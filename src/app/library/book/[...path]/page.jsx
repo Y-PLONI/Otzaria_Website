@@ -52,24 +52,20 @@ export default function BookPage() {
     loadBookData()
   }, [bookPath])
 
-  const loadBookData = async () => {
+const loadBookData = async () => {
     try {
       setLoading(true)
-      // שימוש ב-query parameter במקום path parameter
       console.log('📤 Loading book:', bookPath)
-      const response = await fetch(`/api/book-by-name?name=${encodeURIComponent(bookPath)}`)
+      
+      // --- שינוי כאן: שימוש ב-API המאוחד במקום book-by-name ---
+      const response = await fetch(`/api/book/${encodeURIComponent(bookPath)}`)
+      // -----------------------------------------------------------
+      
       const result = await response.json()
       
       if (result.success) {
         setBookData(result.book)
         setPages(result.pages || [])
-        
-        // Debug: בדוק אם יש תמונות
-        const pagesWithThumbnails = result.pages.filter(p => p.thumbnail)
-        console.log(`📸 נמצאו ${pagesWithThumbnails.length} עמודים עם תמונות מתוך ${result.pages.length}`)
-        if (pagesWithThumbnails.length > 0) {
-          console.log('דוגמה לתמונה:', pagesWithThumbnails[0].thumbnail)
-        }
       } else {
         setError(result.error || 'שגיאה בטעינת הספר')
       }
@@ -93,13 +89,14 @@ export default function BookPage() {
     try {
       console.log('🔓 Releasing page:', { bookPath, pageNumber })
       
+      const pageId = pages.find(p => p.number === pageNumber)?.id;
+      if (!pageId) return alert('שגיאה בזיהוי העמוד');
+
       const response = await fetch(`/api/book/release-page`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookPath,
-          pageNumber,
-          userId: session.user.id,
+          pageId: pageId // ה-API מצפה ל-pageId
         })
       })
 
@@ -139,7 +136,7 @@ export default function BookPage() {
             body: JSON.stringify({
               bookPath: bookPath,
               pageNumber,
-              userId: session.user.id,
+              userId: session.user._idd,
               userName: session.user.name
             })
           })
@@ -190,13 +187,15 @@ export default function BookPage() {
     try {
       console.log('✅ Completing page without upload:', { bookPath, pageNumber })
       
+      const pageId = pages.find(p => p.number === pageNumber)?.id;
+      if (!pageId || !bookData.id) return alert('שגיאה בזיהוי העמוד או הספר');
+
       const response = await fetch(`/api/book/complete-page`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookPath: bookPath,
-          pageNumber,
-          userId: session.user.id
+          pageId: pageId,
+          bookId: bookData.id // ה-API מצפה גם ל-bookId לצורך עדכון המונה
         })
       })
       
@@ -258,7 +257,7 @@ export default function BookPage() {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('bookName', `${bookPath} - עמוד ${pageNumber}`)
-      formData.append('userId', session.user.id)
+      formData.append('userId', session.user._id)
       formData.append('userName', session.user.name)
 
       const uploadResponse = await fetch('/api/upload-book', {
@@ -304,7 +303,7 @@ export default function BookPage() {
           <h2 className="text-2xl font-bold text-on-surface mb-2">שגיאה</h2>
           <p className="text-on-surface/70 mb-4">{error}</p>
           <Link 
-            href="/library"
+            href="/library/dashboard"
             className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors"
           >
             <span className="material-symbols-outlined">arrow_forward</span>

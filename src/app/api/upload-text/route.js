@@ -21,7 +21,7 @@ export async function POST(request) {
         await connectDB();
 
         const upload = await Upload.create({
-            uploader: session.user.id,
+            uploader: session.user._id,
             bookName,
             originalFileName: file.name,
             content: textContent,

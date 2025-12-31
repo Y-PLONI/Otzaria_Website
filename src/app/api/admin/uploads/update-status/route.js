@@ -16,7 +16,7 @@ export async function PUT(request) {
       uploadId,
       { 
           status, 
-          reviewedBy: session.user.id 
+          reviewedBy: session.user._id 
       },
       { new: true }
   );

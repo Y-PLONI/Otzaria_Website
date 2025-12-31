@@ -58,8 +58,8 @@ export default function DashboardPage() {
 
   const loadMyMessages = async () => {
     try {
-      const response = await fetch('/api/messages/list')
-      const result = await response.json()
+    const response = await fetch('/api/messages') 
+    const result = await response.json()
       
       if (result.success) {
         setMyMessages(result.messages)
@@ -77,12 +77,13 @@ export default function DashboardPage() {
 
     try {
       setSendingMessage(true)
-      const response = await fetch('/api/messages/send', {
+      const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subject: messageSubject,
-          message: messageText
+          content: messageText, // שינוי מ-message ל-content
+          recipientId: null // null מסמן הודעה למנהלים
         })
       })
 

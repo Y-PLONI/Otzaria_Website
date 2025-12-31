@@ -21,7 +21,7 @@ export async function POST(request) {
       
       // יצירת הודעות ב-Bulk ליעילות
       const messages = users.map(user => ({
-        sender: session.user.id,
+        sender: session.user._id,
         recipient: user._id,
         subject,
         content: message,
@@ -40,7 +40,7 @@ export async function POST(request) {
       if (!recipientId) return NextResponse.json({ error: 'Missing recipient' }, { status: 400 });
 
       await Message.create({
-        sender: session.user.id,
+        sender: session.user._id,
         recipient: recipientId,
         subject,
         content: message

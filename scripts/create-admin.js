@@ -1,35 +1,68 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-require('dotenv').config({ path: '.env.local' }); // וודא שמותקן dotenv
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const uri = process.env.MONGODB_URI;
+// 1. הגדרת נתיבים (כי אין __dirname ב-ES Modules)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// 2. טעינת משתני סביבה מקובץ .env או .env.local
+// אנחנו עולים תיקייה אחת למעלה (..) כי הסקריפט נמצא בתוך scripts/
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+// גיבוי: נסה לטעון גם מ-.env רגיל אם ה-local לא קיים
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/otzaria_db';
 
 async function createAdmin() {
-    await mongoose.connect(uri);
-    
-    const email = 'admin@example.com'; // המייל שלך
-    const password = 'your-secure-password';
-    const hashedPassword = await bcrypt.hash(password, 12);
+    try {
+        console.log('🔌 Connecting to MongoDB...');
+        await mongoose.connect(MONGODB_URI);
+        console.log('✅ Connected successfully.');
 
-    // מניחים שהסכמה מוגדרת בתוך המודל, כאן נשתמש בגישה ישירה לקולקשן
-    const db = mongoose.connection.db;
-    
-    await db.collection('users').updateOne(
-        { email },
-        { 
-            $set: { 
-                name: 'Admin', 
-                email, 
-                password: hashedPassword, 
-                role: 'admin',
-                points: 1000
-            } 
-        },
-        { upsert: true }
-    );
+        // --- הגדרות האדמין ---
+        const email = 'click.go.script@gmail.com'; // שנה לאימייל שלך
+        const password = 'DINI3141';       // שנה לסיסמה שלך
+        const name = 'Admin';
+        // ---------------------
 
-    console.log('✅ Admin user created/updated');
-    process.exit();
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        // גישה ישירה ל-Collection כדי למנוע בעיות עם מודלים שלא נטענו
+        const db = mongoose.connection.db;
+        const usersCollection = db.collection('users');
+
+        const result = await usersCollection.updateOne(
+            { email }, // תנאי חיפוש
+            { 
+                $set: { 
+                    name: name, 
+                    email: email, 
+                    password: hashedPassword, 
+                    role: 'admin',
+                    points: 1000,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                } 
+            },
+            { upsert: true } // צור אם לא קיים
+        );
+
+        if (result.upsertedCount > 0) {
+            console.log(`🎉 Admin user CREATED successfully! (${email})`);
+        } else {
+            console.log(`♻️  Admin user UPDATED successfully! (${email})`);
+        }
+
+    } catch (error) {
+        console.error('❌ Error:', error);
+    } finally {
+        await mongoose.disconnect();
+        console.log('👋 Disconnected.');
+        process.exit();
+    }
 }
 
 createAdmin();

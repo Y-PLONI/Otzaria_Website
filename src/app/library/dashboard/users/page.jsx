@@ -15,9 +15,9 @@ export default function UsersManagementPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/auth/login')
+      router.push('/library/auth/login') // 👈 תיקון: הוספת /library
     } else if (session?.user?.role !== 'admin') {
-      router.push('/dashboard')
+      router.push('/library/dashboard') // 👈 תיקון: הוספת /library
     } else {
       fetchUsers()
     }
@@ -25,7 +25,7 @@ export default function UsersManagementPage() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/users')
+      const response = await fetch('/api/admin/users') 
       const data = await response.json()
       
       if (response.ok) {
@@ -42,8 +42,8 @@ export default function UsersManagementPage() {
 
   const handleRoleChange = async (userId, newRole) => {
     try {
-      const response = await fetch('/api/users', {
-        method: 'PATCH',
+      const response = await fetch('/api/admin/users', { 
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, role: newRole }),
       })
@@ -65,8 +65,10 @@ export default function UsersManagementPage() {
     }
 
     try {
-      const response = await fetch(`/api/users?id=${userId}`, {
+      const response = await fetch('/api/admin/users', {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
       })
 
       if (response.ok) {
@@ -128,7 +130,7 @@ export default function UsersManagementPage() {
                 </thead>
                 <tbody className="divide-y divide-surface-variant">
                   {users.map((user) => (
-                    <tr key={user.id} className="hover:bg-surface/50 transition-colors">
+                    <tr key={user._id} className="hover:bg-surface/50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div 
@@ -144,9 +146,9 @@ export default function UsersManagementPage() {
                       <td className="px-6 py-4">
                         <select
                           value={user.role}
-                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                          onChange={(e) => handleRoleChange(user._id, e.target.value)}
                           className="px-3 py-1 rounded-lg border border-surface-variant bg-background text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
-                          disabled={user.id === session?.user?.id}
+                          disabled={user._id === session?.user?.id}
                         >
                           <option value="user">משתמש</option>
                           <option value="editor">עורך</option>
@@ -158,8 +160,8 @@ export default function UsersManagementPage() {
                       </td>
                       <td className="px-6 py-4">
                         <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          disabled={user.id === session?.user?.id}
+                          onClick={() => handleDeleteUser(user._id)}
+                          disabled={user._id === session?.user?.id}
                           className="text-red-600 hover:text-red-800 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <span className="material-symbols-outlined">delete</span>

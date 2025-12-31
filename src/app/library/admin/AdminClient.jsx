@@ -42,51 +42,38 @@ export default function AdminClient({ session }) {
         }
     }, [activeTab, pagesFilter])
 
-    const loadData = async (retryCount = 0) => {
+const loadData = async (retryCount = 0) => {
         try {
             setLoading(true)
             console.log('📊 Loading admin data...')
 
+            // תיקון: שימוש בנתיבים הנכונים + מנגנון הגנה מפני קריסה
             const [usersRes, booksRes, uploadsRes] = await Promise.all([
-                fetch('/api/users/list'),
-                fetch('/api/library/list'),
-                fetch('/api/admin/uploads/list')
+                fetch('/api/admin/users').catch(e => ({ ok: false })), 
+                fetch('/api/library/list').catch(e => ({ ok: false })),
+                fetch('/api/admin/uploads/list').catch(e => ({ ok: false }))
             ])
 
-            const usersData = await usersRes.json()
-            const booksData = await booksRes.json()
-            const uploadsData = await uploadsRes.json()
+            const usersData = usersRes.ok ? await usersRes.json() : { success: false };
+            const booksData = booksRes.ok ? await booksRes.json() : { success: false };
+            const uploadsData = uploadsRes.ok ? await uploadsRes.json() : { success: false };
 
-            console.log('📚 Books response:', booksData)
-            console.log('👥 Users response:', usersData)
-            console.log('📤 Uploads response:', uploadsData)
-
-            if (usersData.success) setUsers(usersData.users)
-            if (booksData.success) {
-                console.log(`✅ Setting ${booksData.books.length} books`)
-                setBooks(booksData.books)
-
-                // אם אין ספרים ועדיין לא ניסינו retry, נסה שוב
-                if (booksData.books.length === 0 && retryCount < 2) {
-                    console.log(`🔄 No books found, retrying (${retryCount + 1}/2)...`)
-                    setLoading(false)
-                    setTimeout(() => loadData(retryCount + 1), 1500)
-                    return
-                }
-            } else {
-                console.error('❌ Books API failed:', booksData.error)
+            if (usersData.success && Array.isArray(usersData.users)) {
+                // הגנה: סינון משתמשים ללא מזהה תקין
+                const validUsers = usersData.users.filter(u => u && u._id);
+                setUsers(validUsers);
             }
-            if (uploadsData.success) setUploads(uploadsData.uploads)
+            
+            if (booksData.success && Array.isArray(booksData.books)) {
+                setBooks(booksData.books.filter(b => b));
+            }
+
+            if (uploadsData.success && Array.isArray(uploadsData.uploads)) {
+                setUploads(uploadsData.uploads)
+            }
+            
         } catch (error) {
             console.error('❌ Error loading data:', error)
-
-            // אם יש שגיאה ועדיין לא ניסינו retry, נסה שוב
-            if (retryCount < 2) {
-                console.log(`🔄 Error occurred, retrying (${retryCount + 1}/2)...`)
-                setLoading(false)
-                setTimeout(() => loadData(retryCount + 1), 1500)
-                return
-            }
         } finally {
             setLoading(false)
         }
@@ -112,7 +99,8 @@ export default function AdminClient({ session }) {
 
     const loadMessages = async () => {
         try {
-            const response = await fetch('/api/messages/list')
+            // תיקון נתיב: הוסר ה-/list המיותר
+            const response = await fetch('/api/messages')
             const data = await response.json()
 
             if (data.success) {
@@ -122,6 +110,7 @@ export default function AdminClient({ session }) {
             console.error('Error loading messages:', error)
         }
     }
+
 
     const handleReplyToMessage = async (messageId) => {
         if (!replyText.trim()) {
@@ -255,7 +244,7 @@ export default function AdminClient({ session }) {
 
     const handleDeleteUser = async (userId) => {
         try {
-            const response = await fetch('/api/admin/users/delete', {
+            const response = await fetch('/api/admin/users', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId })
@@ -263,7 +252,7 @@ export default function AdminClient({ session }) {
 
             const result = await response.json()
             if (result.success) {
-                setUsers(users.filter(u => u.id !== userId))
+                setUsers(users.filter(u => u._id !== userId))
                 setDeleteConfirm(null)
             } else {
                 alert(result.error || 'שגיאה במחיקת משתמש')
@@ -276,22 +265,25 @@ export default function AdminClient({ session }) {
 
     const handleUpdateUser = async (userId, updates) => {
         try {
-            // וודא שנקודות הן מספר
             const cleanUpdates = { ...updates }
             if (cleanUpdates.points !== undefined) {
                 cleanUpdates.points = parseInt(cleanUpdates.points) || 0
             }
 
-            const response = await fetch('/api/admin/users/update', {
+            const response = await fetch('/api/admin/users', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, updates: cleanUpdates })
+                body: JSON.stringify({ userId, ...cleanUpdates })
             })
 
             const result = await response.json()
             if (result.success) {
-                // עדכן את המשתמש עם הנתונים שחזרו מהשרת
-                setUsers(users.map(u => u.id === userId ? result.user : u))
+                // עדכון הרשימה המקומית
+                if (result.user) {
+                    setUsers(users.map(u => u._id === userId ? result.user : u))
+                } else {
+                    loadData() // רענון מלא אם אין דאטה
+                }
                 setEditingUser(null)
                 alert('המשתמש עודכן בהצלחה!')
             } else {
@@ -302,6 +294,7 @@ export default function AdminClient({ session }) {
             alert('שגיאה בעדכון משתמש')
         }
     }
+
 
     const handleDeleteBook = async (bookPath) => {
         if (!confirm('האם אתה בטוח שברצונך למחוק את הספר? פעולה זו אינה הפיכה!')) {
@@ -649,7 +642,6 @@ export default function AdminClient({ session }) {
                             </button>
                         </div>
 
-                        {/* Content */}
                         {activeTab === 'users' && (
                             <div className="glass-strong p-6 rounded-xl">
                                 <h2 className="text-2xl font-bold mb-6 text-on-surface">ניהול משתמשים</h2>
@@ -657,23 +649,30 @@ export default function AdminClient({ session }) {
                                     <table className="w-full">
                                         <thead>
                                             <tr className="border-b border-surface-variant">
-                                                <th className="text-right p-4 text-on-surface">שם</th>
-                                                <th className="text-right p-4 text-on-surface">אימייל</th>
-                                                <th className="text-right p-4 text-on-surface">תפקיד</th>
-                                                <th className="text-right p-4 text-on-surface">נקודות</th>
-                                                <th className="text-right p-4 text-on-surface">עמודים</th>
-                                                <th className="text-right p-4 text-on-surface">תאריך הצטרפות</th>
-                                                <th className="text-right p-4 text-on-surface">פעולות</th>
+                                                <th className="text-right p-4">שם</th>
+                                                <th className="text-right p-4">אימייל</th>
+                                                <th className="text-right p-4">תפקיד</th>
+                                                <th className="text-right p-4">נקודות</th>
+                                                <th className="text-right p-4">עמודים</th>
+                                                <th className="text-right p-4">תאריך הצטרפות</th>
+                                                <th className="text-right p-4">פעולות</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {users.map(user => (
-                                                <tr key={user.id} className="border-b border-surface-variant/50 hover:bg-surface-variant/30">
+                                            {users.map(user => {
+                                                if (!user) return null;
+                                                const userId = user._id; // שימוש מפורש ב-_id של מונגו
+                                                
+                                                // בדיקה בטוחה של מצב עריכה
+                                                const isEditing = editingUser && editingUser._id === userId;
+
+                                                return (
+                                                <tr key={userId} className="border-b border-surface-variant/50 hover:bg-surface-variant/30">
                                                     <td className="p-4">
-                                                        {editingUser?.id === user.id ? (
+                                                        {isEditing ? (
                                                             <input
                                                                 type="text"
-                                                                value={editingUser.name}
+                                                                value={editingUser.name || ''}
                                                                 onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
                                                                 className="px-2 py-1 border rounded bg-background text-on-surface"
                                                             />
@@ -683,7 +682,7 @@ export default function AdminClient({ session }) {
                                                     </td>
                                                     <td className="p-4 text-on-surface/70">{user.email}</td>
                                                     <td className="p-4">
-                                                        {editingUser?.id === user.id ? (
+                                                        {isEditing ? (
                                                             <select
                                                                 value={editingUser.role}
                                                                 onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
@@ -702,7 +701,7 @@ export default function AdminClient({ session }) {
                                                         )}
                                                     </td>
                                                     <td className="p-4">
-                                                        {editingUser?.id === user.id ? (
+                                                        {isEditing ? (
                                                             <input
                                                                 type="number"
                                                                 value={editingUser.points || 0}
@@ -720,10 +719,10 @@ export default function AdminClient({ session }) {
                                                     </td>
                                                     <td className="p-4">
                                                         <div className="flex gap-2">
-                                                            {editingUser?.id === user.id ? (
+                                                            {isEditing ? (
                                                                 <>
                                                                     <button
-                                                                        onClick={() => handleUpdateUser(user.id, {
+                                                                        onClick={() => handleUpdateUser(userId, {
                                                                             name: editingUser.name,
                                                                             role: editingUser.role,
                                                                             points: editingUser.points
@@ -751,10 +750,10 @@ export default function AdminClient({ session }) {
                                                                         <span className="material-symbols-outlined">edit</span>
                                                                     </button>
                                                                     <button
-                                                                        onClick={() => setDeleteConfirm(user.id)}
+                                                                        onClick={() => setDeleteConfirm(userId)}
                                                                         className="p-2 text-red-600 hover:bg-red-50 rounded"
                                                                         title="מחק"
-                                                                        disabled={user.id === session.user.id}
+                                                                        disabled={userId === session.user._idd}
                                                                     >
                                                                         <span className="material-symbols-outlined">delete</span>
                                                                     </button>
@@ -763,7 +762,7 @@ export default function AdminClient({ session }) {
                                                         </div>
                                                     </td>
                                                 </tr>
-                                            ))}
+                                            )})}
                                         </tbody>
                                     </table>
                                 </div>
@@ -819,7 +818,7 @@ export default function AdminClient({ session }) {
                                                         </p>
                                                         <div className="flex gap-2">
                                                             <Link
-                                                                href={`/book/${book.path}`}
+                                                                href={`/library/book/${book.path}`} // 👈 תיקון: הוספת /library/
                                                                 className="text-sm text-primary hover:text-accent"
                                                             >
                                                                 צפה
@@ -1033,7 +1032,7 @@ export default function AdminClient({ session }) {
                                     >
                                         <option value="">כל המשתמשים</option>
                                         {users.map(user => (
-                                            <option key={user.id} value={user.id}>{user.name}</option>
+                                            <option key={user._id} value={user._id}>{user.name}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -1318,7 +1317,7 @@ export default function AdminClient({ session }) {
                                             .sort((a, b) => (b.points || 0) - (a.points || 0))
                                             .slice(0, 10)
                                             .map((user, index) => (
-                                                <div key={user.id} className="flex items-center gap-4 p-3 bg-surface rounded-lg">
+                                                <div key={user._id} className="flex items-center gap-4 p-3 bg-surface rounded-lg">
                                                     <span className="text-2xl font-bold text-primary w-8">{index + 1}</span>
                                                     <div className="flex-1">
                                                         <p className="font-medium text-on-surface">{user.name}</p>
@@ -1401,7 +1400,7 @@ export default function AdminClient({ session }) {
                                 >
                                     <option value="all">כל המשתמשים</option>
                                     {users.filter(u => u.role !== 'admin').map(user => (
-                                        <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
+                                        <option key={user._id} value={user._id}>{user.name} ({user.email})</option>
                                     ))}
                                 </select>
                             </div>

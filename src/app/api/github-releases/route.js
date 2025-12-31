@@ -1,37 +1,83 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server'
 
-export const dynamic = 'force-dynamic'; // חשוב כדי לקבל תמיד גרסה עדכנית
+export const runtime = 'edge'
+export const revalidate = 600 // Cache for 10 minutes
 
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type') || 'stable';
+    const { searchParams } = new URL(request.url)
+    const type = searchParams.get('type') || 'stable' // stable or dev
     
-    // שימוש ב-Public API של גיטהאב (או עם טוקן אם יש מגבלת בקשות)
+    // Fetch releases from GitHub
     const url = type === 'dev' 
       ? 'https://api.github.com/repos/Y-PLONI/otzaria/releases'
-      : 'https://api.github.com/repos/Y-PLONI/otzaria/releases/latest';
+      : 'https://api.github.com/repos/Y-PLONI/otzaria/releases/latest'
     
-    const headers = {
-      'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'Otzaria-Website'
-    };
-
-    // אם יש טוקן בשרת, נשתמש בו להגדיל מכסה
-    if (process.env.GITHUB_TOKEN) {
-        headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
-    }
-
-    const response = await fetch(url, { headers, next: { revalidate: 3600 } });
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Otzaria-Website'
+      },
+      next: { revalidate: 600 }
+    })
 
     if (!response.ok) {
-      throw new Error(`GitHub API responded with ${response.status}`);
+      throw new Error('Failed to fetch releases')
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    const data = await response.json()
+    
+    // For dev releases, get the first prerelease
+    const release = type === 'dev' 
+      ? (Array.isArray(data) ? data.find(r => r.prerelease) || data[0] : data)
+      : data
+
+    if (!release) {
+        return NextResponse.json({ error: 'No release found' }, { status: 404 })
+    }
+
+    const assets = release.assets || []
+    
+    // פונקציית עזר לחיפוש גמיש (case insensitive)
+    const findAsset = (extension, keyword = '') => {
+        return assets.find(a => {
+            const name = a.name.toLowerCase();
+            return name.endsWith(extension.toLowerCase()) && 
+                   (!keyword || name.includes(keyword.toLowerCase()));
+        })?.browser_download_url;
+    }
+
+    const downloads = {
+      version: release.tag_name,
+      windows: {
+        // מחפש כל קובץ EXE, מעדיף כזה עם המילה Setup אם יש כפילויות
+        exe: findAsset('.exe'),
+        msix: findAsset('.msix'),
+        // ZIP לווינדוס (שלא מכיל mac או linux בשם)
+        zip: assets.find(a => a.name.endsWith('.zip') && !a.name.toLowerCase().includes('mac') && !a.name.toLowerCase().includes('linux'))?.browser_download_url
+      },
+      linux: {
+        deb: findAsset('.deb'),
+        rpm: findAsset('.rpm'),
+        appimage: findAsset('.AppImage') || findAsset('.appimage')
+      },
+      macos: {
+        dmg: findAsset('.dmg'),
+        // ZIP למק
+        zip: assets.find(a => a.name.endsWith('.zip') && (a.name.toLowerCase().includes('mac') || a.name.toLowerCase().includes('darwin')))?.browser_download_url
+      },
+      android: {
+        apk: findAsset('.apk')
+      },
+      releaseUrl: release.html_url
+    }
+
+    return NextResponse.json(downloads)
   } catch (error) {
-    console.error('GitHub Releases Error:', error);
-    return NextResponse.json({ error: 'Failed to fetch releases' }, { status: 500 });
+    console.error('Error fetching GitHub releases:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch releases' },
+      { status: 500 }
+    )
   }
 }

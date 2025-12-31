@@ -24,7 +24,7 @@ export async function POST(request) {
 
         // יצירת רשומה ב-DB
         const upload = await Upload.create({
-            uploader: session.user.id,
+            uploader: session.user._id,
             bookName: bookName,
             originalFileName: file.name,
             content: content,
@@ -61,13 +61,13 @@ export async function GET(request) {
         const userId = searchParams.get('userId'); // ה-UI שולח את זה, אבל עדיף להשתמש ב-Session לאבטחה
 
         // מוודאים שהמשתמש מבקש את המידע של עצמו (אלא אם הוא אדמין)
-        if (userId && userId !== session.user.id && session.user.role !== 'admin') {
+        if (userId && userId !== session.user._id && session.user.role !== 'admin') {
              return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
         await connectDB();
         
-        const uploads = await Upload.find({ uploader: session.user.id })
+        const uploads = await Upload.find({ uploader: session.user._id })
             .sort({ createdAt: -1 })
             .limit(20)
             .lean();

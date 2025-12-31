@@ -19,7 +19,7 @@ export async function POST(request) {
 
     // 1. עדכון הדף
     const page = await Page.findOneAndUpdate(
-      { _id: pageId, claimedBy: session.user.id, status: 'in-progress' },
+      { _id: pageId, claimedBy: session.user._id, status: 'in-progress' },
       { status: 'completed', completedAt: new Date() },
       { new: true }
     );
@@ -32,7 +32,7 @@ export async function POST(request) {
     await Book.findByIdAndUpdate(page.book, { $inc: { completedPages: 1 } });
 
     // 3. עדכון ניקוד משתמש
-    await User.findByIdAndUpdate(session.user.id, { $inc: { points: 10 } });
+    await User.findByIdAndUpdate(session.user._id, { $inc: { points: 10 } });
 
     return NextResponse.json({ success: true, message: 'הושלם בהצלחה!' });
   } catch (error) {

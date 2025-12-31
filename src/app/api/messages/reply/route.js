@@ -14,7 +14,7 @@ export async function POST(request) {
     await Message.findByIdAndUpdate(messageId, {
         $push: {
             replies: {
-                sender: session.user.id,
+                sender: session.user._id,
                 content: reply,
                 createdAt: new Date()
             }

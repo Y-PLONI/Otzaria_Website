@@ -14,7 +14,7 @@ export async function POST(request) {
     await connectDB();
 
     // קודם נבדוק מה היה הסטטוס הקודם
-    const pageBefore = await Page.findOne({ _id: pageId, claimedBy: session.user.id });
+    const pageBefore = await Page.findOne({ _id: pageId, claimedBy: session.user._id });
     
     if (!pageBefore) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

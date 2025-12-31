@@ -6,39 +6,53 @@ import Page from '@/models/Page';
 export async function GET(request, { params }) {
   try {
     await connectDB();
-    const { id } = params; // זה יהיה ה-slug של הספר
+    
+    // הפענוח קריטי כי ה-Client שולח URL Encoded (למשל רווחים או עברית)
+    const identifier = decodeURIComponent(params.id);
 
-    // 1. מציאת הספר
-    const book = await Book.findOne({ slug: id }).lean();
+    // 1. מציאת הספר - חיפוש גמיש (גם Slug וגם שם)
+    const book = await Book.findOne({ 
+        $or: [
+            { slug: identifier }, 
+            { name: identifier }
+        ] 
+    }).lean();
     
     if (!book) {
       return NextResponse.json({ success: false, error: 'הספר לא נמצא' }, { status: 404 });
     }
 
     // 2. מציאת כל העמודים של הספר
-    // lean() חשוב לביצועים כי הוא מחזיר אובייקט JS רגיל ולא אובייקט Mongoose כבד
     const pages = await Page.find({ book: book._id })
       .sort({ pageNumber: 1 })
-      .select('pageNumber status imagePath claimedBy')
-      .populate('claimedBy', 'name') // הבאת שם המשתמש שתפס את הדף
+      .select('pageNumber status imagePath claimedBy claimedAt completedAt') // בחירת שדות אופטימלית
+      .populate('claimedBy', 'name email') // שליפת פרטי המשתמש
       .lean();
 
-    // התאמת מבנה הנתונים למה שה-UI מצפה (במידת הצורך)
+    // 3. עיבוד הנתונים לפורמט אחיד שמתאים לכל הקומפוננטות
     const formattedPages = pages.map(p => ({
+      id: p._id,
       number: p.pageNumber,
       status: p.status,
-      thumbnail: p.imagePath, // הנתיב בשרת
+      // נתיב תמונה: אם הוא שמור כנתיב יחסי ב-DB, נשאיר אותו כך. ה-Client יציג אותו מ-public.
+      thumbnail: p.imagePath, 
       claimedBy: p.claimedBy ? p.claimedBy.name : null,
-      id: p._id
+      claimedById: p.claimedBy ? p.claimedBy._id : null, // חשוב לזיהוי בעלות
+      claimedAt: p.claimedAt,
+      completedAt: p.completedAt
     }));
 
     return NextResponse.json({
       success: true,
       book: {
+        id: book._id,
         name: book.name,
-        path: book.slug,
+        slug: book.slug, // משמש כ-path ב-Frontend
+        path: book.slug, // תאימות לאחור ל-Frontend הישן
         totalPages: book.totalPages,
-        id: book._id
+        completedPages: book.completedPages,
+        category: book.category,
+        description: book.description
       },
       pages: formattedPages
     });

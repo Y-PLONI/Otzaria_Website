@@ -25,8 +25,8 @@ export default function Footer() {
                 לספרייה
               </Link>
               <Link 
-                href="/upload" 
-                className="px-6 py-2.5 bg-surface text-on-surface rounded-lg hover:bg-surface-variant transition-all border border-outline font-medium"
+                href="/library/upload" 
+                className="..."
               >
                 הוסף ספר
               </Link>
