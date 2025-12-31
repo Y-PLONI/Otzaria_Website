@@ -23,7 +23,7 @@ export default function OtzariaSoftwareHeader() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
         <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <Image src="/logo.svg" alt="לוגו אוצריא" width={32} height={32} />
-          <span className="text-xl font-bold text-foreground" style={{ fontFamily: 'FrankRuehl, serif' }}>אוצריא</span>
+          <span className="text-xl font-bold text-foreground font-frank">אוצריא</span>
         </Link>
         
         {/* Desktop Nav */}

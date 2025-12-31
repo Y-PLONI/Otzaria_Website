@@ -57,7 +57,7 @@ export default function LibraryBooksPage() {
         <div className="flex flex-col h-full">
             {/* Search Bar Area */}
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: 'FrankRuehl, serif' }}>
+                <h1 className="text-3xl font-bold text-foreground font-frank">
                   הספרייה
                 </h1>
                 <div className="relative w-full md:w-96">

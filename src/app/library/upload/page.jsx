@@ -72,7 +72,7 @@ export default function UploadPage() {
       <main className="container mx-auto px-4 py-12">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-10">
-            <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'FrankRuehl, serif' }}>
+            <h1 className="text-3xl font-bold mb-2 font-frank">
               העלאת ספר חדש
             </h1>
             <p className="text-on-surface/70">

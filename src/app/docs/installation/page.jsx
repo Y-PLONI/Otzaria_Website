@@ -30,7 +30,7 @@ export default function InstallationTutorialPage() {
             <span className="material-symbols-outlined text-7xl text-primary mb-4 block">
               install_desktop
             </span>
-            <h1 className="text-4xl font-bold text-primary-dark mb-4" style={{ fontFamily: 'FrankRuehl, serif' }}>
+            <h1 className="text-4xl font-bold text-primary-dark mb-4 font-frank">
               מדריך הפעלת תוכנת אוצריא
             </h1>
             <p className="text-xl text-on-surface/70">

@@ -115,7 +115,7 @@ export default function DocsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-white rounded-xl p-8 mb-8 border border-gray-200 shadow-sm"
               >
-                <h1 className="text-4xl font-bold text-primary mb-6" style={{ fontFamily: 'FrankRuehl, serif' }}>
+                <h1 className="text-4xl font-bold text-primary mb-6 font-frank">
                   מדריך למשתמש
                 </h1>
 

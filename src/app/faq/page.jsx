@@ -48,7 +48,7 @@ export default function FAQPage() {
       <main className="py-12 px-4">
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-primary mb-4" style={{ fontFamily: 'FrankRuehl, serif' }}>
+            <h1 className="text-4xl font-bold text-primary mb-4 font-frank">
               שאלות נפוצות
             </h1>
           </div>

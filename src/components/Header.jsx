@@ -36,7 +36,7 @@ export default function Header() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
         <Link href="/library" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <Image src="/logo.svg" alt="לוגו אוצריא" width={32} height={32} />
-          <span className="text-xl font-bold text-foreground" style={{ fontFamily: 'FrankRuehl, serif' }}>ספריית אוצריא</span>
+          <span className="text-xl font-bold text-foreground font-frank">ספריית אוצריא</span>
         </Link>
         
         <nav className="hidden md:flex items-center gap-6">

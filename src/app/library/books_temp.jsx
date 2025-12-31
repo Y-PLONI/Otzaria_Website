@@ -171,7 +171,7 @@ export default function LibraryPage() {
           <div className="grid lg:grid-cols-2 gap-6 mb-8">
             {/* Left Side - Header + Description + Search + Filters */}
             <div className="flex flex-col h-full">
-              <h1 className="text-4xl font-bold mb-4 text-on-surface" style={{ fontFamily: 'FrankRuehl, serif' }}>ספריית אוצריא</h1>
+              <h1 className="text-4xl font-bold mb-4 text-on-surface font-frank">ספריית אוצריא</h1>
               
               <p className="text-on-surface/150 leading-relaxed" style={{ marginBottom: '20px' }}>
                 ספרייה זו כוללת ספרים מאתר <a href="https://hebrewbooks.org/" target="_blank" rel="noopener noreferrer" className="font-bold text-primary hover:text-accent underline transition-colors">hebrewbooks</a> שמיועדים להוספה למאגר אוצריא.

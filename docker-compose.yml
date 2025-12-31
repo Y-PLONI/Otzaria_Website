@@ -12,6 +12,7 @@ services:
       - NEXTAUTH_SECRET=development_secret_key
       # תיקייה לשמירת ספרים בתוך הדוקר
       - UPLOAD_DIR=/app/public/uploads
+      - WATCHPACK_POLLING=true
     volumes:
       # 1. סנכרון הקוד: כל שינוי בווינדוס ישתקף מיד בדוקר
       - ./:/app

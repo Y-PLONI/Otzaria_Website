@@ -28,7 +28,7 @@ export default function AboutPage() {
                   className="drop-shadow-2xl"
                 />
               </div>
-              <h1 className="text-4xl md:text-5xl font-bold mb-4 text-on-background" style={{ fontFamily: 'FrankRuehl, serif' }}>
+              <h1 className="text-4xl md:text-5xl font-bold mb-4 text-on-background font-frank">
                 אודות ספריית אוצריא
               </h1>
               <p className="text-xl text-on-surface/80">
@@ -192,7 +192,7 @@ export default function AboutPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
               >
-                <p className="text-2xl font-bold text-primary mb-4" style={{ fontFamily: 'FrankRuehl, serif' }}>
+                <p className="text-2xl font-bold text-primary mb-4 font-frank">
                   "צדקתו עומדת לעד"
                 </p>
                 <p className="text-lg text-on-surface/80">

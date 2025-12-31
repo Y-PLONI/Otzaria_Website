@@ -23,7 +23,7 @@ export default function LibraryNotFound() {
               transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
               className="mb-8"
             >
-              <span className="text-9xl font-bold text-primary" style={{ fontFamily: 'FrankRuehl, serif' }}>
+              <span className="text-9xl font-bold text-primary font-frank">
                 404
               </span>
             </motion.div>
@@ -45,8 +45,7 @@ export default function LibraryNotFound() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="text-4xl font-bold text-on-surface mb-4"
-              style={{ fontFamily: 'FrankRuehl, serif' }}
+              className="text-4xl font-bold text-on-surface mb-4 font-frank"
             >
               הדף לא נמצא
             </motion.h1>

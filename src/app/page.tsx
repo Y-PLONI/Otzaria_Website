@@ -86,7 +86,7 @@ export default function Home() {
                     <img src="/logo.svg" alt="לוגו אוצריא" className="w-32 h-32 drop-shadow-2xl" />
                 </motion.div>
                 
-                <h1 className="text-5xl md:text-6xl font-bold mb-6" style={{ fontFamily: 'FrankRuehl, serif' }}>
+                <h1 className="text-5xl md:text-6xl font-bold mb-6 font-frank">
                     אוצריא
                 </h1>
                 
@@ -108,7 +108,7 @@ export default function Home() {
         {/* Features Section */}
         <section className="py-20 px-4 bg-gray-50">
             <div className="container mx-auto max-w-6xl">
-                <h2 className="text-4xl font-bold text-center mb-12" style={{ fontFamily: 'FrankRuehl, serif' }}>מה מייחד את אוצריא?</h2>
+                <h2 className="text-4xl font-bold text-center mb-12 font-frank">מה מייחד את אוצריא?</h2>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {features.map((feature, index) => (
                         <div key={index} className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
@@ -124,7 +124,7 @@ export default function Home() {
         {/* Download Section */}
         <section id="download" className="py-20 px-4">
             <div className="container mx-auto max-w-6xl">
-                <h2 className="text-4xl font-bold text-center mb-4" style={{ fontFamily: 'FrankRuehl, serif' }}>הורדת התוכנה</h2>
+                <h2 className="text-4xl font-bold text-center mb-4 font-frank">הורדת התוכנה</h2>
                 <p className="text-center text-xl text-gray-600 mb-12">בחר את הפלטפורמה המתאימה לך</p>
                 
                 <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">

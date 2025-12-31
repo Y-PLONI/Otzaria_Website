@@ -42,7 +42,7 @@ export default function DevelopmentTutorialPage() {
             <span className="material-symbols-outlined text-7xl text-primary mb-4 block">
               code
             </span>
-            <h1 className="text-4xl font-bold text-primary-dark mb-4" style={{ fontFamily: 'FrankRuehl, serif' }}>
+            <h1 className="text-4xl font-bold text-primary-dark mb-4 font-frank">
               רוצה לערוך את תוכנת אוצריא?
             </h1>
             <p className="text-xl text-on-surface/70">

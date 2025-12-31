@@ -11,7 +11,7 @@ export default function Footer() {
           <div className="md:col-span-2">
             <div className="flex items-center gap-3 mb-4">
               <Image src="/logo.png" alt="לוגו אוצריא" width={40} height={40} className="rounded-lg" />
-              <span className="text-2xl font-bold text-primary" style={{ fontFamily: 'FrankRuehl, serif' }}>ספריית אוצריא</span>
+              <span className="text-2xl font-bold text-primary font-frank">ספריית אוצריא</span>
             </div>
             <p className="text-on-surface/70 text-lg leading-relaxed mb-6">
               פלטפורמה משותפת לעריכה ושיתוף של ספרי קודש.<br />
