@@ -1,47 +1,67 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@theme inline {
+/* 1. הגדרת המשתנים הבסיסיים של CSS */
+:root {
+  /* צבעים */
+  --background: #fefbf6;
+  --foreground: #1c1b1a;
+  
+  --surface: #f8f4ef;
+  --surface-variant: #e7e0d8;
+  
+  --primary: #6b5d4f;
+  --primary-container: #f4ede3;
+  --on-primary: #ffffff;
+  
+  --secondary: #8b7355;
+  --secondary-container: #f5ead8;
+  
+  --accent: #9c7c4f;
+  
+  /* פונטים */
+  --font-frank: var(--font-frank-ruehl), serif;
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-hebrew: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+}
+
+/* 2. חיבור המשתנים ל-Tailwind */
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  /* הוספת הפונט שלנו כמשתנה ש-Tailwind מכיר */
-  --font-frank: var(--font-frank-ruehl); 
-}
-@layer utilities {
-  .font-frank {
-    font-family: var(--font-frank-ruehl), serif;
-  }
+  
+  --color-surface: var(--surface);
+  --color-surface-variant: var(--surface-variant);
+  
+  --color-primary: var(--primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary: var(--on-primary);
+  
+  --color-secondary: var(--secondary);
+  --color-secondary-container: var(--secondary-container);
+  
+  --color-accent: var(--accent);
+  
+  --font-frank: var(--font-frank);
+  --font-hebrew: var(--font-hebrew);
 }
 
+/* 3. הגדרות בסיס */
 @layer base {
   html {
     direction: rtl;
   }
   
   body {
-    @apply bg-background text-on-background font-hebrew antialiased;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-hebrew);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
     position: relative;
+    /* ביטלנו את ה-before כאן לטובת אלמנט ב-layout */
   }
   
-  body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: url('/image.png');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    opacity: 0.15;
-    z-index: -1;
-    pointer-events: none;
-  }
-  
+  /* הגדרת אייקונים */
   .material-symbols-outlined {
     font-family: 'Material Symbols Outlined';
     font-weight: normal;
@@ -58,121 +78,28 @@
   }
 }
 
+/* 4. מחלקות עזר */
 @layer utilities {
   .glass {
-    @apply bg-background/60 backdrop-blur-md border border-surface-variant/50;
+    /* רקע לבן/קרם עם שקיפות 60% */
+    background-color: color-mix(in srgb, var(--background) 60%, transparent);
+    backdrop-filter: blur(12px);
+    border: 1px solid color-mix(in srgb, var(--surface-variant) 50%, transparent);
   }
   
   .glass-strong {
-    @apply bg-background/95 backdrop-blur-lg border border-surface-variant;
+    /* רקע כמעט אטום */
+    background-color: color-mix(in srgb, var(--background) 95%, transparent);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--surface-variant);
   }
   
-  /* הסתרת פס גלילה */
   .custom-scrollbar {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
   
   .custom-scrollbar::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
-  }
-
-  /* אנימציות מותאמות אישית */
-  @keyframes float {
-    0%, 100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-20px);
-    }
-  }
-
-  @keyframes pulse-glow {
-    0%, 100% {
-      box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.3);
-    }
-    50% {
-      box-shadow: 0 0 40px rgba(var(--primary-rgb), 0.6);
-    }
-  }
-
-  @keyframes shimmer {
-    0% {
-      background-position: -1000px 0;
-    }
-    100% {
-      background-position: 1000px 0;
-    }
-  }
-
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-
-  .animate-pulse-glow {
-    animation: pulse-glow 3s ease-in-out infinite;
-  }
-
-  .animate-shimmer {
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.1) 50%,
-      transparent 100%
-    );
-    background-size: 1000px 100%;
-    animation: shimmer 3s infinite;
-  }
-
-  /* אפקט hover מתקדם */
-  .hover-lift {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .hover-lift:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  }
-
-  /* גרדיאנט מונפש */
-  .gradient-animate {
-    background: linear-gradient(
-      -45deg,
-      var(--primary-container),
-      var(--secondary-container),
-      var(--tertiary-container),
-      var(--primary-container)
-    );
-    background-size: 400% 400%;
-    animation: gradient 15s ease infinite;
-  }
-
-  @keyframes gradient {
-    0% {
-      background-position: 0% 50%;
-    }
-    50% {
-      background-position: 100% 50%;
-    }
-    100% {
-      background-position: 0% 50%;
-    }
+    display: none;
   }
 }
-
-  /* אנימציית רעידה לשגיאות */
-  @keyframes shake {
-    0%, 100% {
-      transform: translateX(0);
-    }
-    10%, 30%, 50%, 70%, 90% {
-      transform: translateX(-5px);
-    }
-    20%, 40%, 60%, 80% {
-      transform: translateX(5px);
-    }
-  }
-
-  .animate-shake {
-    animation: shake 0.5s ease-in-out;
-  }

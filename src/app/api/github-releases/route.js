@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 
-export const runtime = 'edge'
+if (process.env.NODE_ENV === 'development') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
+//export const runtime = 'edge'
 export const revalidate = 600 // Cache for 10 minutes
 
 export async function GET(request) {

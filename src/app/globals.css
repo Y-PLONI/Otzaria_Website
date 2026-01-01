@@ -1,26 +1,150 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* הגדרת צבעים מהפרוייקט הישן */
+  --color-background: #fefbf6;
+  --color-surface: #f8f4ef;
+  --color-surface-variant: #e7e0d8;
+  --color-primary: #6b5d4f;
+  --color-primary-container: #f4ede3;
+  --color-secondary: #8b7355;
+  --color-secondary-container: #f5ead8;
+  --color-accent: #9c7c4f;
+  --color-on-background: #1c1b1a;
+  --color-on-surface: #1c1b1a;
+  --color-on-primary: #ffffff;
+
+  /* הגדרת פונטים */
+  --font-frank: var(--font-frank-ruehl), serif;
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-hebrew: 'Segoe UI', Tahoma, Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    direction: rtl;
+  }
+  
+  body {
+    background-color: var(--color-background);
+    color: var(--color-on-background);
+    font-family: var(--font-hebrew);
+    position: relative;
+  }
+  
+  /* תמונת הרקע (הקרע) */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* וודא שהקובץ image.png קיים בתיקיית public */
+    background-image: url('/image.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.15;
+    z-index: -1;
+    pointer-events: none;
+  }
+  
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .font-frank {
+    font-family: var(--font-frank);
+  }
+
+  .glass {
+    background-color: color-mix(in srgb, var(--color-background) 60%, transparent);
+    backdrop-filter: blur(12px);
+    border: 1px solid color-mix(in srgb, var(--color-surface-variant) 50%, transparent);
+  }
+  
+  .glass-strong {
+    background-color: color-mix(in srgb, var(--color-background) 95%, transparent);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-surface-variant);
+  }
+  
+  /* הסתרת פס גלילה */
+  .custom-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* אנימציות */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(107, 93, 79, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(107, 93, 79, 0.6); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      transparent 100%
+    );
+    background-size: 1000px 100%;
+    animation: shimmer 3s infinite;
+  }
+
+  .animate-shake {
+    animation: shake 0.5s ease-in-out;
+  }
+  
+  /* אפקטים נוספים */
+  .hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  }
 }

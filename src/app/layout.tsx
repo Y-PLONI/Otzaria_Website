@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import "./globals.css";
+import "./globals.css"; // <--- שורה זו קריטית! וודא שהיא קיימת
 import SessionProvider from "@/components/SessionProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
