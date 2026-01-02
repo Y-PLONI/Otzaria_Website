@@ -150,7 +150,7 @@ export default function AdminPagesPage() {
               >
                   <option value="">כל המשתמשים</option>
                   {usersList.map(user => (
-                      <option key={user.id} value={user.id}>{user.name}</option>
+                      <option key={user._id} value={user.id}>{user.name}</option>
                   ))}
               </select>
           </div>
