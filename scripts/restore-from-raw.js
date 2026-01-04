@@ -56,12 +56,23 @@ const MessageSchema = new mongoose.Schema({
     }]
 }, { timestamps: true });
 
+const UploadSchema = new mongoose.Schema({
+    uploader: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    bookName: { type: String, required: true },
+    originalFileName: { type: String },
+    content: { type: String },
+    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+}, { timestamps: true });
+
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
 const Book = mongoose.models.Book || mongoose.model('Book', BookSchema);
 const Page = mongoose.models.Page || mongoose.model('Page', PageSchema);
 const Message = mongoose.models.Message || mongoose.model('Message', MessageSchema);
+const Upload = mongoose.models.Upload || mongoose.model('Upload', UploadSchema);
 
-// --- פונקציה חכמה לקריאת קבצים גדולים ---
+// --- פונקציות עזר ---
+
 async function loadDataFromFile(filePath) {
     if (!fs.existsSync(filePath)) {
         console.warn(`⚠️ File not found: ${filePath}`);
@@ -70,11 +81,7 @@ async function loadDataFromFile(filePath) {
 
     const results = [];
     const fileStream = fs.createReadStream(filePath);
-
-    const rl = readline.createInterface({
-        input: fileStream,
-        crlfDelay: Infinity
-    });
+    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
     console.log(`📖 Streaming ${filePath}...`);
 
@@ -83,9 +90,7 @@ async function loadDataFromFile(filePath) {
         try {
             const doc = JSON.parse(line);
             results.push(doc);
-        } catch (err) {
-             // התעלמות משגיאות פרסור של שורות בודדות
-        }
+        } catch (err) {}
     }
 
     if (results.length === 0) {
@@ -94,11 +99,8 @@ async function loadDataFromFile(filePath) {
             const data = JSON.parse(content);
             if (Array.isArray(data)) return data;
             return [data];
-        } catch (e) {
-             // קובץ ריק או לא תקין
-        }
+        } catch (e) {}
     }
-    
     return results;
 }
 
@@ -106,9 +108,22 @@ function decodeFileName(encodedName) {
     try {
         const uriComponent = encodedName.replace(/_/g, '%');
         return decodeURIComponent(uriComponent);
-    } catch (e) {
-        return encodedName;
+    } catch (e) { return encodedName; }
+}
+
+// יצירת slug בטוח שתומך גם בעברית
+function createSafeSlug(name, id) {
+    // נסיון ראשון: אנגלית בלבד
+    let slug = slugify(name, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
+    
+    // אם ה-slug יצא ריק (כי השם בעברית), נשתמש במזהה ייחודי + השם המקורי מקודד
+    if (!slug || slug.length < 2) {
+        // מנקה תווים בעייתיים ל-URL אבל משאיר עברית
+        const safeName = name.replace(/\s+/g, '-').replace(/[^\w\u0590-\u05FF-]/g, '');
+        slug = `${safeName}-${id.toString().slice(-6)}`;
     }
+    
+    return slug;
 }
 
 const userMap = new Map(); 
@@ -124,7 +139,6 @@ async function restore() {
         const rawFiles = await loadDataFromFile(FILES_JSON_PATH);
         const rawBackups = await loadDataFromFile(BACKUPS_JSON_PATH);
         const rawMessages = await loadDataFromFile(MESSAGES_JSON_PATH);
-
         const allMetadataSources = [...rawFiles, ...rawBackups];
 
         // ---------------------------------------------------------
@@ -132,15 +146,12 @@ async function restore() {
         // ---------------------------------------------------------
         const usersEntry = rawFiles.find(f => f.path === 'data/users.json');
         if (usersEntry && usersEntry.data) {
-            console.log(`Processing users...`);
+            console.log(`Processing ${usersEntry.data.length} users...`);
             for (const u of usersEntry.data) {
                 const newId = new mongoose.Types.ObjectId();
-                
-                // בדיקה אם המשתמש כבר קיים כדי לקבל את ה-ID האמיתי שלו
                 const existingUser = await User.findOne({ email: u.email });
                 const finalId = existingUser ? existingUser._id : newId;
                 
-                // שמירת המיפוי (בין ID ישן ל-ID שיהיה במונגו)
                 userMap.set(u.id, finalId);
 
                 const points = u.points?.$numberInt ? parseInt(u.points.$numberInt) : (u.points || 0);
@@ -148,7 +159,6 @@ async function restore() {
                 await User.updateOne(
                     { email: u.email },
                     {
-                        // עדכון שדות רגילים
                         $set: {
                             name: u.name,
                             password: u.password,
@@ -156,7 +166,6 @@ async function restore() {
                             points: points,
                             createdAt: u.createdAt ? new Date(u.createdAt) : new Date(),
                         },
-                        // קביעת ID רק אם נוצר מסמך חדש
                         $setOnInsert: { _id: finalId }
                     },
                     { upsert: true }
@@ -166,16 +175,17 @@ async function restore() {
         }
 
         // ---------------------------------------------------------
-        // שלב 2: ספרים
+        // שלב 2: ספרים (תיקון ה-Slug)
         // ---------------------------------------------------------
         const booksEntry = rawFiles.find(f => f.path === 'data/books.json');
         if (booksEntry && booksEntry.data) {
-            console.log(`Processing books...`);
+            console.log(`Processing ${booksEntry.data.length} books...`);
             for (const b of booksEntry.data) {
                 const newId = new mongoose.Types.ObjectId();
-                const slug = slugify(b.name, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
                 
-                // בדיקה אם ספר קיים
+                // שימוש בפונקציה המתוקנת ליצירת Slug
+                const slug = createSafeSlug(b.name, newId);
+                
                 const existingBook = await Book.findOne({ name: b.name });
                 const finalId = existingBook ? existingBook._id : newId;
 
@@ -187,9 +197,8 @@ async function restore() {
                     { name: b.name },
                     {
                         $set: {
-                            slug: slug,
+                            slug: slug, // התיקון כאן!
                             totalPages: totalPages,
-                            // completedPages: 0, // לא נאפס כדי לא לדרוס חישובים אם יש
                             folderPath: `/uploads/books/${slug}`,
                             createdAt: b.createdAt ? new Date(b.createdAt) : new Date()
                         },
@@ -198,7 +207,7 @@ async function restore() {
                     { upsert: true }
                 );
             }
-            console.log('✅ Books imported.');
+            console.log('✅ Books imported (with fixed slugs).');
         }
 
         // ---------------------------------------------------------
@@ -211,15 +220,18 @@ async function restore() {
         // א. מטא-דאטה
         allMetadataSources.filter(f => f.path && f.path.startsWith('data/pages/')).forEach(fileRecord => {
             const bookName = path.basename(fileRecord.path, '.json');
-            
             if (!fileRecord.data || !Array.isArray(fileRecord.data)) return;
-
             if (!mergedPages[bookName]) mergedPages[bookName] = {};
+
+            const bookInfo = bookMap.get(bookName);
+            // אם הספר לא נמצא, ננסה לייצר slug ידני כדי לא לשבור את הקישור לתמונה
+            const slugForThumb = bookInfo ? bookInfo.slug : slugify(bookName, {lower:true, strict:true}) || 'unknown';
 
             fileRecord.data.forEach(p => {
                 const num = p.number?.$numberInt ? parseInt(p.number.$numberInt) : p.number;
                 
-                const defaultThumb = `/uploads/books/${slugify(bookName, {lower:true, strict:true})}/page.${num}.jpg`;
+                // כאן התיקון הקריטי לתמונות: קודם מהגיבוי, אחר כך מה-Slug
+                const defaultThumb = `/uploads/books/${slugForThumb}/page.${num}.jpg`;
                 
                 mergedPages[bookName][num] = {
                     ...mergedPages[bookName][num],
@@ -227,17 +239,17 @@ async function restore() {
                     claimedById: p.claimedById,
                     claimedAt: p.claimedAt,
                     completedAt: p.completedAt,
-                    thumbnail: p.thumbnail || defaultThumb
+                    thumbnail: p.thumbnail || defaultThumb // שמירה על הקישור המקורי
                 };
             });
         });
 
-        // ב. תוכן טקסט
+        // ב. תוכן טקסט של דפים
         rawFiles.filter(f => f.path && f.path.startsWith('data/content/')).forEach(fileRecord => {
             const fileName = path.basename(fileRecord.path, '.txt');
             const decodedName = decodeFileName(fileName);
-            
             const splitIndex = decodedName.lastIndexOf('_page_');
+            
             if (splitIndex !== -1) {
                 const bookNameRaw = decodedName.substring(0, splitIndex).trim();
                 let validBookName = bookNameRaw;
@@ -253,9 +265,11 @@ async function restore() {
                 if (bookMap.has(validBookName)) {
                     if (!mergedPages[validBookName]) mergedPages[validBookName] = {};
                     if (!mergedPages[validBookName][pageNum]) {
-                        mergedPages[validBookName][pageNum] = { 
+                         const bookInfo = bookMap.get(validBookName);
+                         const slug = bookInfo ? bookInfo.slug : 'unknown';
+                         mergedPages[validBookName][pageNum] = { 
                             status: 'available',
-                            thumbnail: `/uploads/books/${slugify(validBookName, {lower:true, strict:true})}/page.${pageNum}.jpg`
+                            thumbnail: `/uploads/books/${slug}/page.${pageNum}.jpg`
                         };
                     }
                     mergedPages[validBookName][pageNum].content = fileRecord.data?.content || '';
@@ -263,7 +277,7 @@ async function restore() {
             }
         });
 
-        // ג. יצירת אובייקטים
+        // ג. הכנסת דפים
         let totalPagesCount = 0;
         const bookCompletedCounts = {};
 
@@ -301,8 +315,6 @@ async function restore() {
 
         if (pageOperations.length > 0) {
             console.log(`Inserting ${totalPagesCount} pages...`);
-            
-            // מחיקה מלאה של עמודים קיימים לפני הכנסה חדשה (הכי בטוח למניעת כפילויות)
             await Page.deleteMany({});
             
             const chunkSize = 500;
@@ -313,13 +325,81 @@ async function restore() {
             console.log('\n✅ Pages imported.');
         }
 
-        console.log('🔄 Updating book statistics...');
         for (const [bookId, count] of Object.entries(bookCompletedCounts)) {
             await Book.findByIdAndUpdate(bookId, { completedPages: count });
         }
 
         // ---------------------------------------------------------
-        // שלב 4: הודעות
+        // שלב 4: ייבוא Uploads (חדש! לתיקון ההורדות)
+        // ---------------------------------------------------------
+        // נחפש את מערך ה-uploads ב-files.json
+        // זה עשוי להיות בתוך הרשומה הראשית או כרשומות נפרדות
+        let uploadsData = [];
+        
+        // נסיון למצוא את מערך ה-uploads בתוך files.json
+        const mainFileRecord = rawFiles.find(f => f.data && f.data.uploads && Array.isArray(f.data.uploads));
+        
+        if (mainFileRecord) {
+             uploadsData = mainFileRecord.data.uploads;
+        } else {
+             // אם זה מפוצל, אולי נמצא רשומות שה-path שלהן הוא data/uploads.json
+             const uploadsEntry = rawFiles.find(f => f.path === 'data/uploads.json');
+             if (uploadsEntry && uploadsEntry.data) {
+                 uploadsData = uploadsEntry.data;
+             }
+             // אם גם זה לא, ננסה לסרוק את כל הרשומות שהן העלאות (לפי מבנה)
+             // אבל לפי הדוגמא שלך, זה נמצא בתוך אובייקט ראשי ב-files.json תחת מפתח "uploads"
+             // אז נחפש את הרשומה שמכילה "uploads"
+             rawFiles.forEach(f => {
+                 if (f.uploads && Array.isArray(f.uploads)) { // פורמט אחד אפשרי
+                     uploadsData = uploadsData.concat(f.uploads);
+                 }
+                 if (f.data && f.data.uploads && Array.isArray(f.data.uploads)) { // הפורמט שראינו בדוגמה
+                     uploadsData = uploadsData.concat(f.data.uploads);
+                 }
+             });
+        }
+
+        if (uploadsData.length > 0) {
+            console.log(`📂 Processing ${uploadsData.length} uploads...`);
+            await Upload.deleteMany({}); // ניקוי העלאות קודמות
+
+            const uploadsToInsert = uploadsData.map(u => {
+                let uploaderId = null;
+                let reviewerId = null;
+
+                if (u.uploadedById && userMap.has(u.uploadedById)) {
+                    uploaderId = userMap.get(u.uploadedById);
+                } else {
+                    // Fallback למשתמש ראשון/אדמין אם המקורי נמחק
+                    uploaderId = userMap.values().next().value;
+                }
+
+                // המרת סטטוסים
+                let status = 'pending';
+                if (u.status === 'approved') status = 'approved';
+                if (u.status === 'rejected') status = 'rejected';
+
+                return {
+                    uploader: uploaderId,
+                    bookName: u.bookName || 'ספר ללא שם',
+                    originalFileName: u.originalFileName || `upload-${Date.now()}.txt`,
+                    content: u.content || "התוכן לא נמצא בקובץ הגיבוי. יש להעלות מחדש.", // טקסט ברירת מחדל כדי לא לשבור את הממשק
+                    status: status,
+                    reviewedBy: reviewerId,
+                    createdAt: u.uploadedAt ? new Date(u.uploadedAt) : new Date(),
+                    updatedAt: new Date()
+                };
+            });
+
+            await Upload.insertMany(uploadsToInsert);
+            console.log('✅ Uploads imported.');
+        } else {
+            console.log('⚠️ No uploads found in backup files.');
+        }
+
+        // ---------------------------------------------------------
+        // שלב 5: הודעות
         // ---------------------------------------------------------
         if (rawMessages && rawMessages.length > 0) {
             console.log(`📨 Importing ${rawMessages.length} messages...`);
@@ -327,7 +407,6 @@ async function restore() {
 
             for (const msg of rawMessages) {
                 const senderId = userMap.get(msg.senderId);
-                
                 const replies = (msg.replies || []).map(r => ({
                     sender: userMap.get(r.senderId),
                     content: r.message,
@@ -345,7 +424,6 @@ async function restore() {
                     });
                 }
             }
-
             if (messagesToInsert.length > 0) {
                 await Message.deleteMany({});
                 await Message.insertMany(messagesToInsert);
