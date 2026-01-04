@@ -4,35 +4,50 @@ import Book from '@/models/Book';
 import Page from '@/models/Page';
 import fs from 'fs-extra';
 import path from 'path';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function DELETE(request) {
     try {
-        // ... בדיקת הרשאות אדמין (חובה!) ...
+        // 1. אבטחה: בדיקת הרשאות אדמין
+        const session = await getServerSession(authOptions);
+        
+        // בדיקה כפולה: גם שיש סשן וגם שהתפקיד הוא אדמין
+        if (!session || session.user?.role !== 'admin') {
+            return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+        }
 
         const { bookId } = await request.json();
+        
+        if (!bookId) {
+            return NextResponse.json({ error: 'Book ID is required' }, { status: 400 });
+        }
+
         await connectDB();
 
         const book = await Book.findById(bookId);
-        if (!book) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 });
 
-        // 1. מחיקת קבצים פיזיים
-        // book.folderPath שמרנו כ- /uploads/books/slug
-        // נמיר לנתיב מלא במערכת ההפעלה
-        const fullPath = path.join(process.cwd(), 'public', book.folderPath); 
-        // הערה: בפרודקשן הנתיב עשוי להיות שונה (/var/www/...) תלוי בקונפיגורציה ב-POST upload
+        // 2. מחיקת קבצים פיזיים
+        // book.folderPath בדרך כלל נראה כך: /uploads/books/some-book-name
+        // אנו מנקים את הלוכסן בהתחלה כדי לחבר אותו נכון לנתיב התיקייה הנוכחית + public
+        const relativePath = book.folderPath.startsWith('/') ? book.folderPath.slice(1) : book.folderPath;
+        const fullPath = path.join(process.cwd(), 'public', relativePath);
 
-        if (await fs.pathExists(fullPath)) {
+        // בדיקת בטיחות בסיסית לפני מחיקה פיזית (לוודא שאנחנו בתיקיית uploads)
+        if (fullPath.includes('uploads') && await fs.pathExists(fullPath)) {
             await fs.remove(fullPath);
         }
 
-        // 2. מחיקת עמודים
+        // 3. מחיקת כל העמודים המשויכים לספר מה-DB
         await Page.deleteMany({ book: bookId });
 
-        // 3. מחיקת הספר
+        // 4. מחיקת רשומת הספר עצמה מה-DB
         await Book.findByIdAndDelete(bookId);
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, message: 'הספר נמחק בהצלחה' });
     } catch (error) {
+        console.error('Delete book error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
