@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import slugify from 'slugify';
 import { fileURLToPath } from 'url';
 
+// 1. טעינת משתני סביבה
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
 
@@ -13,7 +14,7 @@ const FILES_JSON_PATH = 'files.json';
 const MESSAGES_JSON_PATH = 'messages.json';
 const BACKUPS_JSON_PATH = 'backups.json';
 
-// --- סכמות ---
+// --- סכמות (העתק מדויק מהפרויקט החדש) ---
 const UserSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
@@ -46,7 +47,7 @@ const UploadSchema = new mongoose.Schema({
     uploader: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     bookName: { type: String, required: true },
     originalFileName: { type: String },
-    content: { type: String }, 
+    content: { type: String }, // <--- זה השדה הקריטי להורדה!
     status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
@@ -70,13 +71,47 @@ const Page = mongoose.models.Page || mongoose.model('Page', PageSchema);
 const Upload = mongoose.models.Upload || mongoose.model('Upload', UploadSchema);
 const Message = mongoose.models.Message || mongoose.model('Message', MessageSchema);
 
-// --- עזרים ---
+// --- פונקציות עזר לניקוי וזיהוי שמות ---
+
+// מפענח שמות מקודדים (URI Component)
+function decodeFileName(encodedName) {
+    try {
+        const uriComponent = encodedName.replace(/_/g, '%');
+        return decodeURIComponent(uriComponent);
+    } catch (e) { return encodedName; }
+}
+
+// יוצר "מפתח נקי" להשוואה בין שמות קבצים
+// מסיר סיומות, מספרים אקראיים, רווחים וכו' כדי למצוא התאמה
+function normalizeKey(filename) {
+    if (!filename) return '';
+    let name = filename;
+    
+    // אם השם מקודד (מתחיל ב-_D7...), נפענח אותו קודם
+    if (name.startsWith('_')) {
+        name = decodeFileName(name);
+    }
+
+    return name
+        .replace(/\.txt$/i, '')           // הסרת סיומת
+        .replace(/_\d{10,}/, '')          // הסרת timestamp ארוך בסוף (למשל _1767489134475)
+        .replace(/[-_\s]+/g, ' ')         // החלפת מפרידים ברווח
+        .trim()
+        .toLowerCase();
+}
+
+// יצירת slug שמשמר עברית
+function createHebrewSlug(name) {
+    if (!name) return 'unknown';
+    return name.trim().replace(/\s+/g, '-').replace(/[^\w\u0590-\u05FF\-]/g, '');
+}
 
 async function loadDataFromFile(filePath) {
     if (!fs.existsSync(filePath)) {
         console.warn(`⚠️ File not found: ${filePath}`);
         return [];
     }
+
     const results = [];
     const fileStream = fs.createReadStream(filePath);
     const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
@@ -102,22 +137,10 @@ async function loadDataFromFile(filePath) {
     return results;
 }
 
-function decodeFileName(encodedName) {
-    try {
-        const uriComponent = encodedName.replace(/_/g, '%');
-        return decodeURIComponent(uriComponent);
-    } catch (e) { return encodedName; }
-}
-
-function createHebrewSlug(name) {
-    if (!name) return 'unknown';
-    return name.trim().replace(/\s+/g, '-').replace(/[^\w\u0590-\u05FF\-]/g, '');
-}
-
 // מפות גלובליות
 const userMap = new Map(); 
 const bookMap = new Map(); 
-const contentMap = new Map(); // fileName -> content
+const contentMap = new Map(); // NormalizedKey -> Content
 
 async function restore() {
     try {
@@ -125,36 +148,37 @@ async function restore() {
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Connected.');
 
+        // קריאת כל הקבצים
         const rawFiles = await loadDataFromFile(FILES_JSON_PATH);
         const rawBackups = await loadDataFromFile(BACKUPS_JSON_PATH);
         const rawMessages = await loadDataFromFile(MESSAGES_JSON_PATH);
         const allMetadataSources = [...rawFiles, ...rawBackups];
 
         // ---------------------------------------------------------
-        // שלב 0: בניית מפת תוכן חכמה
+        // שלב 0: בניית אינדקס תוכן חכם
         // ---------------------------------------------------------
-        console.log('📝 Building smart content cache...');
+        console.log('📝 Building content index...');
         rawFiles.filter(f => f.path && f.path.startsWith('data/content/')).forEach(fileRecord => {
             if (fileRecord.data && fileRecord.data.content) {
-                // שמירת התוכן תחת כל המפתחות האפשריים
-                const rawName = path.basename(fileRecord.path); // _D7_90...txt
-                const decodedName = decodeFileName(rawName);    // אילת השחר...txt
+                const rawName = path.basename(fileRecord.path); 
+                const normalized = normalizeKey(rawName);
                 
+                // שמירה במפה לפי המפתח המנורמל
+                // אם יש כפילויות, האחרון דורס (בדרך כלל זה בסדר)
+                contentMap.set(normalized, fileRecord.data.content);
+                
+                // שמירה גם לפי השם המקורי ליתר ביטחון
                 contentMap.set(rawName, fileRecord.data.content);
-                contentMap.set(decodedName, fileRecord.data.content);
-                
-                // נסיון לשמור גם בלי סיומת .txt למקרה הצורך
-                contentMap.set(rawName.replace('.txt', ''), fileRecord.data.content);
-                contentMap.set(decodedName.replace('.txt', ''), fileRecord.data.content);
             }
         });
-        console.log(`✅ Cached content for ${contentMap.size} keys.`);
+        console.log(`✅ Indexed ${contentMap.size} text contents.`);
 
         // ---------------------------------------------------------
         // שלב 1: משתמשים
         // ---------------------------------------------------------
         const usersEntry = rawFiles.find(f => f.path === 'data/users.json');
         if (usersEntry && usersEntry.data) {
+            console.log(`Processing users...`);
             for (const u of usersEntry.data) {
                 const newId = new mongoose.Types.ObjectId();
                 const existingUser = await User.findOne({ email: u.email });
@@ -186,6 +210,7 @@ async function restore() {
         // ---------------------------------------------------------
         const booksEntry = rawFiles.find(f => f.path === 'data/books.json');
         if (booksEntry && booksEntry.data) {
+            console.log(`Processing books...`);
             for (const b of booksEntry.data) {
                 const newId = new mongoose.Types.ObjectId();
                 const slug = createHebrewSlug(b.name);
@@ -214,12 +239,83 @@ async function restore() {
         }
 
         // ---------------------------------------------------------
-        // שלב 3: איחוי דפים
+        // שלב 3: Uploads (קבצי טקסט להורדה)
+        // ---------------------------------------------------------
+        // איתור רשימת ההעלאות
+        let uploadsData = [];
+        rawFiles.forEach(f => {
+            if (f.data && f.data.uploads && Array.isArray(f.data.uploads)) {
+                uploadsData = uploadsData.concat(f.data.uploads);
+            }
+        });
+
+        if (uploadsData.length > 0) {
+            console.log(`📂 Processing ${uploadsData.length} uploads...`);
+            await Upload.deleteMany({}); 
+
+            let mappedCount = 0;
+            const uploadsToInsert = uploadsData.map(u => {
+                let uploaderId = null;
+                if (u.uploadedById && userMap.has(u.uploadedById)) {
+                    uploaderId = userMap.get(u.uploadedById);
+                } else {
+                    uploaderId = userMap.values().next().value;
+                }
+
+                // --- חיפוש תוכן "עקשן" ---
+                let realContent = '';
+                const keysToTry = [
+                    normalizeKey(u.fileName),           // לפי שם הקובץ שנוצר (למשל עם timestamp)
+                    normalizeKey(u.originalFileName),   // לפי השם המקורי
+                    u.fileName,                         // לפי השם המדויק
+                    u.bookName                          // לפי שם הספר (לפעמים זה אותו דבר)
+                ];
+
+                for (const key of keysToTry) {
+                    if (key && contentMap.has(key)) {
+                        realContent = contentMap.get(key);
+                        mappedCount++;
+                        break;
+                    }
+                }
+
+                if (!realContent) {
+                    // נסיון אחרון: חיפוש חלקי במפה
+                    // זה איטי יותר, אבל מציל נתונים במקרים קשים
+                    for (const [mapKey, mapContent] of contentMap.entries()) {
+                         if (mapKey.includes(normalizeKey(u.bookName)) || normalizeKey(u.fileName).includes(mapKey)) {
+                             realContent = mapContent;
+                             mappedCount++;
+                             break;
+                         }
+                    }
+                }
+
+                const finalContent = realContent || "שגיאה: התוכן לא נמצא בקובץ הגיבוי.";
+
+                return {
+                    uploader: uploaderId,
+                    bookName: u.bookName || 'ספר ללא שם',
+                    originalFileName: u.originalFileName || `upload.txt`,
+                    content: finalContent, // כאן נשמר הטקסט שיוצג בהורדה!
+                    status: u.status === 'approved' ? 'approved' : u.status === 'rejected' ? 'rejected' : 'pending',
+                    reviewedBy: null,
+                    createdAt: u.uploadedAt ? new Date(u.uploadedAt) : new Date(),
+                    updatedAt: new Date()
+                };
+            });
+
+            await Upload.insertMany(uploadsToInsert);
+            console.log(`✅ Uploads imported. Successfully matched content for ${mappedCount}/${uploadsToInsert.length} files.`);
+        }
+
+        // ---------------------------------------------------------
+        // שלב 4: דפים (Pages)
         // ---------------------------------------------------------
         console.log('🧩 Processing pages...');
-        const pageOperations = [];
         const mergedPages = {};
 
+        // איסוף מטא-דאטה
         allMetadataSources.filter(f => f.path && f.path.startsWith('data/pages/')).forEach(fileRecord => {
             const bookName = path.basename(fileRecord.path, '.json');
             if (!fileRecord.data || !Array.isArray(fileRecord.data)) return;
@@ -232,9 +328,8 @@ async function restore() {
                 const num = p.number?.$numberInt ? parseInt(p.number.$numberInt) : p.number;
                 const defaultThumb = `/uploads/books/${slugForThumb}/page.${num}.jpg`;
                 
-                // חיפוש תוכן לדף הספציפי הזה
-                // השם בדרך כלל הוא: "שם ספר_page_1.txt"
-                const contentKey = `${bookName}_page_${num}.txt`;
+                // גם כאן נשתמש במיפוי התוכן החכם
+                const contentKey = normalizeKey(`${bookName} page ${num}`);
                 const content = contentMap.get(contentKey) || '';
 
                 mergedPages[bookName][num] = {
@@ -249,32 +344,10 @@ async function restore() {
             });
         });
 
-        // עדכון דפים על בסיס קבצי תוכן בלבד (אם חסר מטא-דאטה)
-        rawFiles.filter(f => f.path && f.path.startsWith('data/content/')).forEach(fileRecord => {
-            const fileName = path.basename(fileRecord.path, '.txt');
-            const decodedName = decodeFileName(fileName);
-            const splitIndex = decodedName.lastIndexOf('_page_');
-            
-            if (splitIndex !== -1) {
-                const bookName = decodedName.substring(0, splitIndex).trim();
-                const pageNum = parseInt(decodedName.substring(splitIndex + 6));
-
-                if (bookMap.has(bookName)) {
-                    if (!mergedPages[bookName]) mergedPages[bookName] = {};
-                    if (!mergedPages[bookName][pageNum]) {
-                         const bookInfo = bookMap.get(bookName);
-                         const slug = bookInfo ? bookInfo.slug : 'unknown';
-                         mergedPages[bookName][pageNum] = { 
-                            status: 'available',
-                            thumbnail: `/uploads/books/${slug}/page.${pageNum}.jpg`
-                        };
-                    }
-                    mergedPages[bookName][pageNum].content = fileRecord.data?.content || '';
-                }
-            }
-        });
-
+        // יצירה והכנסה
+        const pageOperations = [];
         const bookCompletedCounts = {};
+
         for (const [bookName, pagesObj] of Object.entries(mergedPages)) {
             const bookInfo = bookMap.get(bookName);
             if (!bookInfo) continue;
@@ -316,70 +389,6 @@ async function restore() {
 
         for (const [bookId, count] of Object.entries(bookCompletedCounts)) {
             await Book.findByIdAndUpdate(bookId, { completedPages: count });
-        }
-
-        // ---------------------------------------------------------
-        // שלב 4: Uploads (תיקון הורדות)
-        // ---------------------------------------------------------
-        let uploadsData = [];
-        const mainFileRecord = rawFiles.find(f => f.data && f.data.uploads && Array.isArray(f.data.uploads));
-        
-        if (mainFileRecord) {
-             uploadsData = mainFileRecord.data.uploads;
-        } else {
-             rawFiles.forEach(f => {
-                 if (f.uploads && Array.isArray(f.uploads)) uploadsData = uploadsData.concat(f.uploads);
-                 if (f.data && f.data.uploads && Array.isArray(f.data.uploads)) uploadsData = uploadsData.concat(f.data.uploads);
-             });
-        }
-
-        if (uploadsData.length > 0) {
-            console.log(`📂 Processing ${uploadsData.length} uploads...`);
-            await Upload.deleteMany({}); 
-
-            const uploadsToInsert = uploadsData.map(u => {
-                let uploaderId = null;
-                if (u.uploadedById && userMap.has(u.uploadedById)) {
-                    uploaderId = userMap.get(u.uploadedById);
-                } else {
-                    uploaderId = userMap.values().next().value;
-                }
-
-                // --- לוגיקה משופרת למציאת תוכן ---
-                let realContent = '';
-                
-                // נסיון 1: לפי fileName (בדרך כלל מקודד)
-                if (u.fileName && contentMap.has(u.fileName)) {
-                    realContent = contentMap.get(u.fileName);
-                } 
-                // נסיון 2: לפי originalFileName (שם עברי)
-                else if (u.originalFileName && contentMap.has(u.originalFileName)) {
-                    realContent = contentMap.get(u.originalFileName);
-                }
-                // נסיון 3: התאמה מיוחדת (הסרת timestamps אם יש)
-                else if (u.fileName) {
-                    // למשל: name_timestamp.txt -> name.txt
-                    const baseName = u.fileName.replace(/_\d+\.txt$/, '.txt');
-                    if (contentMap.has(baseName)) realContent = contentMap.get(baseName);
-                }
-                
-                // fallback אחרון
-                const finalContent = realContent || u.content || "התוכן לא שוחזר מהגיבוי.";
-
-                return {
-                    uploader: uploaderId,
-                    bookName: u.bookName || 'ספר ללא שם',
-                    originalFileName: u.originalFileName || `upload.txt`,
-                    content: finalContent,
-                    status: u.status === 'approved' ? 'approved' : u.status === 'rejected' ? 'rejected' : 'pending',
-                    reviewedBy: null, // אפשר להשאיר ריק
-                    createdAt: u.uploadedAt ? new Date(u.uploadedAt) : new Date(),
-                    updatedAt: new Date()
-                };
-            });
-
-            await Upload.insertMany(uploadsToInsert);
-            console.log('✅ Uploads imported with content.');
         }
 
         // ---------------------------------------------------------
