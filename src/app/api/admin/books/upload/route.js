@@ -29,13 +29,32 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'חסרים נתונים' }, { status: 400 });
     }
 
-    // תיקון: יצירת Slug ששומר על עברית
-    // במקום למחוק תווים לא לטיניים, נחליף רק רווחים וסימנים מיוחדים במקפים
-    const safeName = bookName.trim().replace(/[\s\t\n]+/g, '-'); 
-    // מוסיפים timestamp קצר למניעת כפילויות
-    const slug = `${safeName}-${Date.now().toString().slice(-6)}`;
+    // 1. אבטחה: Path Traversal Protection
+    // שימוש ב-slugify כדי להסיר תווים מסוכנים כמו / \ ..
+    // הוספת timestamp כדי להבטיח ייחודיות ולמנוע דריסת תיקיות קיימות
+    const safeName = slugify(bookName, {
+        replacement: '-',  // replace spaces with replacement
+        remove: /[*+~.()'"!:@\/\\?]/g, // regex to remove characters (כולל סלשים)
+        lower: false,      // allow mixed case (לעברית זה פחות משנה אבל שומר על קריאות)
+        strict: false      // allow unicode (Hebrew)
+    });
     
+    // ניקוי נוסף ליתר ביטחון (משאיר רק אותיות, מספרים ומקפים)
+    const sanitizedName = safeName.replace(/[^\w\u0590-\u05FF\-]/g, '');
+    
+    if (!sanitizedName) {
+         return NextResponse.json({ error: 'שם הספר מכיל תווים לא חוקיים' }, { status: 400 });
+    }
+
+    const slug = `${sanitizedName}-${Date.now().toString().slice(-6)}`;
+    
+    // שימוש ב-path.join מבטיח שימוש בספרטורים נכונים, אבל הניקוי למעלה הוא ההגנה האמיתית
     const bookFolder = path.join(UPLOAD_ROOT, 'books', slug);
+    
+    // מניעת יציאה מהתיקייה (למקרה שמשהו התפספס, למרות שה-slugify אמור לטפל בזה)
+    if (!bookFolder.startsWith(UPLOAD_ROOT)) {
+        return NextResponse.json({ error: 'נתיב לא חוקי' }, { status: 400 });
+    }
     
     await fs.ensureDir(bookFolder);
 

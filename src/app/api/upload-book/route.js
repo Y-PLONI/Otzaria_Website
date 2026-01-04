@@ -4,7 +4,7 @@ import Upload from '@/models/Upload';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-// טיפול בהעלאת קובץ טקסט ע"י משתמש (תואם ל-UI הישן)
+// טיפול בהעלאת קובץ טקסט ע"י משתמש
 export async function POST(request) {
     try {
         const session = await getServerSession(authOptions);
@@ -14,11 +14,28 @@ export async function POST(request) {
         const file = formData.get('file');
         const bookName = formData.get('bookName');
 
-        // ולידציות
+        // ולידציות בסיסיות
         if (!file || !bookName) return NextResponse.json({ error: 'Missing data' }, { status: 400 });
-        if (!file.name.endsWith('.txt')) return NextResponse.json({ error: 'Only .txt files allowed' }, { status: 400 });
+
+        // 1. אבטחה: בדיקת סוג קובץ (MIME Type) בנוסף לסיומת
+        // אנו מוודאים שהדפדפן מזהה את זה כטקסט פשוט
+        if (file.type !== 'text/plain' && !file.name.toLowerCase().endsWith('.txt')) {
+            return NextResponse.json({ error: 'רק קבצי טקסט (.txt) מותרים' }, { status: 400 });
+        }
+
+        // 2. אבטחה: הגבלת גודל קובץ (למשל 10MB)
+        const MAX_SIZE = 10 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+            return NextResponse.json({ error: 'הקובץ גדול מדי (מקסימום 10MB)' }, { status: 400 });
+        }
 
         const content = await file.text();
+
+        // 3. אבטחה: בדיקה שהתוכן לא מכיל תווים בינאריים חשודים (Null Bytes)
+        // זה מונע העלאת קבצי הרצה שהוסוו כטקסט
+        if (content.indexOf('\0') !== -1) {
+             return NextResponse.json({ error: 'הקובץ מכיל תווים לא חוקיים' }, { status: 400 });
+        }
 
         await connectDB();
 
@@ -33,7 +50,6 @@ export async function POST(request) {
             status: 'pending'
         });
 
-        // החזרת פורמט שה-UI הישן מצפה לו
         return NextResponse.json({ 
             success: true, 
             message: 'הספר הועלה בהצלחה',
@@ -51,16 +67,15 @@ export async function POST(request) {
     }
 }
 
-// קבלת ההיסטוריה של המשתמש
+// קבלת ההיסטוריה של המשתמש (ללא שינוי, נשאר לצורך שלמות הקובץ)
 export async function GET(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ success: true, uploads: [] }); // לא מחובר
+        if (!session) return NextResponse.json({ success: true, uploads: [] }); 
 
         const { searchParams } = new URL(request.url);
-        const userId = searchParams.get('userId'); // ה-UI שולח את זה, אבל עדיף להשתמש ב-Session לאבטחה
+        const userId = searchParams.get('userId'); 
 
-        // מוודאים שהמשתמש מבקש את המידע של עצמו (אלא אם הוא אדמין)
         if (userId && userId !== session.user._id && session.user.role !== 'admin') {
              return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }

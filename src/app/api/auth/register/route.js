@@ -2,9 +2,24 @@ import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
+import { checkRateLimit } from '@/lib/rate-limit'; // ייבוא הפונקציה
 
 export async function POST(request) {
   try {
+    // 1. אבטחה: Rate Limiting
+    // קבלת ה-IP האמיתי (תלוי בפריסה, בדרך כלל x-forwarded-for עובד ברוב המקרים)
+    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    
+    // הגבלה: 5 הרשמות בשעה מאותה כתובת IP
+    const isAllowed = checkRateLimit(ip, 'register', 5, 'hour');
+    
+    if (!isAllowed) {
+        return NextResponse.json(
+            { error: 'יותר מדי ניסיונות הרשמה. נסה שוב מאוחר יותר.' }, 
+            { status: 429 }
+        );
+    }
+
     const { name, email, password } = await request.json();
     
     await connectDB();

@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import Book from '@/models/Book';
-import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+
+export const dynamic = 'force-dynamic'; // מונע קאש סטטי
 
 export async function GET() {
     try {
@@ -15,27 +16,52 @@ export async function GET() {
 
         await connectDB();
 
-        // שליפת כל הנתונים (זהירות: במסד ענק זה עלול להיות כבד)
-        // בפרודקשן אמיתי עדיף להשתמש ב-mongodump ברמת השרת
-        const users = await User.find({}).lean();
-        const books = await Book.find({}).lean();
-        // עמודים הם רבים, אולי נדלג עליהם בייצוא JSON פשוט או נייצא רק טקסט
-        
-        const backupData = {
-            date: new Date().toISOString(),
-            users,
-            books,
-            // pages: ... (אופציונלי)
-        };
+        // יצירת Stream במקום לטעון הכל לזיכרון (מניעת DoS/Memory Crash)
+        const stream = new ReadableStream({
+            async start(controller) {
+                const encoder = new TextEncoder();
+                
+                // התחלת JSON
+                controller.enqueue(encoder.encode('{\n"date": "' + new Date().toISOString() + '",\n'));
+                
+                // 1. הזרמת משתמשים
+                controller.enqueue(encoder.encode('"users": ['));
+                let isFirstUser = true;
+                
+                // שימוש ב-Cursor של Mongoose כדי לרוץ על המסמכים אחד אחד
+                for await (const user of User.find({}).cursor()) {
+                    if (!isFirstUser) controller.enqueue(encoder.encode(','));
+                    controller.enqueue(encoder.encode(JSON.stringify(user)));
+                    isFirstUser = false;
+                }
+                controller.enqueue(encoder.encode('],\n'));
 
-        return new NextResponse(JSON.stringify(backupData, null, 2), {
+                // 2. הזרמת ספרים
+                controller.enqueue(encoder.encode('"books": ['));
+                let isFirstBook = true;
+                
+                for await (const book of Book.find({}).cursor()) {
+                    if (!isFirstBook) controller.enqueue(encoder.encode(','));
+                    controller.enqueue(encoder.encode(JSON.stringify(book)));
+                    isFirstBook = false;
+                }
+                controller.enqueue(encoder.encode(']\n}'));
+                
+                // סיום
+                controller.close();
+            }
+        });
+
+        return new NextResponse(stream, {
             headers: {
                 'Content-Type': 'application/json',
-                'Content-Disposition': `attachment; filename="otzaria-backup-${Date.now()}.json"`
+                'Content-Disposition': `attachment; filename="otzaria-backup-${Date.now()}.json"`,
+                'Cache-Control': 'no-cache'
             }
         });
 
     } catch (error) {
+        console.error('Backup Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

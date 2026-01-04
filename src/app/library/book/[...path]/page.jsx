@@ -525,7 +525,7 @@ function PageCard({ page, onClaim, onComplete, onRelease, currentUser, bookPath 
         {page.status === 'in-progress' && isClaimedByMe && (
           <div className="flex gap-2">
             <Link
-              href={`/edit/${encodeURIComponent(bookPath)}/${page.number}`}
+              href={`/library/edit/${encodeURIComponent(bookPath)}/${page.number}`}
               className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex items-center justify-center"
             >
               ערוך

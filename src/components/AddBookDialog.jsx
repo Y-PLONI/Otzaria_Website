@@ -10,12 +10,14 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
     const [file, setFile] = useState(null)
     const [isUploading, setIsUploading] = useState(false)
     const [error, setError] = useState(null)
+    const [category, setCategory] = useState('כללי')
 
     const handleFileSelect = (e) => {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0])
             if (!bookName) {
-                setBookName(e.target.files[0].name.replace('.pdf', ''))
+                // הסרת סיומת
+                setBookName(e.target.files[0].name.replace(/\.[^/.]+$/, ""))
             }
         }
     }
@@ -40,6 +42,7 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
         const formData = new FormData()
         formData.append('pdf', file)
         formData.append('bookName', bookName)
+        formData.append('category', category)
 
         try {
             const result = await uploadBookAction(formData)
@@ -52,10 +55,11 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
             onClose()
             setFile(null)
             setBookName('')
+            setCategory('כללי')
 
         } catch (err) {
             console.error(err)
-            setError('שגיאה בתהליך: ' + err.message)
+            setError('שגיאה בתהליך ההעלאה וההמרה: ' + err.message)
         } finally {
             setIsUploading(false)
         }
