@@ -2,8 +2,11 @@
 
 /**
  * migrate-complete-final.js
- * סקריפט שחזור אולטימטיבי למבנה הנתונים של אוצריא.
- * כולל Parser ייעודי לקבצי ה-JSON המיוחדים (Concatenated Objects).
+ * סקריפט שחזור אולטימטיבי:
+ * 1. קורא נתונים גולמיים בצורה חכמה (כולל סוף קובץ).
+ * 2. מפענח שמות קבצים ותוכן.
+ * 3. משדך משתמשים בצורה אגרסיבית (ID -> אימייל -> שם).
+ * 4. מבצע חישוב מחדש של סטטיסטיקות בסוף הריצה.
  */
 
 const fs = require('fs');
@@ -16,7 +19,7 @@ const FILES_JSON_PATH = path.join(process.cwd(), 'files.json');
 const BACKUPS_JSON_PATH = path.join(process.cwd(), 'backups.json');
 const MESSAGES_JSON_PATH = path.join(process.cwd(), 'messages.json');
 
-// --- הגדרת סכמות (Schemas) ---
+// --- הגדרת סכמות ---
 const Schema = mongoose.Schema;
 
 const UserSchema = new Schema({
@@ -47,7 +50,6 @@ const PageSchema = new Schema({
     imagePath: { type: String, required: true }
 }, { timestamps: true });
 
-// אינדקס ייחודי למניעת כפילויות
 PageSchema.index({ book: 1, pageNumber: 1 }, { unique: true });
 
 const UploadSchema = new Schema({
@@ -79,36 +81,24 @@ const Page = mongoose.models.Page || mongoose.model('Page', PageSchema);
 const Upload = mongoose.models.Upload || mongoose.model('Upload', UploadSchema);
 const Message = mongoose.models.Message || mongoose.model('Message', MessageSchema);
 
-// --- פונקציות עזר לניקוי נתונים ---
+// --- משתנים גלובליים למיפוי ---
+// אנו נשתמש במספר מפות כדי להבטיח שנמצא את המשתמש גם אם ה-ID השתנה
+const userIdMap = new Map();    // Old ID -> New ObjectId
+const userEmailMap = new Map(); // Email -> New ObjectId
+const userNameMap = new Map();  // Name -> New ObjectId
+const contentMap = new Map();   // Normalized Filename -> Content
 
-/**
- * מנרמל שמות קבצים כדי למצוא התאמה בין ה-Uploads לקבצי התוכן.
- * מטפל בקידוד URL, סיומות וחותמות זמן.
- */
+// --- פונקציות עזר ---
+
 function normalizeKey(filePathOrName) {
     if (!filePathOrName) return '';
-
-    // 1. חילוץ שם הקובץ מהנתיב
     let name = filePathOrName.split('/').pop(); 
-
-    // 2. פענוח URL Encoded (למשל %D7%90 -> א)
-    try {
-        name = decodeURIComponent(name);
-    } catch (e) { }
-
-    // 3. הסרת סיומת קובץ
+    try { name = decodeURIComponent(name); } catch (e) { }
     name = name.replace(/\.[^/.]+$/, "");
-
-    // 4. הסרת חותמות זמן ארוכות בסוף הקובץ (למשל _1767556478342)
-    // ה-Regex מחפש קו תחתון ואחריו לפחות 10 ספרות בסוף המחרוזת
     name = name.replace(/_\d{10,}.*$/, '');
-
     return name.trim();
 }
 
-/**
- * יצירת סלאג (Slug)
- */
 function createSlug(name) {
     if (!name) return 'unknown-' + Date.now();
     return name.trim()
@@ -117,9 +107,6 @@ function createSlug(name) {
         .toLowerCase() || 'book-' + Date.now();
 }
 
-/**
- * המרת אובייקטים מיוחדים של מונגו לערכים רגילים
- */
 function extractValue(val) {
     if (val && typeof val === 'object') {
         if (val.$numberInt) return parseInt(val.$numberInt);
@@ -130,20 +117,37 @@ function extractValue(val) {
     return val;
 }
 
-/**
- * המרת תאריך בטוחה
- */
 function safeDate(d) {
     if (!d) return new Date();
     const date = new Date(extractValue(d));
     return isNaN(date.getTime()) ? new Date() : date;
 }
 
-// --- פונקציית הקריאה המיוחדת (Parser) ---
+/**
+ * פונקציה חכמה למציאת המשתמש הנכון
+ * מנסה לפי סדר: מזהה ישן > אימייל > שם
+ */
+function resolveUser(oldId, oldEmail, oldName) {
+    // 1. נסה לפי מזהה ישן
+    if (oldId && userIdMap.has(oldId)) return userIdMap.get(oldId);
+    
+    // 2. נסה לפי אימייל (אם קיים בנתונים הישנים)
+    if (oldEmail) {
+        const cleanEmail = oldEmail.toLowerCase().trim();
+        if (userEmailMap.has(cleanEmail)) return userEmailMap.get(cleanEmail);
+    }
+
+    // 3. נסה לפי שם (פחות בטוח, אבל עדיף מכלום)
+    if (oldName) {
+        const cleanName = oldName.trim();
+        if (userNameMap.has(cleanName)) return userNameMap.get(cleanName);
+    }
+
+    return null;
+}
 
 /**
- * קורא קובץ שמכיל רצף של אובייקטי JSON (לא מופרדים בפסיקים ולא עטופים במערך).
- * מטפל בבעיות זיכרון ע"י קריאה חכמה.
+ * Parser מותאם אישית לקבצי ה-JSON הבעייתיים
  */
 function parseStreamedJsonFileSync(filePath) {
     if (!fs.existsSync(filePath)) {
@@ -151,8 +155,7 @@ function parseStreamedJsonFileSync(filePath) {
         return [];
     }
 
-    console.log(`📖 מתחיל לקרוא את ${path.basename(filePath)} (קריאה מתקדמת)...`);
-    
+    console.log(`📖 קורא את ${path.basename(filePath)}...`);
     const fileBuffer = fs.readFileSync(filePath);
     const content = fileBuffer.toString('utf8');
     const objects = [];
@@ -164,17 +167,9 @@ function parseStreamedJsonFileSync(filePath) {
 
     for (let i = 0; i < content.length; i++) {
         const char = content[i];
-
-        // טיפול במחרוזות כדי לא לספור סוגריים בתוכן טקסטואלי
-        if (char === '"' && !isEscaped) {
-            inString = !inString;
-        }
-        
-        if (!isEscaped && char === '\\') {
-            isEscaped = true;
-        } else {
-            isEscaped = false;
-        }
+        if (char === '"' && !isEscaped) inString = !inString;
+        if (!isEscaped && char === '\\') isEscaped = true;
+        else isEscaped = false;
 
         if (!inString) {
             if (char === '{') {
@@ -183,39 +178,28 @@ function parseStreamedJsonFileSync(filePath) {
             } else if (char === '}') {
                 braceCount--;
                 if (braceCount === 0 && startIndex !== -1) {
-                    // מצאנו אובייקט שלם
                     const jsonStr = content.substring(startIndex, i + 1);
                     try {
-                        const obj = JSON.parse(jsonStr);
-                        objects.push(obj);
-                    } catch (e) {
-                        // התעלם משגיאות פרסור נקודתיות
-                    }
+                        objects.push(JSON.parse(jsonStr));
+                    } catch (e) {}
                     startIndex = -1;
                 }
             }
         }
     }
-
-    console.log(`✅ הצלחנו לחלץ ${objects.length} אובייקטים מ-${path.basename(filePath)}`);
+    console.log(`✅ חולצו ${objects.length} אובייקטים מ-${path.basename(filePath)}`);
     return objects;
 }
-
-// --- משתנים גלובליים למיפוי ---
-const userIdMapping = new Map(); // Old ID -> New ObjectId
-const contentMap = new Map();    // Normalized Key -> Text Content
 
 // --- הלוגיקה הראשית ---
 
 async function main() {
     try {
-        console.log('🚀 מתחיל תהליך שחזור נתונים מלא (גרסה מתוקנת)...');
-        
-        // 1. התחברות
+        console.log('🚀 מתחיל תהליך שחזור מלא ומתוקן...');
         await mongoose.connect(MONGODB_URI);
         console.log('✅ מחובר למסד הנתונים.');
 
-        // 2. ניקוי
+        // שלב 0: ניקוי
         console.log('🧹 מנקה נתונים קיימים...');
         await Promise.all([
             User.deleteMany({}),
@@ -224,30 +208,21 @@ async function main() {
             Upload.deleteMany({}),
             Message.deleteMany({})
         ]);
-        console.log('✅ המסד נקי.');
 
-        // 3. טעינת files.json ומיפוי תוכן
-        // זה השלב הקריטי - קריאת כל האובייקטים מהקובץ הגדול
+        // שלב 1: טעינת files.json ומיפוי תוכן
         const filesData = parseStreamedJsonFileSync(FILES_JSON_PATH);
-        
-        // איתור קבצי מטא-דאטה מתוך הנתונים שקראנו
         let usersRawData = null;
         let uploadsMetaRawData = null;
 
         console.log('📝 בונה אינדקס תוכן...');
-        
         filesData.forEach(item => {
-            // שמירת הפניות לקבצי מטא-דאטה חשובים שנמצאים בתוך files.json
             if (item.path === 'data/users.json') usersRawData = item.data;
             if (item.path === 'data/uploads-meta.json') uploadsMetaRawData = item.data;
 
-            // שמירת תוכן (טקסט) של קבצים רלוונטיים
             if (item.data && typeof item.data.content === 'string' && item.data.content.length > 0) {
                 if (item.path.includes('data/content/') || item.path.includes('data/uploads/')) {
                     const normalized = normalizeKey(item.path);
                     contentMap.set(normalized, item.data.content);
-                    
-                    // שמירה גם עם רווחים במקום קו תחתון (למקרה של אי-התאמה)
                     if (normalized.includes('_')) {
                         contentMap.set(normalized.replace(/_/g, ' '), item.data.content);
                     }
@@ -255,9 +230,7 @@ async function main() {
             }
         });
 
-        console.log(`📊 נטענו ${contentMap.size} רשומות תוכן לזיכרון.`);
-
-        // 4. שחזור משתמשים
+        // שלב 2: שחזור משתמשים (כולל בניית מפות חיפוש)
         if (usersRawData && Array.isArray(usersRawData)) {
             console.log(`👥 משחזר ${usersRawData.length} משתמשים...`);
             for (const u of usersRawData) {
@@ -266,75 +239,77 @@ async function main() {
                     const newUser = await User.create({
                         name: u.name || `User_${u.id}`,
                         email: u.email,
-                        password: u.password || '$2b$10$PlaceholderHashForSecurity', 
+                        password: u.password || '$2b$10$PlaceholderHashForSecurity',
                         role: u.role || 'user',
                         points: extractValue(u.points) || 0,
                         createdAt: safeDate(u.createdAt),
                         updatedAt: safeDate(u.updatedAt)
                     });
-                    userIdMapping.set(u.id, newUser._id);
-                } catch (e) { /* ignore duplicates */ }
+                    
+                    // מילוי כל המפות לזיהוי עתידי
+                    const newId = newUser._id;
+                    userIdMap.set(u.id, newId);
+                    userEmailMap.set(u.email.toLowerCase().trim(), newId);
+                    if (u.name) userNameMap.set(u.name.trim(), newId);
+
+                } catch (e) {}
             }
             console.log('✅ שחזור משתמשים הושלם.');
-        } else {
-            console.log('⚠️ לא נמצאו נתוני משתמשים ב-files.json');
         }
 
-        // 5. שחזור Uploads (קבצים שהועלו)
+        // שלב 3: שחזור Uploads
         if (uploadsMetaRawData && Array.isArray(uploadsMetaRawData)) {
             console.log(`📤 משחזר ${uploadsMetaRawData.length} העלאות...`);
-            let matchedContentCount = 0;
+            let contentFound = 0;
 
             for (const meta of uploadsMetaRawData) {
                 if (!meta.bookName) continue;
 
                 let content = '';
                 const originalName = meta.fileName || meta.originalFileName || '';
-                
-                // חיפוש חכם של התוכן
                 let searchKey = normalizeKey(originalName);
+                
                 if (contentMap.has(searchKey)) {
                     content = contentMap.get(searchKey);
                 } else {
-                    // נסיון נוסף עם פענוח כפול
                     try {
                         const decodedKey = normalizeKey(decodeURIComponent(originalName));
-                        if (contentMap.has(decodedKey)) {
-                            content = contentMap.get(decodedKey);
-                        }
+                        if (contentMap.has(decodedKey)) content = contentMap.get(decodedKey);
                     } catch(e) {}
                 }
 
-                if (content) matchedContentCount++;
+                if (content) contentFound++;
+
+                // שימוש ב-resolveUser כדי למצוא את המעלה
+                const uploaderId = resolveUser(meta.uploadedById, null, meta.uploadedBy);
 
                 await Upload.create({
-                    uploader: userIdMapping.get(meta.uploadedById) || null,
+                    uploader: uploaderId,
                     bookName: meta.bookName,
                     originalFileName: originalName,
                     content: content || '', 
                     status: meta.status || 'pending',
-                    reviewedBy: userIdMapping.get(meta.reviewedById),
+                    reviewedBy: resolveUser(meta.reviewedById, null, null),
                     createdAt: safeDate(meta.uploadedAt),
                     updatedAt: safeDate(meta.uploadedAt)
                 });
             }
-            console.log(`✅ שחזור Uploads הושלם. נמצא תוכן עבור ${matchedContentCount} קבצים.`);
+            console.log(`✅ שחזור Uploads הושלם (${contentFound} עם תוכן).`);
         }
 
-        // 6. שחזור ספרים ועמודים (מתוך backups.json)
+        // שלב 4: שחזור ספרים ועמודים
+        console.log('📚 טוען ומעבד את backups.json...');
         const backupsRaw = parseStreamedJsonFileSync(BACKUPS_JSON_PATH);
-        
-        // סינון: לוקחים רק את הגרסה האחרונה של כל ספר
         const uniqueBooksMap = new Map();
+
         backupsRaw.forEach(item => {
             if (item.path && item.path.includes('data/pages/') && item.data) {
                 const bookName = normalizeKey(item.path);
-                // דורסים כל פעם - כך נשארים עם הגרסה האחרונה בקובץ (שהיא העדכנית ביותר)
-                uniqueBooksMap.set(bookName, item.data);
+                uniqueBooksMap.set(bookName, item.data); // דריסה לטובת הגרסה האחרונה
             }
         });
 
-        console.log(`📚 זוהו ${uniqueBooksMap.size} ספרים ייחודיים לשחזור.`);
+        console.log(`📚 זוהו ${uniqueBooksMap.size} ספרים ייחודיים.`);
 
         for (const [bookName, pagesData] of uniqueBooksMap.entries()) {
             if (!Array.isArray(pagesData)) continue;
@@ -343,7 +318,7 @@ async function main() {
                 name: bookName,
                 slug: createSlug(bookName),
                 totalPages: pagesData.length,
-                completedPages: pagesData.filter(p => p.status === 'completed').length,
+                completedPages: 0, // יחושב בסוף
                 category: 'כללי',
                 folderPath: `/uploads/books/${createSlug(bookName)}`
             });
@@ -353,18 +328,15 @@ async function main() {
             for (const p of pagesData) {
                 const pageNum = extractValue(p.number);
                 
-                // חיפוש תוכן לעמוד
+                // שחזור תוכן
                 let pageContent = p.content || '';
-
                 if (!pageContent) {
-                    // וריאציות חיפוש בקבצי התוכן
                     const keysToTry = [
                         `${bookName}_page_${pageNum}`,
                         `${bookName}_עמוד_${pageNum}`,
                         `${bookName} _ עמוד ${pageNum}`,
                         `${bookName} page ${pageNum}`
                     ];
-
                     for (const key of keysToTry) {
                         const normalizedKey = normalizeKey(key);
                         if (contentMap.has(normalizedKey)) {
@@ -374,12 +346,22 @@ async function main() {
                     }
                 }
 
+                // *** התיקון הגדול לבעלות (Ownership) ***
+                // מנסים למצוא את המשתמש בכל הדרכים האפשריות
+                const claimedById = resolveUser(p.claimedById, null, p.claimedBy);
+                
+                // קביעת סטטוס - אם יש בעלים אך הסטטוס היה available, נשנה ל-in-progress
+                let status = p.status || 'available';
+                if (claimedById && status === 'available') {
+                    status = 'in-progress';
+                }
+
                 pagesToInsert.push({
                     book: book._id,
                     pageNumber: pageNum,
                     content: pageContent,
-                    status: p.status || 'available',
-                    claimedBy: userIdMapping.get(p.claimedById),
+                    status: status,
+                    claimedBy: claimedById, // ה-ObjectId האמיתי מהמסד החדש
                     claimedAt: safeDate(p.claimedAt),
                     completedAt: safeDate(p.completedAt),
                     imagePath: p.thumbnail || `/uploads/books/${book.slug}/page.${pageNum}.jpg`,
@@ -394,18 +376,17 @@ async function main() {
         }
         console.log('✅ שחזור ספרים ועמודים הושלם.');
 
-        // 7. שחזור הודעות (Messages)
+        // שלב 5: הודעות
+        console.log('💬 משחזר הודעות...');
         const messagesData = parseStreamedJsonFileSync(MESSAGES_JSON_PATH);
-        
-        let msgCount = 0;
         for (const msg of messagesData) {
             if (!msg.message && !msg.content) continue;
 
-            const senderId = userIdMapping.get(msg.senderId);
-            const recipientId = userIdMapping.get(msg.recipientId);
+            const senderId = resolveUser(msg.senderId, null, msg.senderName);
+            const recipientId = resolveUser(msg.recipientId, null, msg.recipientName);
 
             const replies = (msg.replies || []).map(r => ({
-                sender: userIdMapping.get(r.senderId),
+                sender: resolveUser(r.senderId, null, r.senderName),
                 content: r.message || r.content,
                 createdAt: safeDate(r.createdAt)
             }));
@@ -420,22 +401,53 @@ async function main() {
                 createdAt: safeDate(msg.createdAt),
                 updatedAt: safeDate(msg.updatedAt)
             });
-            msgCount++;
         }
-        console.log(`✅ שחזור ${msgCount} הודעות הושלם.`);
+
+        // ==========================================
+        // שלב 6: חישוב מחדש וסנכרון (Recalculation)
+        // ==========================================
+        console.log('🔄 מבצע חישוב מחדש של סטטיסטיקות ומונים...');
+
+        // 6.1 עדכון מונים בספרים
+        const books = await Book.find({});
+        for (const book of books) {
+            const completedCount = await Page.countDocuments({ book: book._id, status: 'completed' });
+            const totalCount = await Page.countDocuments({ book: book._id });
+            
+            if (book.completedPages !== completedCount || book.totalPages !== totalCount) {
+                await Book.findByIdAndUpdate(book._id, {
+                    completedPages: completedCount,
+                    totalPages: totalCount
+                });
+            }
+        }
+        console.log('✅ מוני ספרים עודכנו.');
+
+        // 6.2 עדכון נקודות למשתמשים (אופציונלי אך מומלץ)
+        // נניח שכל דף שווה 10 נקודות
+        const users = await User.find({});
+        for (const user of users) {
+            // אם למשתמש יש כבר נקודות מהייבוא, נשאיר אותן, אלא אם כן נראה שיש פער גדול
+            const completedByUser = await Page.countDocuments({ claimedBy: user._id, status: 'completed' });
+            const calculatedPoints = completedByUser * 10;
+            
+            // אם הנקודות המחושבות גבוהות מהקיימות, נעדכן
+            if (calculatedPoints > user.points) {
+                await User.findByIdAndUpdate(user._id, { points: calculatedPoints });
+            }
+        }
+        console.log('✅ ניקוד משתמשים סונכרן.');
 
         console.log('\n=====================================');
-        console.log('🎉 מיגרציה הושלמה בהצלחה!');
+        console.log('🎉 מיגרציה מלאה הושלמה בהצלחה!');
         console.log('=====================================');
         
         process.exit(0);
 
     } catch (error) {
-        console.error('\n❌ שגיאה קריטית במהלך המיגרציה:');
-        console.error(error);
+        console.error('\n❌ שגיאה קריטית:', error);
         process.exit(1);
     }
 }
 
-// הרצה
 main();
