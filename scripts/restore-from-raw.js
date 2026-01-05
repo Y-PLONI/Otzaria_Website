@@ -9,7 +9,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// טעינת משתני סביבה
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -17,7 +16,7 @@ const FILES_JSON_PATH = path.resolve(__dirname, '../files.json');
 const MESSAGES_JSON_PATH = path.resolve(__dirname, '../messages.json');
 const BACKUPS_JSON_PATH = path.resolve(__dirname, '../backups.json');
 
-// --- סכמות (Mongoose Models) ---
+// --- סכמות ---
 const UserSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
@@ -40,7 +39,7 @@ const PageSchema = new mongoose.Schema({
     pageNumber: { type: Number, required: true },
     content: { type: String, default: '' },
     status: { type: String, enum: ['available', 'in-progress', 'completed'], default: 'available' },
-    claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // הקישור הקריטי
+    claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     claimedAt: { type: Date },
     completedAt: { type: Date },
     imagePath: { type: String, required: true },
@@ -64,7 +63,7 @@ const Book = mongoose.models.Book || mongoose.model('Book', BookSchema);
 const Page = mongoose.models.Page || mongoose.model('Page', PageSchema);
 const Message = mongoose.models.Message || mongoose.model('Message', MessageSchema);
 
-// --- פונקציות עזר ---
+// --- פונקציות עזר לניקוי נתונים ---
 
 function decodeFileName(encodedName) {
     if (!encodedName) return '';
@@ -104,6 +103,19 @@ function createHebrewSlug(name) {
     return name.trim().replace(/\s+/g, '-').replace(/[^\w\u0590-\u05FF\-]/g, '');
 }
 
+// פונקציה קריטית: מנרמלת IDs להשוואה
+function cleanId(id) {
+    if (!id) return null;
+    let strId = id;
+    // טיפול באובייקטים של מונגו ישן
+    if (typeof id === 'object') {
+        if (id.$oid) strId = id.$oid;
+        else if (id.id) strId = id.id;
+        else strId = JSON.stringify(id);
+    }
+    return String(strId).trim();
+}
+
 async function loadDataFromFile(filePath) {
     if (!fs.existsSync(filePath)) {
         console.warn(`⚠️ File not found: ${filePath}`);
@@ -130,61 +142,57 @@ async function loadDataFromFile(filePath) {
     return results;
 }
 
-// --- משתנים גלובליים למיפוי ---
-const userMap = new Map(); // OldID (String) -> NewID (ObjectId)
-const userNameMap = new Map(); // Name (String) -> NewID (ObjectId) - מנגנון גיבוי
+// --- משתנים גלובליים ---
+const userMap = new Map(); // CleanID -> ObjectId
+const userNameMap = new Map(); // Name -> ObjectId
 const contentMap = new Map();
 
-// --- הפונקציה הראשית ---
+// --- Main Restore Function ---
 async function restore() {
     try {
         console.log('🔌 Connecting to MongoDB...');
-        if (!process.env.MONGODB_URI) throw new Error('Missing MONGODB_URI in .env');
+        if (!process.env.MONGODB_URI) throw new Error('Missing MONGODB_URI');
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Connected.');
 
-        // ניקוי המסד לפני שחזור (אופציונלי - בטל אם אתה רוצה רק לעדכן)
-        console.log('🧹 Clearing old data...');
+        // ניקוי
+        console.log('🧹 Clearing DB...');
         await User.deleteMany({});
         await Book.deleteMany({});
         await Page.deleteMany({});
         await Message.deleteMany({});
 
         // 1. טעינת קבצים
-        console.log('📖 Reading backup files...');
+        console.log('📖 Reading files...');
         const rawFiles = await loadDataFromFile(FILES_JSON_PATH);
         const rawBackups = await loadDataFromFile(BACKUPS_JSON_PATH);
         const rawMessages = await loadDataFromFile(MESSAGES_JSON_PATH);
         const allRecords = [...rawFiles, ...rawBackups];
 
         // 2. מיפוי תוכן
-        console.log('📝 Indexing text content...');
+        console.log('📝 Indexing content...');
         rawFiles.forEach(f => {
             if (f.path && f.path.startsWith('data/content/') && f.data?.content) {
-                const filename = path.basename(f.path);
-                const parsed = parseContentFilename(filename);
+                const parsed = parseContentFilename(path.basename(f.path));
                 if (parsed) {
-                    const key = `${parsed.bookName}|${parsed.pageNumber}`;
-                    contentMap.set(key, f.data.content);
+                    contentMap.set(`${parsed.bookName}|${parsed.pageNumber}`, f.data.content);
                 }
             }
         });
 
-        // 3. שחזור משתמשים (Users)
+        // 3. שחזור משתמשים
         console.log('👥 Restoring Users...');
         const usersRecord = rawFiles.find(f => f.path === 'data/users.json');
         
         if (usersRecord && Array.isArray(usersRecord.data)) {
             for (const u of usersRecord.data) {
-                // המרת ID למחרוזת בטוחה
-                const oldId = String(u.id); 
-                const email = u.email ? u.email.toLowerCase().trim() : `noemail_${oldId}@example.com`;
+                const cleanedId = cleanId(u.id);
+                const email = u.email ? u.email.toLowerCase().trim() : `user_${cleanedId}@temp.com`;
                 const name = u.name ? u.name.trim() : 'Unknown';
 
-                // יצירת משתמש
                 const userDoc = await User.create({
-                    name: name,
-                    email: email,
+                    name,
+                    email,
                     password: u.password,
                     role: u.role || 'user',
                     points: extractValue(u.points) || 0,
@@ -192,51 +200,59 @@ async function restore() {
                     updatedAt: new Date()
                 });
                 
-                // שמירה בשתי המפות לזיהוי ודאי
-                userMap.set(oldId, userDoc._id);
-                userNameMap.set(name, userDoc._id);
+                // מיפוי גם לפי ID וגם לפי שם
+                if (cleanedId) userMap.set(cleanedId, userDoc._id);
+                if (name) userNameMap.set(name, userDoc._id);
             }
             console.log(`✅ Restored ${userMap.size} users.`);
+            
+            // Debug: הדפס דוגמה למפתחות
+            console.log('DEBUG: User Map Keys (Sample):', [...userMap.keys()].slice(0, 3));
         }
 
-        // 4. שחזור ספרים ודפים
-        console.log('📚 Restoring Books and Pages...');
+        // 4. מיזוג מידע על דפים (Files + Backups)
+        console.log('📚 Processing pages data...');
         const pagesByBook = {};
 
         allRecords.forEach(record => {
             if (record.path && record.path.startsWith('data/pages/')) {
-                let bookName = path.basename(record.path, '.json');
-                bookName = decodeFileName(bookName);
-
+                let bookName = decodeFileName(path.basename(record.path, '.json'));
                 if (!pagesByBook[bookName]) pagesByBook[bookName] = {};
 
                 if (Array.isArray(record.data)) {
                     record.data.forEach(p => {
                         const pageNum = extractValue(p.number);
                         
-                        // קבלת הגרסה העדכנית ביותר של הדף
-                        const existing = pagesByBook[bookName][pageNum];
-                        const newDate = p.updatedAt ? new Date(extractValue(p.updatedAt)) : new Date(0);
-                        const oldDate = existing?.updatedAt ? new Date(existing.updatedAt) : new Date(0);
-
-                        if (!existing || newDate >= oldDate) {
-                            pagesByBook[bookName][pageNum] = { ...p, updatedAt: newDate };
-                        }
+                        // קבלת הקיים
+                        const existing = pagesByBook[bookName][pageNum] || {};
+                        
+                        // מיזוג: קח את החדש, אבל שמור על שדות חשובים אם חסרים בחדש
+                        const claimedById = p.claimedById || existing.claimedById;
+                        const claimedBy = p.claimedBy || existing.claimedBy;
+                        const status = p.status === 'available' && existing.status !== 'available' ? existing.status : p.status;
+                        
+                        pagesByBook[bookName][pageNum] = {
+                            ...existing,
+                            ...p,
+                            claimedById,
+                            claimedBy,
+                            status
+                        };
                     });
                 }
             }
         });
 
-        // יצירה בפועל
-        let totalPagesInserted = 0;
-        let matchedUsersCount = 0;
+        // 5. יצירת ספרים ודפים
+        let totalPages = 0;
+        let linkedPages = 0;
+        let failLogCount = 0;
 
         for (const [bookName, pagesMap] of Object.entries(pagesByBook)) {
             const slug = createHebrewSlug(bookName);
-            
             const book = await Book.create({
                 name: bookName,
-                slug: slug,
+                slug,
                 totalPages: Object.keys(pagesMap).length,
                 completedPages: 0,
                 category: 'כללי',
@@ -249,45 +265,43 @@ async function restore() {
             for (const [pageNumStr, pageData] of Object.entries(pagesMap)) {
                 const pageNum = parseInt(pageNumStr);
                 
-                // --- השידוך הקריטי ---
+                // --- לוגיקת שידוך משופרת ---
                 let userId = null;
-                
-                // 1. נסיון לפי ID
-                if (pageData.claimedById) {
-                    const idKey = String(pageData.claimedById);
-                    if (userMap.has(idKey)) {
-                        userId = userMap.get(idKey);
-                    }
-                }
-                
-                // 2. נסיון לפי שם (אם ID נכשל)
-                if (!userId && pageData.claimedBy) {
-                    const nameKey = pageData.claimedBy.trim();
-                    if (userNameMap.has(nameKey)) {
-                        userId = userNameMap.get(nameKey);
-                    }
+                const rawId = cleanId(pageData.claimedById);
+                const rawName = pageData.claimedBy ? pageData.claimedBy.trim() : null;
+
+                // נסיון 1: לפי ID
+                if (rawId && userMap.has(rawId)) {
+                    userId = userMap.get(rawId);
+                } 
+                // נסיון 2: לפי שם
+                else if (rawName && userNameMap.has(rawName)) {
+                    userId = userNameMap.get(rawName);
                 }
 
-                if (userId) matchedUsersCount++;
+                // לוג דיבוג לכישלונות (רק ל-10 הראשונים)
+                if ((rawId || rawName) && !userId && failLogCount < 10) {
+                    console.log(`⚠️ Failed to link page. Book: ${bookName}, Page: ${pageNum}`);
+                    console.log(`   - ClaimedById (Raw): ${pageData.claimedById} -> Cleaned: ${rawId}`);
+                    console.log(`   - ClaimedBy (Name): ${rawName}`);
+                    failLogCount++;
+                }
 
-                // טיפול בנתיב התמונה (שמירה על הקישור לגיטהאב)
+                if (userId) linkedPages++;
+                if (pageData.status === 'completed') completedCount++;
+
+                // טיפול בתמונה - שומרים מקור אם יש
                 let imagePath = pageData.thumbnail;
-                if (!imagePath) {
+                if (!imagePath || imagePath.length < 5) {
                     imagePath = `/uploads/books/${slug}/page.${pageNum}.jpg`;
                 }
-
-                // טיפול בתוכן
-                const contentKey = `${bookName}|${pageNum}`;
-                const content = contentMap.get(contentKey) || '';
-
-                if (pageData.status === 'completed') completedCount++;
 
                 pagesToInsert.push({
                     book: book._id,
                     pageNumber: pageNum,
-                    content: content,
+                    content: contentMap.get(`${bookName}|${pageNum}`) || '',
                     status: pageData.status || 'available',
-                    claimedBy: userId, // כאן נכנס ה-ObjectId האמיתי
+                    claimedBy: userId,
                     claimedAt: pageData.claimedAt ? new Date(extractValue(pageData.claimedAt)) : null,
                     completedAt: pageData.completedAt ? new Date(extractValue(pageData.completedAt)) : null,
                     imagePath: imagePath,
@@ -298,88 +312,53 @@ async function restore() {
 
             if (pagesToInsert.length > 0) {
                 await Page.insertMany(pagesToInsert);
-                totalPagesInserted += pagesToInsert.length;
+                totalPages += pagesToInsert.length;
             }
-
             await Book.findByIdAndUpdate(book._id, { completedPages: completedCount });
             process.stdout.write('.');
         }
-        console.log(`\n✅ Inserted ${totalPagesInserted} pages.`);
-        console.log(`✅ Successfully linked ${matchedUsersCount} pages to users.`);
 
-        // 5. שחזור הודעות
-        if (rawMessages && rawMessages.length > 0) {
-            console.log(`📨 Restoring ${rawMessages.length} messages...`);
-            const messagesToInsert = [];
-            
+        console.log(`\n✅ Inserted ${totalPages} pages.`);
+        console.log(`✅ Linked ${linkedPages} pages to users.`);
+
+        // 6. שחזור הודעות
+        console.log('📨 Restoring messages...');
+        const messagesToInsert = [];
+        
+        if (rawMessages) {
             for (const msg of rawMessages) {
-                const oldSenderId = String(extractValue(msg.senderId) || msg.senderId);
-                const senderId = userMap.get(oldSenderId); // גם אם משתמש נמחק, אולי יש לנו ID?
-                
-                // כאן אנחנו חייבים senderId. אם לא מצאנו, נדלג.
+                const senderId = userMap.get(cleanId(msg.senderId));
                 if (!senderId) continue;
 
-                const replies = (msg.replies || []).map(r => {
-                    const rOldId = String(extractValue(r.senderId) || r.senderId);
-                    const rId = userMap.get(rOldId);
-                    if (!rId) return null;
-                    return {
-                        sender: rId,
-                        content: r.message,
-                        createdAt: r.createdAt ? new Date(extractValue(r.createdAt)) : new Date()
-                    };
-                }).filter(Boolean);
+                const replies = (msg.replies || []).map(r => ({
+                    sender: userMap.get(cleanId(r.senderId)),
+                    content: r.message,
+                    createdAt: r.createdAt ? new Date(extractValue(r.createdAt)) : new Date()
+                })).filter(r => r.sender);
 
                 messagesToInsert.push({
                     sender: senderId,
                     recipient: null,
-                    subject: msg.subject || 'הודעה משוחזרת',
+                    subject: msg.subject || 'ללא נושא',
                     content: msg.message,
                     isRead: !!msg.readAt,
-                    replies: replies,
-                    createdAt: msg.createdAt ? new Date(extractValue(msg.createdAt)) : new Date(),
-                    updatedAt: msg.updatedAt ? new Date(extractValue(msg.updatedAt)) : new Date()
+                    replies,
+                    createdAt: msg.createdAt ? new Date(extractValue(msg.createdAt)) : new Date()
                 });
             }
-            
-            if (messagesToInsert.length > 0) {
-                await Message.insertMany(messagesToInsert);
-            }
-            console.log('✅ Messages restored.');
+            if (messagesToInsert.length > 0) await Message.insertMany(messagesToInsert);
         }
+        console.log(`✅ Restored ${messagesToInsert.length} messages.`);
 
-        // --- בדיקת אימות סופית (Verification) ---
-        console.log('\n📊 Verifying Data Integrity...');
-        
-        // בדיקת כמה דפים יש לכל משתמש בפועל ב-DB
-        const stats = await Page.aggregate([
-            { $match: { claimedBy: { $ne: null } } },
-            { $group: { _id: "$claimedBy", count: { $sum: 1 } } },
-            { $sort: { count: -1 } },
-            { $limit: 5 } // הצגת 5 המובילים
-        ]);
+        // בדיקה סופית
+        const check = await Page.countDocuments({ claimedBy: { $ne: null } });
+        console.log(`\n🔎 Final DB Check: ${check} pages have an owner in MongoDB.`);
 
-        console.log("🏆 Top 5 Users by Page Count (Verification):");
-        for (const stat of stats) {
-            const user = await User.findById(stat._id);
-            if (user) {
-                console.log(`   - ${user.name}: ${stat.count} pages`);
-            } else {
-                console.log(`   - Unknown User (${stat._id}): ${stat.count} pages`);
-            }
-        }
-
-        if (stats.length === 0) {
-            console.error("❌ CRITICAL WARNING: No pages are linked to users! Something went wrong with ID matching.");
-        } else {
-            console.log("✅ Data verification passed. Users have pages linked.");
-        }
-
-        console.log('🎉 FULL RESTORE COMPLETE!');
+        console.log('🎉 DONE!');
         process.exit(0);
 
     } catch (error) {
-        console.error('❌ Error during restore:', error);
+        console.error('❌ Error:', error);
         process.exit(1);
     }
 }
