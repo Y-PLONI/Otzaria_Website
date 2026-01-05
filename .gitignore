@@ -42,3 +42,19 @@ next-env.d.ts
 .gitconfig_local
 otzaria-rewrite.xml
 public/uploads/*
+messages.json
+backups.json
+files.json
+
+# Migration scripts (temporary - exclude from git except main migration script)
+scripts/analyze-data-structure.js
+scripts/deep-data-analysis.js
+scripts/fix-duplicate-books.js
+scripts/migration-summary.js
+scripts/migrate-old-data.js
+scripts/migrate-old-data-simple.js
+scripts/pre-migration-check.js
+scripts/preview-migration.js
+scripts/safe-json-reader.js
+scripts/validate-migration-readiness.js
+scripts/MIGRATION_README.md
