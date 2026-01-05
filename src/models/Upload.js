@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const UploadSchema = new mongoose.Schema({
-  uploader: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  uploader: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // null = העלאה אנונימית
   bookName: { type: String, required: true },
   originalFileName: { type: String },
   content: { type: String }, // תוכן הקובץ

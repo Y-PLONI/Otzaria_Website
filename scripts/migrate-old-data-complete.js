@@ -565,14 +565,14 @@ async function migrateUploads() {
             if (uploadData.uploadedById) {
                 uploaderId = userIdMapping.get(uploadData.uploadedById);
                 if (!uploaderId) {
-                    console.log(`⚠️ דילוג על upload "${uploadData.fileName || 'ללא שם'}" - מעלה לא קיים: ${uploadData.uploadedById} (${uploadData.uploadedBy || 'לא ידוע'})`);
+                    console.log(`⚠️ upload "${uploadData.fileName || 'ללא שם'}" - מעלה לא קיים: ${uploadData.uploadedById} (${uploadData.uploadedBy || 'לא ידוע'}) - נשמר בלי מעלה`);
                     uploadsWithoutUploader++;
-                    continue; // דילוג על upload זה
+                    // לא נדלג - נמשיך לשמור בלי uploader
                 }
             } else {
-                console.log(`⚠️ דילוג על upload "${uploadData.fileName || 'ללא שם'}" - ללא מזהה מעלה`);
+                console.log(`⚠️ upload "${uploadData.fileName || 'ללא שם'}" - ללא מזהה מעלה - נשמר בלי מעלה`);
                 uploadsWithoutUploader++;
-                continue; // דילוג על upload זה
+                // לא נדלג - נמשיך לשמור בלי uploader
             }
             
             // חיפוש תוכן הקובץ
@@ -584,15 +584,18 @@ async function migrateUploads() {
                     uploadsWithContent++;
                     
                     // debug - הדפסה לכמה קבצים ראשונים
-                    if (uploadsWithContent <= 3) {
+                    if (uploadsWithContent <= 5) {
                         console.log(`🔍 Debug: קובץ "${uploadData.fileName}" - תוכן: ${fileContent.length} תווים`);
                     }
+                } else {
+                    console.log(`⚠️ לא נמצא תוכן עבור: "${uploadData.fileName}"`);
                 }
+            } else {
+                console.log(`⚠️ upload ללא שם קובץ`);
             }
             
-            // יצירת ה-upload - עכשיו תמיד יש uploader תקין
+            // יצירת ה-upload - עכשיו עם או בלי uploader
             const uploadDoc = {
-                uploader: uploaderId, // תמיד קיים
                 bookName: uploadData.bookName,
                 originalFileName: uploadData.originalFileName || uploadData.fileName || 'ללא שם',
                 content: fileContent,
@@ -601,10 +604,17 @@ async function migrateUploads() {
                 updatedAt: safeParseDate(uploadData.uploadedAt)
             };
             
+            // הוספת uploader רק אם קיים
+            if (uploaderId) {
+                uploadDoc.uploader = uploaderId;
+            }
+            
             // debug נוסף - בדיקה לפני השמירה
-            if (uploadsWithContent <= 3) {
+            if (uploadsWithContent <= 5) {
                 console.log(`🔍 Debug לפני שמירה: תוכן באורך ${fileContent.length} תווים`);
-                console.log(`🔍 Debug תחילת תוכן: "${fileContent.substring(0, 50)}..."`);
+                if (fileContent.length > 0) {
+                    console.log(`🔍 Debug תחילת תוכן: "${fileContent.substring(0, 50)}..."`);
+                }
             }
             
             const newUpload = new Upload(uploadDoc);
@@ -621,7 +631,7 @@ async function migrateUploads() {
     
     console.log(`✅ הושלמה מיגרציה של ${migratedCount} קבצי uploads`);
     if (uploadsWithoutUploader > 0) {
-        console.log(`⚠️ ${uploadsWithoutUploader} uploads נדלגו בגלל מעלה לא קיים במסד`);
+        console.log(`⚠️ ${uploadsWithoutUploader} uploads נשמרו ללא מעלה תקין`);
     }
     console.log(`📄 שוחזר תוכן עבור ${uploadsWithContent} קבצי uploads`);
 }
