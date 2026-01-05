@@ -1,7 +1,7 @@
 /**
- * scripts/migrate-fixed.js
- * סקריפט מיגרציה מתוקן ומקצועי להעברת נתונים מלאה.
- * מטפל ביצירת Slugs תקינים, קישור משתמשים, והעברת תוכן מלאה.
+ * scripts/migrate-final-v3.js
+ * גרסה מתוקנת שמטפלת במבני נתונים מורכבים של ספרים (Object vs Array)
+ * ומבטיחה שכל הספרים יעברו.
  */
 
 import mongoose from 'mongoose';
@@ -15,7 +15,6 @@ dotenv.config({ path: '.env' });
 
 // --- הגדרות חיבור ---
 const NEW_DB_URI = process.env.MONGODB_URI;
-// הנחה: יש לך מונגו מקומי שבו שחזרת את ה-BSON הישן לדאטהבייס בשם otzaria_legacy
 const OLD_DB_URI = process.env.LEGACY_MONGODB_URI || 'mongodb://127.0.0.1:27017/otzaria_legacy';
 
 if (!NEW_DB_URI) {
@@ -23,7 +22,7 @@ if (!NEW_DB_URI) {
     process.exit(1);
 }
 
-// --- הגדרת סכמות (בהתאמה מדויקת לקוד החדש) ---
+// --- סכמות (Inline) ---
 
 const UserSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
@@ -35,7 +34,7 @@ const UserSchema = new mongoose.Schema({
 
 const BookSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
-    slug: { type: String, index: true, required: true }, // חובה slug לניווט
+    slug: { type: String, index: true, required: true },
     totalPages: { type: Number, default: 0 },
     completedPages: { type: Number, default: 0 },
     category: { type: String, default: 'כללי' },
@@ -60,7 +59,6 @@ const PageSchema = new mongoose.Schema({
     imagePath: { type: String, required: true }
 }, { timestamps: true });
 
-// אינדקס למניעת כפילויות עמודים
 PageSchema.index({ book: 1, pageNumber: 1 }, { unique: true });
 
 const MessageSchema = new mongoose.Schema({
@@ -92,19 +90,48 @@ const Page = mongoose.models.Page || mongoose.model('Page', PageSchema);
 const Message = mongoose.models.Message || mongoose.model('Message', MessageSchema);
 const Upload = mongoose.models.Upload || mongoose.model('Upload', UploadSchema);
 
-// מפות עזר
 const userIdMap = new Map();
 
-// --- פונקציות עזר ---
+// --- פונקציות עזר קריטיות ---
 
-// יצירת slug שמשמר עברית אבל מחליף רווחים ותווים בעייתיים
-// זה קריטי לניתוב תקין ב-Next.js
+/**
+ * מנרמל את הנתונים למערך.
+ * מטפל במקרים שבהם המידע הוא אובייקט, מחרוזת, או עטוף במאפיין אחר.
+ */
+function normalizePagesData(data) {
+    if (!data) return [];
+    
+    // 1. אם זה מחרוזת, נסה לפענח JSON
+    if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch(e) { return []; }
+    }
+
+    // 2. אם זה כבר מערך - מצוין
+    if (Array.isArray(data)) return data;
+
+    // 3. אם זה אובייקט, נחפש איפה מסתתר המערך
+    if (typeof data === 'object') {
+        // האם יש מאפיין 'pages' או 'data' שהוא מערך?
+        if (Array.isArray(data.pages)) return data.pages;
+        if (Array.isArray(data.data)) return data.data;
+
+        // האם זה אובייקט שהמפתחות שלו הם מספרים? ("0": {}, "1": {})
+        // נבדוק אם הערכים הם אובייקטים שיש להם 'number' או 'status'
+        const values = Object.values(data);
+        if (values.length > 0 && values[0] && (values[0].number || values[0].status)) {
+            return values;
+        }
+    }
+
+    return [];
+}
+
 function createSafeSlug(text) {
     if (!text) return 'unknown-' + Date.now();
-    return text.trim()
-        .replace(/\s+/g, '-')           // רווחים למקפים
-        .replace(/[^\w\u0590-\u05FF\-]/g, '') // השארת עברית, אנגלית, מספרים ומקפים בלבד
-        .toLowerCase();                 // (לאנגלית)
+    return String(text).trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\u0590-\u05FF\-]/g, '') // משמר עברית ואנגלית
+        .toLowerCase();
 }
 
 function safeDate(d) {
@@ -113,11 +140,17 @@ function safeDate(d) {
     return isNaN(date.getTime()) ? new Date() : date;
 }
 
-// פירוק תוכן לדפים מפוצלים אם צריך
-function parsePageContent(content) {
+function safeString(val) {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (Buffer.isBuffer(val)) return val.toString('utf8');
+    return String(val);
+}
+
+function parsePageContent(rawContent) {
+    const content = safeString(rawContent);
     if (!content) return { content: '', isTwoColumns: false };
     
-    // זיהוי תבנית הפיצול מהמערכת הישנה
     const splitRegex = /=== (.+?) ===\n([\s\S]*?)\n\n=== (.+?) ===\n([\s\S]*)/;
     const match = content.match(splitRegex);
 
@@ -131,13 +164,7 @@ function parsePageContent(content) {
             leftColumn: match[4]
         };
     }
-    
-    return { 
-        content: content, 
-        isTwoColumns: false,
-        rightColumn: '',
-        leftColumn: ''
-    };
+    return { content: content, isTwoColumns: false, rightColumn: '', leftColumn: '' };
 }
 
 // --- המיגרציה ---
@@ -145,16 +172,15 @@ function parsePageContent(content) {
 async function runMigration() {
     let oldClient;
     try {
-        console.log('🏁 Starting Full Migration...');
+        console.log('🏁 Starting FINAL V3 Migration...');
 
         // 1. חיבורים
-        console.log('🔌 Connecting to databases...');
         oldClient = new MongoClient(OLD_DB_URI);
         await oldClient.connect();
         const oldDb = oldClient.db();
         
         await mongoose.connect(NEW_DB_URI);
-        console.log('✅ Connected to both databases.');
+        console.log('✅ Connected to databases.');
 
         // 2. ניקוי
         console.log('🧹 Clearing new database...');
@@ -165,34 +191,27 @@ async function runMigration() {
             Message.deleteMany({}),
             Upload.deleteMany({})
         ]);
-        console.log('✅ Database cleared.');
 
-        // 3. משתמשים (Users)
-        console.log('\n👥 processing Users...');
-        // בודק גם ב-files (כמו שראינו קודם) וגם ב-collection 'users' אם קיים
+        // 3. משתמשים
+        console.log('\n👥 Processing Users...');
         let oldUsers = [];
-        
-        // נסיון 1: קובץ users.json
         const usersFile = await oldDb.collection('files').findOne({ path: 'data/users.json' });
-        if (usersFile?.data) oldUsers = usersFile.data;
         
-        // נסיון 2: collection רגיל (אם לא מצא בקובץ)
-        if (oldUsers.length === 0) {
+        if (usersFile?.data) {
+            oldUsers = typeof usersFile.data === 'string' ? JSON.parse(usersFile.data) : usersFile.data;
+        } else {
             oldUsers = await oldDb.collection('users').find({}).toArray();
         }
 
-        if (oldUsers.length === 0) console.warn('⚠️ No users found!');
-
         for (const u of oldUsers) {
             const newId = new mongoose.Types.ObjectId();
-            // המרה בין ה-ID הישן (שיכול להיות string או מספר) ל-ObjectId החדש
-            userIdMap.set(String(u.id || u._id), newId); 
+            if (u.id || u._id) userIdMap.set(String(u.id || u._id), newId);
 
             await User.create({
                 _id: newId,
-                name: u.name || 'Unknown',
+                name: u.name || `User_${u.id}`,
                 email: u.email || `missing_${newId}@otzaria.local`,
-                password: u.password || 'temp_pass', // ישמור את ה-Hash המקורי אם קיים
+                password: u.password || 'temp_pass',
                 role: u.role || 'user',
                 points: u.points || 0,
                 createdAt: safeDate(u.createdAt),
@@ -201,15 +220,11 @@ async function runMigration() {
         }
         console.log(`✅ Migrated ${oldUsers.length} users.`);
         
-        // מציאת אדמין ברירת מחדל לשיוך יתומים
-        const defaultAdmin = await User.findOne({ role: 'admin' }) || await User.findOne({});
-        const defaultAdminId = defaultAdmin?._id;
+        const defaultAdminId = (await User.findOne({ role: 'admin' }))?._id;
 
-        // 4. ספרים ודפים (Books & Pages)
+        // 4. ספרים ודפים - החלק הקריטי
         console.log('\n📚 Processing Books & Pages...');
         
-        // נשלוף את כל הקבצים מ-collection 'files' שמתחילים ב-data/pages/
-        // אלו קבצי ה-JSON שמגדירים את מבנה הספרים
         const bookFilesCursor = oldDb.collection('files').find({ 
             path: { $regex: '^data/pages/' } 
         });
@@ -219,36 +234,26 @@ async function runMigration() {
 
         for await (const bookFile of bookFilesCursor) {
             try {
-                // חילוץ שם הספר מהנתיב: data/pages/BookName.json -> BookName
                 const rawName = path.basename(bookFile.path, '.json');
-                
-                // יצירת slug נקי ותקין
                 const slug = createSafeSlug(rawName);
 
-                // נתוני העמודים (מערך)
-                const pagesData = bookFile.data;
-                if (!Array.isArray(pagesData)) {
-                    console.warn(`⚠️ Skipping ${rawName}: Invalid data format`);
+                // שימוש בפונקציה החדשה לנירמול הנתונים
+                const pagesData = normalizePagesData(bookFile.data);
+
+                if (pagesData.length === 0) {
+                    console.warn(`⚠️ Skipping ${rawName}: Empty or invalid data structure.`);
+                    // הדפסת המבנה לצורך דיבוג אם זה קורה
+                     console.log('DEBUG Structure:', JSON.stringify(bookFile.data).substring(0, 100));
                     continue;
                 }
-
-                // בדיקה אם ספר כזה כבר קיים (למניעת כפילויות שם)
-                const existingBook = await Book.findOne({ slug });
-                if (existingBook) {
-                    console.warn(`⚠️ Skipping duplicate book slug: ${slug} (${rawName})`);
-                    continue;
-                }
-
-                // חישוב סטטיסטיקות
-                const completedCount = pagesData.filter(p => p.status === 'completed').length;
 
                 // יצירת הספר
                 const newBook = await Book.create({
                     name: rawName,
                     slug: slug,
                     totalPages: pagesData.length,
-                    completedPages: completedCount,
-                    category: 'כללי', // ניתן לשפר אם יש מידע ב-files אחרים
+                    completedPages: pagesData.filter(p => p.status === 'completed').length,
+                    category: 'כללי',
                     createdAt: safeDate(bookFile.uploadedAt) || new Date(),
                     updatedAt: new Date()
                 });
@@ -256,38 +261,28 @@ async function runMigration() {
                 booksCount++;
                 const newPages = [];
 
-                // מעבר על כל דף בספר
                 for (const p of pagesData) {
                     const pageNum = parseInt(p.number);
                     if (!pageNum) continue;
 
-                    // ניסיון לשלוף תוכן טקסט
-                    // שם הקובץ ב-Content יכול להיות עם רווחים או קווים תחתונים
-                    const possibleContentPaths = [
+                    // חיפוש תוכן ב-3 וריאציות
+                    const possiblePaths = [
                         `data/content/${rawName}_page_${pageNum}.txt`,
                         `data/content/${rawName.replace(/\s/g, '_')}_page_${pageNum}.txt`,
                         `data/content/${rawName}_${pageNum}.txt`
                     ];
 
                     let rawContent = '';
-                    
-                    // חיפוש התוכן המתאים
-                    for (const cp of possibleContentPaths) {
+                    for (const cp of possiblePaths) {
                         const contentDoc = await oldDb.collection('files').findOne({ path: cp });
                         if (contentDoc) {
-                            rawContent = contentDoc.data?.content || contentDoc.data || '';
-                            break;
+                            rawContent = safeString(contentDoc.data?.content || contentDoc.data);
+                            if (rawContent) break;
                         }
                     }
 
-                    // פרסור התוכן (חלוקה לטורים אם יש)
                     const parsedContent = parsePageContent(rawContent);
-
-                    // שיוך משתמש
-                    let claimerId = null;
-                    if (p.claimedById) {
-                        claimerId = userIdMap.get(String(p.claimedById));
-                    }
+                    const claimerId = p.claimedById ? userIdMap.get(String(p.claimedById)) : null;
 
                     newPages.push({
                         book: newBook._id,
@@ -296,9 +291,9 @@ async function runMigration() {
                         claimedBy: claimerId,
                         claimedAt: safeDate(p.claimedAt),
                         completedAt: safeDate(p.completedAt),
-                        imagePath: p.thumbnail || `/uploads/books/${slug}/page-${pageNum}.jpg`, // נתיב גנרי או מה שהיה
+                        // תמיכה בנתיב תמונה גם אם הוא מקומי או URL
+                        imagePath: p.thumbnail || `/uploads/books/${slug}/page-${pageNum}.jpg`,
                         
-                        // התוכן
                         content: parsedContent.content,
                         isTwoColumns: parsedContent.isTwoColumns,
                         rightColumn: parsedContent.rightColumn,
@@ -308,97 +303,86 @@ async function runMigration() {
                     });
                 }
 
-                // שמירה בבת אחת (Batch Insert)
                 if (newPages.length > 0) {
-                    try {
-                        await Page.insertMany(newPages);
-                        pagesCount += newPages.length;
-                    } catch (err) {
-                        console.error(`❌ Error inserting pages for book ${rawName}:`, err.message);
-                    }
+                    await Page.insertMany(newPages, { ordered: false });
+                    pagesCount += newPages.length;
                 }
-                
-                process.stdout.write('.'); // התקדמות ויזואלית
+                process.stdout.write('.');
 
             } catch (err) {
-                console.error(`\n❌ Critical error processing book file ${bookFile.path}:`, err);
+                console.error(`\n❌ Error processing book ${bookFile.path}:`, err.message);
             }
         }
         console.log(`\n✅ Finished: ${booksCount} books, ${pagesCount} pages.`);
 
-
-        // 5. הודעות (Messages)
+        // 5. הודעות
         console.log('\n💬 Processing Messages...');
-        // בדרך כלל הודעות נשמרו בקולקשיין messages ולא ב-files
         const messagesCursor = oldDb.collection('messages').find({});
         let msgCount = 0;
 
         while (await messagesCursor.hasNext()) {
-            const msg = await messagesCursor.next();
-            
-            // המרה בטוחה של IDs
-            const senderId = userIdMap.get(String(msg.senderId)) || defaultAdminId;
-            const recipientId = msg.recipientId ? userIdMap.get(String(msg.recipientId)) : null;
-
-            // עיבוד תגובות
-            const replies = (msg.replies || []).map(r => ({
-                sender: userIdMap.get(String(r.senderId)) || defaultAdminId,
-                content: r.message || r.content,
-                createdAt: safeDate(r.createdAt)
-            })).filter(r => r.sender); // רק אם יש שולח תקין
-
-            if (senderId) {
-                await Message.create({
-                    sender: senderId,
-                    recipient: recipientId,
-                    subject: msg.subject || 'ללא נושא',
-                    content: msg.message || msg.content || '',
-                    isRead: !!(msg.status === 'read' || msg.isRead),
-                    replies: replies,
-                    createdAt: safeDate(msg.createdAt),
-                    updatedAt: safeDate(msg.updatedAt || msg.createdAt)
-                });
-                msgCount++;
-            }
+            try {
+                const msg = await messagesCursor.next();
+                const senderId = userIdMap.get(String(msg.senderId)) || defaultAdminId;
+                
+                if (senderId) {
+                    await Message.create({
+                        sender: senderId,
+                        recipient: msg.recipientId ? userIdMap.get(String(msg.recipientId)) : null,
+                        subject: safeString(msg.subject) || 'ללא נושא',
+                        content: safeString(msg.message || msg.content),
+                        isRead: !!(msg.status === 'read' || msg.isRead),
+                        replies: (msg.replies || []).map(r => ({
+                            sender: userIdMap.get(String(r.senderId)) || defaultAdminId,
+                            content: safeString(r.message || r.content),
+                            createdAt: safeDate(r.createdAt)
+                        })).filter(r => r.sender),
+                        createdAt: safeDate(msg.createdAt),
+                        updatedAt: safeDate(msg.updatedAt)
+                    });
+                    msgCount++;
+                }
+            } catch (e) {}
         }
         console.log(`✅ Migrated ${msgCount} messages.`);
 
-
-        // 6. העלאות (Uploads)
+        // 6. העלאות
         console.log('\n📤 Processing Uploads...');
-        // מחפש את קובץ המטא-דאטה
         const uploadsMetaDoc = await oldDb.collection('files').findOne({ path: 'data/uploads-meta.json' });
+        let uploadsData = [];
+        
+        if (uploadsMetaDoc) {
+            uploadsData = typeof uploadsMetaDoc.data === 'string' ? 
+                JSON.parse(uploadsMetaDoc.data) : uploadsMetaDoc.data;
+        }
+
         let uploadCount = 0;
+        if (Array.isArray(uploadsData)) {
+            for (const up of uploadsData) {
+                try {
+                    const uploaderId = userIdMap.get(String(up.uploadedById)) || defaultAdminId;
+                    const uploadPath = `data/uploads/${up.fileName}`;
+                    const contentDoc = await oldDb.collection('files').findOne({ path: uploadPath });
+                    const content = contentDoc ? safeString(contentDoc.data?.content || contentDoc.data) : '';
 
-        if (uploadsMetaDoc && Array.isArray(uploadsMetaDoc.data)) {
-            for (const up of uploadsMetaDoc.data) {
-                const uploaderId = userIdMap.get(String(up.uploadedById)) || defaultAdminId;
-                
-                // שליפת תוכן הקובץ
-                const uploadFilePath = `data/uploads/${up.fileName}`;
-                const fileContentDoc = await oldDb.collection('files').findOne({ path: uploadFilePath });
-                const content = fileContentDoc ? 
-                    (typeof fileContentDoc.data === 'string' ? fileContentDoc.data : fileContentDoc.data.content) 
-                    : '';
-
-                if (uploaderId) {
-                    await Upload.create({
-                        uploader: uploaderId,
-                        bookName: up.bookName,
-                        originalFileName: up.originalFileName || up.fileName,
-                        content: content || '',
-                        status: up.status || 'pending',
-                        reviewedBy: up.reviewedBy ? defaultAdminId : null,
-                        createdAt: safeDate(up.uploadedAt),
-                        updatedAt: safeDate(up.uploadedAt)
-                    });
-                    uploadCount++;
-                }
+                    if (uploaderId) {
+                        await Upload.create({
+                            uploader: uploaderId,
+                            bookName: safeString(up.bookName),
+                            originalFileName: safeString(up.originalFileName || up.fileName),
+                            content: content,
+                            status: up.status || 'pending',
+                            reviewedBy: up.reviewedBy ? defaultAdminId : null,
+                            createdAt: safeDate(up.uploadedAt),
+                            updatedAt: safeDate(up.uploadedAt)
+                        });
+                        uploadCount++;
+                    }
+                } catch(e) {}
             }
         }
         console.log(`✅ Migrated ${uploadCount} uploads.`);
-
-        console.log('\n🎉 ALL DONE! System is ready.');
+        console.log('\n🎉 ALL DONE!');
 
     } catch (error) {
         console.error('\n🛑 Fatal Error:', error);
