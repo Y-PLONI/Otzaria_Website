@@ -55,6 +55,5 @@ scripts/migrate-old-data.js
 scripts/migrate-old-data-simple.js
 scripts/pre-migration-check.js
 scripts/preview-migration.js
-scripts/safe-json-reader.js
 scripts/validate-migration-readiness.js
 scripts/MIGRATION_README.md
