@@ -228,9 +228,9 @@ async function migrateMessages() {
             const senderId = oldMessage.senderId ? userIdMapping.get(oldMessage.senderId) : null;
             const recipientId = oldMessage.recipientId ? userIdMapping.get(oldMessage.recipientId) : null;
             
-            // אם אין שולח, נשמור את ההודעה בלי שולח (עם הערה)
+            // אם אין שולח, נשמור את ההודעה בלי שולח
             if (!senderId && oldMessage.senderId) {
-                console.log(`⚠️ הודעה ללא שולח תקין: ${oldMessage.senderId} (${oldMessage.senderName || 'לא ידוע'}) - נשמר בלי שולח`);
+                console.log(`⚠️ הודעה ללא שולח תקין: ${oldMessage.senderId} (${oldMessage.senderName || 'לא ידוע'}) - נשמר עם sender: null`);
                 messagesWithoutSender++;
             }
             
@@ -241,29 +241,33 @@ async function migrateMessages() {
                 const replySenderId = reply.senderId ? userIdMapping.get(reply.senderId) : null;
                 
                 if (!replySenderId && reply.senderId) {
-                    console.log(`⚠️ תגובה ללא שולח תקין: ${reply.senderId} (${reply.senderName || 'לא ידוע'}) - נשמר בלי שולח`);
+                    console.log(`⚠️ תגובה ללא שולח תקין: ${reply.senderId} (${reply.senderName || 'לא ידוע'}) - נשמר עם sender: null`);
                     repliesWithoutSender++;
                 }
                 
                 return {
-                    sender: replySenderId, // יכול להיות null
                     content: reply.message,
-                    createdAt: safeParseDate(reply.createdAt)
+                    createdAt: safeParseDate(reply.createdAt),
+                    // הוספת שולח רק אם קיים
+                    ...(replySenderId && { sender: replySenderId })
                 };
             });
             
             // יצירת ההודעה עם ברירות מחדל לשדות חסרים
-            const newMessage = new Message({
-                sender: senderId, // יכול להיות null
-                recipient: recipientId, // יכול להיות null
+            const messageData = {
                 subject: oldMessage.subject || 'ללא נושא',
                 content: oldMessage.message || 'ללא תוכן',
                 isRead: oldMessage.status === 'read',
                 replies: processedReplies,
                 createdAt: safeParseDate(oldMessage.createdAt),
                 updatedAt: safeParseDate(oldMessage.updatedAt)
-            });
+            };
             
+            // הוספת שולח ונמען רק אם הם קיימים (כדי לעקוף validation)
+            if (senderId) messageData.sender = senderId;
+            if (recipientId) messageData.recipient = recipientId;
+            
+            const newMessage = new Message(messageData);
             await newMessage.save();
             migratedCount++;
             
@@ -287,7 +291,35 @@ async function migrateMessages() {
 async function migrateBooksAndPages() {
     console.log('\n📚 מתחיל מיגרציה של ספרים ועמודים...');
     
+    // קריאת נתוני הדפים מ-backups.json
     const backupsContent = fs.readFileSync('backups.json', 'utf8');
+    
+    // קריאת תוכן הדפים מ-files.json
+    console.log('🔄 טוען תוכן דפים מ-files.json...');
+    const filesData = await readLargeJsonFile('files.json');
+    
+    // מיפוי תוכן הדפים
+    const pageContentMap = new Map();
+    const uploadContentMap = new Map();
+    
+    if (Array.isArray(filesData)) {
+        filesData.forEach(item => {
+            if (item.path && item.data && item.data.content) {
+                if (item.path.includes('data/content/')) {
+                    // תוכן דפים בעבודה
+                    const fileName = item.path.replace('data/content/', '').replace('.txt', '');
+                    pageContentMap.set(fileName, item.data.content);
+                } else if (item.path.includes('data/uploads/')) {
+                    // תוכן דפים שהושלמו
+                    const fileName = item.path.replace('data/uploads/', '').replace('.txt', '');
+                    uploadContentMap.set(fileName, item.data.content);
+                }
+            }
+        });
+    }
+    
+    console.log(`📄 נמצאו ${pageContentMap.size} דפים עם תוכן בעבודה`);
+    console.log(`📄 נמצאו ${uploadContentMap.size} דפים עם תוכן שהועלו`);
     
     // פיצול לאובייקטי JSON נפרדים
     const bookObjects = [];
@@ -388,6 +420,8 @@ async function migrateBooksAndPages() {
     let migratedPages = 0;
     let totalCompletedPages = 0;
     let totalInProgressPages = 0;
+    let pagesWithContent = 0;
+    let pagesWithUploadContent = 0;
     
     for (const bookVersion of bestVersions) {
         try {
@@ -417,7 +451,7 @@ async function migrateBooksAndPages() {
             
             console.log(`📖 נוצר ספר: ${bookName} (${bookData.length} עמודים, ${completedCount} גמורים, ${inProgressCount} בעבודה)`);
             
-            // יצירת העמודים עם טיפול משופר בנתונים חסרים
+            // יצירת העמודים עם טיפול משופר בנתונים חסרים ושחזור תוכן
             const pages = [];
             let pagesWithInvalidOwners = 0;
             let pagesWithInvalidNumbers = 0;
@@ -428,13 +462,25 @@ async function migrateBooksAndPages() {
                 let claimedAt = null;
                 let completedAt = null;
                 
-                // טיפול בבעלים
+                // טיפול בבעלים ובסטטוס
                 if (pageData.claimedById) {
                     claimedBy = userIdMapping.get(pageData.claimedById);
                     if (!claimedBy) {
-                        console.log(`⚠️ עמוד ${extractValue(pageData.number)} בספר "${bookName}" - בעלים לא קיים: ${pageData.claimedById}, מאפס לזמין`);
+                        console.log(`⚠️ עמוד ${extractValue(pageData.number)} בספר "${bookName}" - בעלים לא קיים: ${pageData.claimedById}`);
                         pagesWithInvalidOwners++;
-                        actualStatus = 'available'; // איפוס לזמין
+                        
+                        // שמירת הסטטוס המקורי גם עם בעלים לא תקין
+                        if (pageData.status === 'completed') {
+                            actualStatus = 'completed';
+                            completedAt = safeParseDate(pageData.completedAt) || safeParseDate(pageData.claimedAt) || new Date();
+                            console.log(`   📝 עמוד מושלם נשמר ללא בעלים`);
+                        } else if (pageData.status === 'in-progress') {
+                            actualStatus = 'in-progress';
+                            claimedAt = safeParseDate(pageData.claimedAt) || new Date();
+                            console.log(`   🔄 עמוד בעבודה נשמר ללא בעלים`);
+                        } else {
+                            actualStatus = 'available';
+                        }
                     } else {
                         // יש בעלים תקין, נשמור את הסטטוס המקורי
                         actualStatus = pageData.status === 'completed' ? 'completed' : 
@@ -449,6 +495,15 @@ async function migrateBooksAndPages() {
                             completedAt = claimedAt || new Date(); // אם אין תאריך השלמה, נשתמש בתאריך התפיסה או נוכחי
                         }
                     }
+                } else {
+                    // אין בעלים במסד הישן - בדיקה אם זה עמוד מושלם
+                    if (pageData.status === 'completed') {
+                        actualStatus = 'completed';
+                        completedAt = safeParseDate(pageData.completedAt) || new Date();
+                        console.log(`⚠️ עמוד ${extractValue(pageData.number)} בספר "${bookName}" - מושלם ללא בעלים במסד הישן`);
+                    } else {
+                        actualStatus = 'available';
+                    }
                 }
                 
                 // וידוא שמספר העמוד תקין
@@ -459,10 +514,40 @@ async function migrateBooksAndPages() {
                     pagesWithInvalidNumbers++;
                 }
                 
+                // שחזור תוכן העמוד
+                let pageContent = pageData.content || '';
+                
+                // חיפוש תוכן בקבצי content (דפים בעבודה)
+                const contentKey1 = `${bookName}_page_${pageNumber}`;
+                const contentKey2 = `${bookName.replace(/\s+/g, '_')}_page_${pageNumber}`;
+                
+                if (pageContentMap.has(contentKey1)) {
+                    pageContent = pageContentMap.get(contentKey1);
+                    pagesWithContent++;
+                } else if (pageContentMap.has(contentKey2)) {
+                    pageContent = pageContentMap.get(contentKey2);
+                    pagesWithContent++;
+                }
+                
+                // חיפוש תוכן בקבצי uploads (דפים שהושלמו)
+                const uploadKeys = [
+                    `${bookName} _ עמוד ${pageNumber}_`,
+                    `${bookName}_עמוד_${pageNumber}_`,
+                    `${bookName}_page_${pageNumber}_`
+                ];
+                
+                for (const [uploadKey, uploadContent] of uploadContentMap.entries()) {
+                    if (uploadKeys.some(key => uploadKey.includes(key))) {
+                        pageContent = uploadContent;
+                        pagesWithUploadContent++;
+                        break;
+                    }
+                }
+                
                 const newPage = {
                     book: savedBook._id,
                     pageNumber: pageNumber,
-                    content: pageData.content || '', // תוכן העמוד אם קיים
+                    content: pageContent, // תוכן העמוד המשוחזר
                     status: actualStatus,
                     claimedBy: claimedBy,
                     claimedAt: claimedAt,
@@ -476,7 +561,7 @@ async function migrateBooksAndPages() {
             }
             
             if (pagesWithInvalidOwners > 0) {
-                console.log(`⚠️ ${pagesWithInvalidOwners} עמודים אופסו עקב בעלים לא קיימים בספר "${bookName}"`);
+                console.log(`⚠️ ${pagesWithInvalidOwners} עמודים עם בעלים לא תקינים נשמרו עם הסטטוס המקורי בספר "${bookName}"`);
             }
             if (pagesWithInvalidNumbers > 0) {
                 console.log(`⚠️ ${pagesWithInvalidNumbers} עמודים עם מספרים לא תקינים תוקנו בספר "${bookName}"`);
@@ -515,6 +600,8 @@ async function migrateBooksAndPages() {
     
     console.log(`✅ הושלמה מיגרציה של ${migratedBooks} ספרים ו-${migratedPages} עמודים`);
     console.log(`📊 סיכום: ${totalCompletedPages} עמודים גמורים, ${totalInProgressPages} עמודים בעבודה`);
+    console.log(`📄 שוחזר תוכן עבור ${pagesWithContent} דפים מקבצי content`);
+    console.log(`📄 שוחזר תוכן עבור ${pagesWithUploadContent} דפים מקבצי uploads`);
 }
 
 async function validateMigration() {

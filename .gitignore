@@ -57,3 +57,6 @@ scripts/pre-migration-check.js
 scripts/preview-migration.js
 scripts/validate-migration-readiness.js
 scripts/MIGRATION_README.md
+scripts/check-backups-structure.js
+scripts/check-content-files.js
+scripts/check-files-structure.js
