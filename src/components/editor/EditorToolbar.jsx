@@ -24,6 +24,11 @@ export default function EditorToolbar({
   setShowSettings,
   thumbnailUrl
 }) {
+  // פונקציית עזר למניעת איבוד פוקוס בעת לחיצה על כפתורי עריכה
+  const preventFocusLoss = (e) => {
+    e.preventDefault();
+  };
+
   return (
     <div className="bg-white border-b border-gray-200 sticky top-16 z-30 shadow-sm">
       <div className="container mx-auto px-4 py-2.5">
@@ -102,24 +107,75 @@ export default function EditorToolbar({
           {/* Right Side - Text Tools */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-0 bg-gray-100 rounded-lg p-0.5">
-              <button onClick={() => insertTag('b')} className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center" title="מודגש"><span className="font-bold text-sm">B</span></button>
-              <button onClick={() => insertTag('i')} className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center" title="נטוי"><span className="italic text-sm">I</span></button>
-              <button onClick={() => insertTag('u')} className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center" title="קו תחתון"><span className="underline text-sm">U</span></button>
+              <button 
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertTag('b')} 
+                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center" 
+                title="מודגש"
+              >
+                <span className="font-bold text-sm">B</span>
+              </button>
+              <button 
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertTag('i')} 
+                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center" 
+                title="נטוי"
+              >
+                <span className="italic text-sm">I</span>
+              </button>
+              <button 
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertTag('u')} 
+                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center" 
+                title="קו תחתון"
+              >
+                <span className="underline text-sm">U</span>
+              </button>
             </div>
 
             <div className="w-px h-6 bg-gray-200"></div>
 
             <div className="flex items-center gap-0 bg-gray-100 rounded-lg p-0.5">
-              <button onClick={() => insertTag('big')} className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center text-sm font-medium">A+</button>
-              <button onClick={() => insertTag('small')} className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center text-xs font-medium">A-</button>
+              <button 
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertTag('big')} 
+                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center text-sm font-medium"
+              >
+                A+
+              </button>
+              <button 
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertTag('small')} 
+                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center text-xs font-medium"
+              >
+                A-
+              </button>
             </div>
 
             <div className="w-px h-6 bg-gray-200"></div>
 
             <div className="flex items-center gap-0 bg-gray-100 rounded-lg p-0.5">
-              <button onClick={() => insertTag('h1')} className="px-2.5 h-8 hover:bg-white rounded-md text-xs font-bold flex items-center justify-center">H1</button>
-              <button onClick={() => insertTag('h2')} className="px-2.5 h-8 hover:bg-white rounded-md text-xs font-bold flex items-center justify-center">H2</button>
-              <button onClick={() => insertTag('h3')} className="px-2.5 h-8 hover:bg-white rounded-md text-xs font-bold flex items-center justify-center">H3</button>
+              <button 
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertTag('h1')} 
+                className="px-2.5 h-8 hover:bg-white rounded-md text-xs font-bold flex items-center justify-center"
+              >
+                H1
+              </button>
+              <button 
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertTag('h2')} 
+                className="px-2.5 h-8 hover:bg-white rounded-md text-xs font-bold flex items-center justify-center"
+              >
+                H2
+              </button>
+              <button 
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertTag('h3')} 
+                className="px-2.5 h-8 hover:bg-white rounded-md text-xs font-bold flex items-center justify-center"
+              >
+                H3
+              </button>
             </div>
 
             <div className="w-px h-6 bg-gray-200"></div>

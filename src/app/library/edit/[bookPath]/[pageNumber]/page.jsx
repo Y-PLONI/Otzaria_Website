@@ -202,7 +202,6 @@ export default function EditPage() {
   const handleFindReplace = (replaceAll = false) => {
     if (!findText) return alert('הזן טקסט לחיפוש')
     
-    // Simplification for brevity: using state logic from original file
     const regex = new RegExp(findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
     let count = 0
     
@@ -224,9 +223,21 @@ export default function EditPage() {
   }
 
   const insertTag = (tag) => {
-    // Logic mostly handled in TextEditor via props/ref could be better, keeping simple:
-    const activeEl = document.activeElement;
-    if (activeEl.tagName !== 'TEXTAREA') return;
+    let activeEl = document.activeElement;
+
+    // מנגנון גיבוי: אם הפוקוס לא ב-TEXTAREA, נסה למצוא את האחרון שהיה בשימוש
+    if (!activeEl || activeEl.tagName !== 'TEXTAREA') {
+        if (activeTextarea === 'left') {
+            activeEl = document.querySelector('textarea[data-column="left"]');
+        } else if (activeTextarea === 'right') {
+            activeEl = document.querySelector('textarea[data-column="right"]');
+        } else {
+            // במצב של עמודה אחת, יש רק אחד
+            activeEl = document.querySelector('.editor-container textarea');
+        }
+    }
+
+    if (!activeEl || activeEl.tagName !== 'TEXTAREA') return;
     
     const start = activeEl.selectionStart;
     const end = activeEl.selectionEnd;
@@ -235,13 +246,17 @@ export default function EditPage() {
     const selected = text.substring(start, end);
     const after = text.substring(end);
     
+    // לוגיקה לתגיות
     let insertion = `<${tag}>${selected}</${tag}>`
-    if (tag === 'big' || tag === 'small') insertion = `<${tag}>${selected}</${tag}>`
-    // ... complete tag logic ...
+    
+    // בדרך כלל כותרות צריכות שורה חדשה לפני ואחרי
+    if (['h1', 'h2', 'h3'].includes(tag)) {
+        insertion = `\n<${tag}>${selected}</${tag}>\n`
+    }
     
     const newText = before + insertion + after;
     
-    // Update state based on active textarea
+    // עדכון ה-State בהתאם לאלמנט הפעיל
     const col = activeEl.getAttribute('data-column');
     if (col === 'right') handleColumnChange('right', newText);
     else if (col === 'left') handleColumnChange('left', newText);
@@ -250,16 +265,18 @@ export default function EditPage() {
         handleAutoSaveWrapper(newText);
     }
     
+    // החזרת הפוקוס וסימון הטקסט הרלוונטי
     setTimeout(() => {
         activeEl.focus();
-        activeEl.setSelectionRange(start + insertion.length, start + insertion.length);
+        // הצבת הסמן אחרי התגית הסוגרת
+        const newCursorPos = start + insertion.length;
+        activeEl.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
   }
 
   const handleOCR = async () => {
     if (!selectionRect) return alert('בחר אזור')
     
-    // Load image blob (same logic as before)
     const response = await fetch(pageData.thumbnail)
     const blob = await response.blob()
     const img = await createImageBitmap(blob)
@@ -281,7 +298,6 @@ export default function EditPage() {
         
         if (!text) return alert('לא זוהה טקסט')
         
-        // Append text
         if (twoColumns) {
             const newRight = rightColumn + '\n' + text
             setRightColumn(newRight)
@@ -300,7 +316,6 @@ export default function EditPage() {
   }
 
   const getInstructions = () => {
-      // Default instructions object (moved from original file)
       return bookData?.editingInfo || { 
           title: 'הנחיות כלליות', 
           sections: [{ title: 'כללי', items: ['העתק במדויק'] }] 
@@ -372,7 +387,7 @@ export default function EditPage() {
         selectedModel={selectedModel} setSelectedModel={setSelectedModel}
         customPrompt={customPrompt} setCustomPrompt={setCustomPrompt}
         saveSettings={() => { localStorage.setItem('gemini_api_key', userApiKey); alert('נשמר'); }}
-        resetPrompt={() => setCustomPrompt('...default...')}
+        resetPrompt={() => setCustomPrompt('The text is in Hebrew, written in Rashi script...')}
       />
       
       <FindReplaceDialog 
