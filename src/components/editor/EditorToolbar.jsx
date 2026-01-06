@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 export default function EditorToolbar({
   pageNumber,
   totalPages,
@@ -24,171 +26,188 @@ export default function EditorToolbar({
   setShowSettings,
   thumbnailUrl
 }) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   // פונקציית עזר למניעת איבוד פוקוס בעת לחיצה על כפתורי עריכה
   const preventFocusLoss = (e) => {
     e.preventDefault();
   };
 
+  // תצוגה במצב מקופל - פס דק עם כפתור לפתיחה
+  if (isCollapsed) {
+    return (
+      <div 
+        className="bg-white border-b border-gray-200 sticky top-16 z-30 shadow-sm h-3 hover:h-5 transition-all duration-200 flex justify-center items-start cursor-pointer group"
+        onClick={() => setIsCollapsed(false)}
+        title="הצג סרגל כלים"
+      >
+        <div className="bg-gray-100 border-b border-x border-gray-200 rounded-b-md px-6 flex items-center justify-center h-full group-hover:bg-gray-200 transition-colors">
+           <span className="material-symbols-outlined text-xs text-gray-500">expand_more</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white border-b border-gray-200 sticky top-16 z-30 shadow-sm">
-      <div className="container mx-auto px-4 py-2.5">
-        <div className="flex items-center justify-between gap-3">
+    <div className="bg-white border-b border-gray-200 sticky top-16 z-30 shadow-sm transition-all">
+      <div className="container mx-auto px-4 py-1.5">
+        <div className="flex items-center justify-between gap-2">
           {/* Left Side - Image Tools */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setShowSettings(prev => !prev)}
-              className="p-1.5 h-8 rounded-lg transition-colors flex items-center hover:bg-gray-100 text-gray-700"
+              className="p-1 h-7 w-7 rounded-md transition-colors flex items-center justify-center hover:bg-gray-100 text-gray-700"
               title="הגדרות OCR"
             >
-              <span className="material-symbols-outlined text-base">settings</span>
+              <span className="material-symbols-outlined text-sm">settings</span>
             </button>
 
-            <div className="w-px h-6 bg-gray-200"></div>
-            <span className="text-xs text-gray-500 font-medium">עמוד {pageNumber} מתוך {totalPages}</span>
-            <div className="w-px h-6 bg-gray-200"></div>
+            <div className="w-px h-5 bg-gray-200"></div>
+            <span className="text-[11px] text-gray-500 font-medium whitespace-nowrap">עמוד {pageNumber} / {totalPages}</span>
+            <div className="w-px h-5 bg-gray-200"></div>
 
             {/* Zoom Controls */}
-            <div className="flex items-center gap-0 bg-gray-100 rounded-lg p-0.5">
-              <button onClick={() => setImageZoom(Math.max(25, imageZoom - 10))} className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center">
-                <span className="material-symbols-outlined text-base">zoom_out</span>
+            <div className="flex items-center gap-0 bg-gray-100 rounded-md p-0.5">
+              <button onClick={() => setImageZoom(Math.max(25, imageZoom - 10))} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center">
+                <span className="material-symbols-outlined text-sm">zoom_out</span>
               </button>
-              <span className="text-xs font-medium min-w-[2.5rem] text-center text-gray-700">{imageZoom}%</span>
-              <button onClick={() => setImageZoom(Math.min(300, imageZoom + 10))} className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center">
-                <span className="material-symbols-outlined text-base">zoom_in</span>
+              <span className="text-[10px] font-medium min-w-[2rem] text-center text-gray-700">{imageZoom}%</span>
+              <button onClick={() => setImageZoom(Math.min(300, imageZoom + 10))} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center">
+                <span className="material-symbols-outlined text-sm">zoom_in</span>
               </button>
-              <button onClick={() => setImageZoom(100)} className="w-12 h-8 hover:bg-white rounded-md text-xs font-medium flex items-center justify-center">
+              <button onClick={() => setImageZoom(100)} className="w-9 h-7 hover:bg-white rounded text-[10px] font-medium flex items-center justify-center">
                 100%
               </button>
             </div>
 
-            <div className="w-px h-6 bg-gray-200"></div>
+            <div className="w-px h-5 bg-gray-200"></div>
 
             {/* OCR Method Selector */}
-            <div className="flex items-center gap-0 bg-gray-100 rounded-lg p-0.5">
-              <button onClick={() => setOcrMethod('tesseract')} className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 h-8 ${ocrMethod === 'tesseract' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-                <span className="material-symbols-outlined text-base">text_fields</span>
-                <span>OCR</span>
+            <div className="flex items-center gap-0 bg-gray-100 rounded-md p-0.5">
+              <button onClick={() => setOcrMethod('tesseract')} className={`px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1 h-7 ${ocrMethod === 'tesseract' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+                <span className="material-symbols-outlined text-sm">text_fields</span>
+                <span className="hidden sm:inline">OCR</span>
               </button>
-              <button onClick={() => setOcrMethod('gemini')} className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 h-8 ${ocrMethod === 'gemini' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-                <img src="https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" alt="Gemini" className="w-3.5 h-3.5" />
-                <span>Gemini</span>
+              <button onClick={() => setOcrMethod('gemini')} className={`px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1 h-7 ${ocrMethod === 'gemini' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+                <img src="https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" alt="Gemini" className="w-3 h-3" />
+                <span className="hidden sm:inline">Gemini</span>
               </button>
             </div>
 
             <button
               onClick={toggleSelectionMode}
               disabled={isOcrProcessing || !thumbnailUrl}
-              className={`w-8 h-8 rounded-lg border flex items-center justify-center ${isSelectionMode ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'} disabled:opacity-40`}
+              className={`w-7 h-7 rounded-md border flex items-center justify-center ${isSelectionMode ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'} disabled:opacity-40`}
               title="זיהוי טקסט מאזור נבחר"
             >
-              <span className={`material-symbols-outlined text-base ${isOcrProcessing ? 'animate-spin' : ''}`}>
+              <span className={`material-symbols-outlined text-sm ${isOcrProcessing ? 'animate-spin' : ''}`}>
                 {isOcrProcessing ? 'progress_activity' : 'document_scanner'}
               </span>
             </button>
 
             {selectionRect && (
               <>
-                <button onClick={handleOCRSelection} disabled={isOcrProcessing} className="flex items-center gap-2 px-3 py-1.5 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40">
-                  <span className="material-symbols-outlined text-base">check_circle</span>
-                  <span className="text-xs font-medium">זהה אזור</span>
+                <button onClick={handleOCRSelection} disabled={isOcrProcessing} className="flex items-center gap-1.5 px-2 py-1 h-7 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-40">
+                  <span className="material-symbols-outlined text-sm">check_circle</span>
+                  <span className="text-[10px] font-medium">זהה</span>
                 </button>
-                <button onClick={() => { setSelectionRect(null); setIsSelectionMode(false); }} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
-                  <span className="material-symbols-outlined text-base">close</span>
+                <button onClick={() => { setSelectionRect(null); setIsSelectionMode(false); }} className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md">
+                  <span className="material-symbols-outlined text-sm">close</span>
                 </button>
               </>
             )}
 
-            <div className="w-px h-6 bg-gray-200"></div>
-            <a href="https://aistudio.google.com/prompts/new_chat?model=gemini-3-pro-preview" target="_blank" rel="noopener noreferrer" className="p-1.5 h-8 hover:bg-gray-100 rounded-lg flex items-center">
-              <img src="https://www.gstatic.com/lamda/images/bard_sparkle_v2_advanced.svg" alt="Gemini" className="w-5 h-5" />
+            <div className="w-px h-5 bg-gray-200"></div>
+            <a href="https://aistudio.google.com/prompts/new_chat?model=gemini-3-pro-preview" target="_blank" rel="noopener noreferrer" className="w-7 h-7 hover:bg-gray-100 rounded-md flex items-center justify-center">
+              <img src="https://www.gstatic.com/lamda/images/bard_sparkle_v2_advanced.svg" alt="Gemini" className="w-4 h-4" />
             </a>
           </div>
 
           {/* Right Side - Text Tools */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-0 bg-gray-100 rounded-lg p-0.5">
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            <div className="flex items-center gap-0 bg-gray-100 rounded-md p-0.5">
               <button 
                 onMouseDown={preventFocusLoss}
                 onClick={() => insertTag('b')} 
-                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center" 
+                className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" 
                 title="מודגש"
               >
-                <span className="font-bold text-sm">B</span>
+                <span className="font-bold text-xs">B</span>
               </button>
               <button 
                 onMouseDown={preventFocusLoss}
                 onClick={() => insertTag('i')} 
-                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center" 
+                className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" 
                 title="נטוי"
               >
-                <span className="italic text-sm">I</span>
+                <span className="italic text-xs">I</span>
               </button>
               <button 
                 onMouseDown={preventFocusLoss}
                 onClick={() => insertTag('u')} 
-                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center" 
+                className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" 
                 title="קו תחתון"
               >
-                <span className="underline text-sm">U</span>
+                <span className="underline text-xs">U</span>
               </button>
             </div>
 
-            <div className="w-px h-6 bg-gray-200"></div>
+            <div className="w-px h-5 bg-gray-200"></div>
 
-            <div className="flex items-center gap-0 bg-gray-100 rounded-lg p-0.5">
+            <div className="flex items-center gap-0 bg-gray-100 rounded-md p-0.5">
               <button 
                 onMouseDown={preventFocusLoss}
                 onClick={() => insertTag('big')} 
-                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center text-sm font-medium"
+                className="w-7 h-7 hover:bg-white rounded flex items-center justify-center text-xs font-medium"
               >
                 A+
               </button>
               <button 
                 onMouseDown={preventFocusLoss}
                 onClick={() => insertTag('small')} 
-                className="w-8 h-8 hover:bg-white rounded-md flex items-center justify-center text-xs font-medium"
+                className="w-7 h-7 hover:bg-white rounded flex items-center justify-center text-[10px] font-medium"
               >
                 A-
               </button>
             </div>
 
-            <div className="w-px h-6 bg-gray-200"></div>
+            <div className="w-px h-5 bg-gray-200"></div>
 
-            <div className="flex items-center gap-0 bg-gray-100 rounded-lg p-0.5">
+            <div className="flex items-center gap-0 bg-gray-100 rounded-md p-0.5">
               <button 
                 onMouseDown={preventFocusLoss}
                 onClick={() => insertTag('h1')} 
-                className="px-2.5 h-8 hover:bg-white rounded-md text-xs font-bold flex items-center justify-center"
+                className="px-2 h-7 hover:bg-white rounded text-[10px] font-bold flex items-center justify-center"
               >
                 H1
               </button>
               <button 
                 onMouseDown={preventFocusLoss}
                 onClick={() => insertTag('h2')} 
-                className="px-2.5 h-8 hover:bg-white rounded-md text-xs font-bold flex items-center justify-center"
+                className="px-2 h-7 hover:bg-white rounded text-[10px] font-bold flex items-center justify-center"
               >
                 H2
               </button>
               <button 
                 onMouseDown={preventFocusLoss}
                 onClick={() => insertTag('h3')} 
-                className="px-2.5 h-8 hover:bg-white rounded-md text-xs font-bold flex items-center justify-center"
+                className="px-2 h-7 hover:bg-white rounded text-[10px] font-bold flex items-center justify-center"
               >
                 H3
               </button>
             </div>
 
-            <div className="w-px h-6 bg-gray-200"></div>
+            <div className="w-px h-5 bg-gray-200"></div>
 
-            <button onClick={() => setShowFindReplace(true)} className="flex items-center gap-2 px-3 py-1.5 h-8 bg-white hover:bg-gray-50 rounded-lg border border-gray-200">
-              <span className="material-symbols-outlined text-base">find_replace</span>
-              <span className="text-xs font-medium">חיפוש</span>
+            <button onClick={() => setShowFindReplace(true)} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-gray-50 rounded-md border border-gray-200">
+              <span className="material-symbols-outlined text-sm">find_replace</span>
+              <span className="text-[10px] font-medium">חיפוש</span>
             </button>
 
-            <div className="w-px h-6 bg-gray-200"></div>
+            <div className="w-px h-5 bg-gray-200"></div>
 
             <div className="relative">
-              <select value={selectedFont} onChange={(e) => setSelectedFont(e.target.value)} className="appearance-none pl-3 pr-8 h-8 bg-white border border-gray-200 rounded-lg text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer">
+              <select value={selectedFont} onChange={(e) => setSelectedFont(e.target.value)} className="appearance-none pl-2 pr-6 h-7 bg-white border border-gray-200 rounded-md text-[10px] font-medium focus:outline-none hover:bg-gray-50 cursor-pointer w-24">
                 <option value="monospace">Monospace</option>
                 <option value="Arial">Arial</option>
                 <option value="'Times New Roman'">Times New Roman</option>
@@ -196,27 +215,36 @@ export default function EditorToolbar({
                 <option value="Georgia">Georgia</option>
                 <option value="Verdana">Verdana</option>
               </select>
-              <span className="material-symbols-outlined text-base absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+              <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
             </div>
 
-            <div className="w-px h-6 bg-gray-200"></div>
+            <div className="w-px h-5 bg-gray-200"></div>
 
-            <button onClick={toggleColumns} className="w-8 h-8 hover:bg-gray-100 rounded-lg flex items-center justify-center" title={twoColumns ? 'איחוד לטור אחד' : 'פיצול לשני טורים'}>
-              <span className="material-symbols-outlined text-base" style={{ transform: 'rotate(90deg)' }}>{twoColumns ? 'unfold_less' : 'unfold_more'}</span>
+            <button onClick={toggleColumns} className="w-7 h-7 hover:bg-gray-100 rounded-md flex items-center justify-center" title={twoColumns ? 'איחוד לטור אחד' : 'פיצול לשני טורים'}>
+              <span className="material-symbols-outlined text-sm" style={{ transform: 'rotate(90deg)' }}>{twoColumns ? 'unfold_less' : 'unfold_more'}</span>
             </button>
 
             <button onClick={() => {
               const newOrientation = layoutOrientation === 'vertical' ? 'horizontal' : 'vertical'
               setLayoutOrientation(newOrientation)
               localStorage.setItem('layoutOrientation', newOrientation)
-            }} className="w-8 h-8 hover:bg-gray-100 rounded-lg flex items-center justify-center" title={layoutOrientation === 'vertical' ? 'פריסה אנכית' : 'פריסה אופקית'}>
-              <span className="material-symbols-outlined text-base" style={{ transform: layoutOrientation === 'horizontal' ? 'rotate(90deg)' : 'none' }}>splitscreen</span>
+            }} className="w-7 h-7 hover:bg-gray-100 rounded-md flex items-center justify-center" title={layoutOrientation === 'vertical' ? 'פריסה אנכית' : 'פריסה אופקית'}>
+              <span className="material-symbols-outlined text-sm" style={{ transform: layoutOrientation === 'horizontal' ? 'rotate(90deg)' : 'none' }}>splitscreen</span>
             </button>
 
-            <div className="w-px h-6 bg-gray-200"></div>
+            <div className="w-px h-5 bg-gray-200"></div>
 
-            <button onClick={() => setShowInfoDialog(true)} className="w-8 h-8 hover:bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
-              <span className="material-symbols-outlined text-base">info</span>
+            <button onClick={() => setShowInfoDialog(true)} className="w-7 h-7 hover:bg-blue-50 text-blue-600 rounded-md flex items-center justify-center">
+              <span className="material-symbols-outlined text-sm">info</span>
+            </button>
+
+            {/* כפתור קיפול סרגל */}
+            <button 
+                onClick={() => setIsCollapsed(true)} 
+                className="w-7 h-7 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded-md flex items-center justify-center mr-1"
+                title="קפל סרגל כלים"
+            >
+              <span className="material-symbols-outlined text-sm">expand_less</span>
             </button>
           </div>
         </div>
