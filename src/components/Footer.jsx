@@ -5,7 +5,7 @@ import { FOOTER_QUICK_LINKS, FOOTER_EXTERNAL_LINKS } from '@/lib/navigation-cons
 
 export default function Footer() {
   return (
-    <footer className="bg-gradient-to-b from-surface to-surface-variant py-16 px-4 mt-20">
+    <footer className="bg-gradient-to-b from-surface to-surface-variant py-8 px-4 mt-3">
       <div className="container mx-auto max-w-6xl">
         {/* Main Footer Content */}
         <div className="grid md:grid-cols-4 gap-8 mb-12">

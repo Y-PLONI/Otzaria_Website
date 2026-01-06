@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 
-export default function EditorHeader({ bookName, pageNumber, bookPath, session, saveStatus }) {
+export default function EditorHeader({ bookName, pageNumber, bookPath, session, saveStatus, onToggleFullScreen }) {
   return (
     <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
       <div className="container mx-auto px-4 py-3">
@@ -51,8 +51,16 @@ export default function EditorHeader({ bookName, pageNumber, bookPath, session, 
                   <span>שגיאה בשמירה</span>
                 </div>
               )}
-              {/* במצב unsaved לא מציגים כלום */}
             </div>
+
+            {/* כפתור מסך מלא */}
+            <button 
+              onClick={onToggleFullScreen}
+              className="p-2 hover:bg-surface-variant rounded-full transition-colors text-on-surface/70"
+              title="מסך מלא"
+            >
+              <span className="material-symbols-outlined">fullscreen</span>
+            </button>
 
             <Link
               href="/library/dashboard"

@@ -1,5 +1,3 @@
-import { useState } from 'react'
-
 export default function EditorToolbar({
   pageNumber,
   totalPages,
@@ -24,32 +22,34 @@ export default function EditorToolbar({
   setLayoutOrientation,
   setShowInfoDialog,
   setShowSettings,
-  thumbnailUrl
+  thumbnailUrl,
+  isCollapsed,
+  setIsCollapsed,
+  isFullScreen,
+  onToggleFullScreen
 }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  // פונקציית עזר למניעת איבוד פוקוס בעת לחיצה על כפתורי עריכה
   const preventFocusLoss = (e) => {
     e.preventDefault();
   };
 
-  // תצוגה במצב מקופל - פס דק עם כפתור לפתיחה
+  // תצוגה במצב מקופל - מוצג תמיד (ללא opacity-0)
   if (isCollapsed) {
     return (
       <div 
-        className="bg-white border-b border-gray-200 sticky top-16 z-30 shadow-sm h-3 hover:h-5 transition-all duration-200 flex justify-center items-start cursor-pointer group"
+        className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm h-3 hover:h-6 transition-all duration-200 flex justify-center items-start cursor-pointer group"
         onClick={() => setIsCollapsed(false)}
         title="הצג סרגל כלים"
       >
-        <div className="bg-gray-100 border-b border-x border-gray-200 rounded-b-md px-6 flex items-center justify-center h-full group-hover:bg-gray-200 transition-colors">
-           <span className="material-symbols-outlined text-xs text-gray-500">expand_more</span>
+        <div className="bg-white/90 border-b border-x border-gray-200 rounded-b-md px-8 py-1 flex items-center justify-center shadow-sm">
+           <span className="material-symbols-outlined text-sm text-gray-500">expand_more</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white border-b border-gray-200 sticky top-16 z-30 shadow-sm transition-all">
+    // שינוי לוגיקה: sticky תמיד. אם מסך מלא - top-0, אחרת top-16 (מתחת להדר)
+    <div className={`bg-white border-b border-gray-200 z-30 shadow-sm transition-all sticky ${isFullScreen ? 'top-0' : 'top-[65px]'}`}>
       <div className="container mx-auto px-4 py-1.5">
         <div className="flex items-center justify-between gap-2">
           {/* Left Side - Image Tools */}
@@ -236,6 +236,19 @@ export default function EditorToolbar({
 
             <button onClick={() => setShowInfoDialog(true)} className="w-7 h-7 hover:bg-blue-50 text-blue-600 rounded-md flex items-center justify-center">
               <span className="material-symbols-outlined text-sm">info</span>
+            </button>
+
+            <div className="w-px h-5 bg-gray-200"></div>
+
+            {/* כפתור מסך מלא בסרגל */}
+            <button 
+                onClick={onToggleFullScreen}
+                className="w-7 h-7 hover:bg-gray-100 text-gray-600 rounded-md flex items-center justify-center"
+                title={isFullScreen ? "צא ממסך מלא" : "מסך מלא"}
+            >
+              <span className="material-symbols-outlined text-sm">
+                {isFullScreen ? 'close_fullscreen' : 'fullscreen'}
+              </span>
             </button>
 
             {/* כפתור קיפול סרגל */}

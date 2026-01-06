@@ -45,6 +45,10 @@ export default function EditPage() {
   const [layoutOrientation, setLayoutOrientation] = useState('vertical')
   const [imagePanelWidth, setImagePanelWidth] = useState(50)
   const [isResizing, setIsResizing] = useState(false)
+  
+  // Full Screen & Toolbar State
+  const [isFullScreen, setIsFullScreen] = useState(false)
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false)
 
   // Split Logic State
   const [showSplitDialog, setShowSplitDialog] = useState(false)
@@ -73,7 +77,7 @@ export default function EditPage() {
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
   const [customPrompt, setCustomPrompt] = useState('The text is in Hebrew, written in Rashi script...') 
 
-  // Auto Save Hook - Destructured to get status
+  // Auto Save Hook
   const { save: debouncedSave, status: saveStatus } = useAutoSave()
 
   // Load Settings
@@ -89,6 +93,30 @@ export default function EditPage() {
     if (savedModel) setSelectedModel(savedModel)
     if (savedPanelWidth) setImagePanelWidth(parseFloat(savedPanelWidth))
     if (savedOrientation) setLayoutOrientation(savedOrientation)
+  }, [])
+
+  // Full Screen Handler
+  const toggleFullScreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen()
+        setIsToolbarCollapsed(true) // כיווץ אוטומטי בכניסה למסך מלא
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen()
+        setIsToolbarCollapsed(false)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  // Listener for Full Screen changes (e.g. Esc key)
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      setIsFullScreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handleFullScreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullScreenChange)
   }, [])
 
   // Auth & Load Data
@@ -226,14 +254,12 @@ export default function EditPage() {
   const insertTag = (tag) => {
     let activeEl = document.activeElement;
 
-    // מנגנון גיבוי: אם הפוקוס לא ב-TEXTAREA, נסה למצוא את האחרון שהיה בשימוש
     if (!activeEl || activeEl.tagName !== 'TEXTAREA') {
         if (activeTextarea === 'left') {
             activeEl = document.querySelector('textarea[data-column="left"]');
         } else if (activeTextarea === 'right') {
             activeEl = document.querySelector('textarea[data-column="right"]');
         } else {
-            // במצב של עמודה אחת, יש רק אחד
             activeEl = document.querySelector('.editor-container textarea');
         }
     }
@@ -247,17 +273,13 @@ export default function EditPage() {
     const selected = text.substring(start, end);
     const after = text.substring(end);
     
-    // לוגיקה לתגיות
     let insertion = `<${tag}>${selected}</${tag}>`
-    
-    // בדרך כלל כותרות צריכות שורה חדשה לפני ואחרי
     if (['h1', 'h2', 'h3'].includes(tag)) {
         insertion = `\n<${tag}>${selected}</${tag}>\n`
     }
     
     const newText = before + insertion + after;
     
-    // עדכון ה-State בהתאם לאלמנט הפעיל
     const col = activeEl.getAttribute('data-column');
     if (col === 'right') handleColumnChange('right', newText);
     else if (col === 'left') handleColumnChange('left', newText);
@@ -266,10 +288,8 @@ export default function EditPage() {
         handleAutoSaveWrapper(newText);
     }
     
-    // החזרת הפוקוס וסימון הטקסט הרלוונטי
     setTimeout(() => {
         activeEl.focus();
-        // הצבת הסמן אחרי התגית הסוגרת
         const newCursorPos = start + insertion.length;
         activeEl.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
@@ -327,15 +347,27 @@ export default function EditPage() {
   if (error) return <div className="text-center p-20 text-red-500">{error}</div>
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden" style={{ cursor: isResizing ? 'col-resize' : 'default' }}>
-      <EditorHeader 
-        bookName={bookData?.name} 
-        pageNumber={pageNumber} 
-        bookPath={bookPath} 
-        session={session} 
-        saveStatus={saveStatus} // העברת הסטטוס להדר
-      />
+    // השינוי העיקרי כאן: כשהמסך מלא, אנחנו מוסיפים fixed inset-0 z-50 כדי לכסות את כל המסך ולהסתיר את הפוטר הגלובלי
+    <div 
+      className={`bg-background flex flex-col overflow-hidden transition-all duration-300 ${
+        isFullScreen ? 'fixed inset-0 z-[100] h-screen w-screen' : 'h-[calc(100vh-0px)]' 
+      }`}
+      style={{ cursor: isResizing ? 'col-resize' : 'default' }}
+    >
       
+      {/* כותרת עליונה - מוסתרת במסך מלא */}
+      {!isFullScreen && (
+        <EditorHeader 
+          bookName={bookData?.name} 
+          pageNumber={pageNumber} 
+          bookPath={bookPath} 
+          session={session} 
+          saveStatus={saveStatus}
+          onToggleFullScreen={toggleFullScreen}
+        />
+      )}
+      
+      {/* סרגל כלים */}
       <EditorToolbar 
         pageNumber={pageNumber} totalPages={bookData?.totalPages}
         imageZoom={imageZoom} setImageZoom={setImageZoom}
@@ -350,12 +382,18 @@ export default function EditPage() {
         layoutOrientation={layoutOrientation} setLayoutOrientation={setLayoutOrientation}
         setShowInfoDialog={setShowInfoDialog} setShowSettings={setShowSettings}
         thumbnailUrl={pageData?.thumbnail}
+        isCollapsed={isToolbarCollapsed}
+        setIsCollapsed={setIsToolbarCollapsed}
+        isFullScreen={isFullScreen}
+        onToggleFullScreen={toggleFullScreen}
       />
 
-      <div className="flex-1 flex flex-col overflow-hidden p-6">
-        <div className="glass-strong rounded-xl border border-surface-variant flex-1 flex flex-col overflow-hidden">
+      {/* אזור העריכה המרכזי */}
+      {/* הסרנו את ה-bg-black במסך מלא כדי לשמור על צבעים אחידים */}
+      <div className={`flex-1 flex flex-col overflow-hidden ${isFullScreen ? 'p-0' : 'p-6'}`}>
+        <div className={`flex-1 flex flex-col overflow-hidden ${isFullScreen ? '' : 'glass-strong rounded-xl border border-surface-variant'}`}>
+          
           <div className="flex-1 flex overflow-hidden split-container" style={{ flexDirection: layoutOrientation === 'horizontal' ? 'column' : 'row' }}>
-            
             <ImagePanel 
               thumbnailUrl={pageData?.thumbnail} pageNumber={pageNumber}
               imageZoom={imageZoom} isSelectionMode={isSelectionMode}
@@ -367,7 +405,6 @@ export default function EditPage() {
               isResizing={isResizing} handleResizeStart={handleResizeStart}
             />
 
-            {/* Editor Side */}
             <TextEditor 
               content={content} leftColumn={leftColumn} rightColumn={rightColumn}
               twoColumns={twoColumns} rightColumnName={rightColumnName} leftColumnName={leftColumnName}
@@ -377,8 +414,8 @@ export default function EditPage() {
             />
           </div>
           
-          {/* Stats Footer - מעודכן עם לוגיקת הצגת סטטוס שמירה */}
-          <div className="px-4 py-3 border-t border-surface-variant bg-surface/50 text-sm flex justify-between items-center h-12">
+          {/* כותרת תחתונה של העורך - מוצגת תמיד, כולל במסך מלא */}
+          <div className="px-4 py-3 border-t border-surface-variant bg-surface/50 text-sm flex justify-between items-center h-12 flex-shrink-0">
              <div className="flex gap-4">
                 {twoColumns ? <span>ימין: {rightColumn.length}, שמאל: {leftColumn.length}</span> : <span>תווים: {content.length}</span>}
              </div>
@@ -386,7 +423,6 @@ export default function EditPage() {
                 {saveStatus === 'saved' && <span className="text-green-600 font-medium">נשמר אוטומטית</span>}
                 {saveStatus === 'saving' && <span className="text-blue-600 font-medium">שומר...</span>}
                 {saveStatus === 'error' && <span className="text-red-600 font-medium">שגיאה בשמירה</span>}
-                {/* כאשר unsaved לא מציגים כלום */}
              </div>
           </div>
         </div>
