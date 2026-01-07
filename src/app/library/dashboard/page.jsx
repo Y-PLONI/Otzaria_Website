@@ -24,6 +24,9 @@ export default function DashboardPage() {
   const [sendingMessage, setSendingMessage] = useState(false)
   const [myMessages, setMyMessages] = useState([])
   const [showMyMessages, setShowMyMessages] = useState(false)
+  const [replyingToMessageId, setReplyingToMessageId] = useState(null)
+  const [replyText, setReplyText] = useState('')
+  const [sendingReply, setSendingReply] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -102,6 +105,36 @@ export default function DashboardPage() {
       alert('שגיאה בשליחת הודעה')
     } finally {
       setSendingMessage(false)
+    }
+  }
+
+  const handleSendReply = async (messageId) => {
+    if (!replyText.trim()) {
+      alert('נא לכתוב תגובה')
+      return
+    }
+
+    try {
+      setSendingReply(true)
+      const response = await fetch('/api/messages/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, reply: replyText })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setReplyText('')
+        setReplyingToMessageId(null)
+        loadMyMessages()
+      } else {
+        alert(result.error || 'שגיאה בשליחת התגובה')
+      }
+    } catch (error) {
+      console.error('Error sending reply:', error)
+      alert('שגיאה בשליחת התגובה')
+    } finally {
+      setSendingReply(false)
     }
   }
 
@@ -349,13 +382,25 @@ export default function DashboardPage() {
                         <div className="mt-4 pt-4 border-t border-surface-variant">
                           <h5 className="font-bold text-on-surface mb-3 flex items-center gap-2">
                             <span className="material-symbols-outlined text-green-600">reply</span>
-                            תגובות מהמנהלים:
+                            תגובות בשרשור:
                           </h5>
                           <div className="space-y-3">
                             {message.replies.map((reply, idx) => (
-                              <div key={idx} className="bg-green-50 p-4 rounded-lg">
+                              <div
+                                key={idx}
+                                className={`${reply?.senderRole === 'admin' ? 'bg-green-50' : 'bg-surface'} p-4 rounded-lg`}
+                              >
                                 <p className="text-sm text-on-surface/60 mb-2">
-                                  <span className="font-medium">{reply.senderName || 'מנהל'}</span>
+                                  <span className="font-medium">
+                                    {(() => {
+                                      const currentUserId = session?.user?._id || session?.user?.id
+                                      const replySenderId = reply?.sender
+                                      if (currentUserId && replySenderId && String(currentUserId) === String(replySenderId)) {
+                                        return 'אתה'
+                                      }
+                                      return reply?.senderRole === 'admin' ? (reply?.senderName || 'מנהל') : (reply?.senderName || 'משתמש')
+                                    })()}
+                                  </span>
                                   <span className="mx-2">•</span>
                                   {new Date(reply.createdAt).toLocaleDateString('he-IL', {
                                     day: 'numeric',
@@ -368,6 +413,55 @@ export default function DashboardPage() {
                               </div>
                             ))}
                           </div>
+                        </div>
+                      )}
+
+                      {message.replies && message.replies.length > 0 && (
+                        <div className="mt-4">
+                          {replyingToMessageId === message.id ? (
+                            <div>
+                              <textarea
+                                className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface"
+                                placeholder="כתוב תגובה למנהלים..."
+                                rows="4"
+                                value={replyText}
+                                onChange={(e) => setReplyText(e.target.value)}
+                                disabled={sendingReply}
+                                autoFocus
+                              />
+                              <div className="flex gap-3 mt-3">
+                                <button
+                                  onClick={() => {
+                                    setReplyingToMessageId(null)
+                                    setReplyText('')
+                                  }}
+                                  disabled={sendingReply}
+                                  className="px-6 py-3 glass rounded-lg hover:bg-surface-variant transition-colors disabled:opacity-50"
+                                >
+                                  ביטול
+                                </button>
+                                <button
+                                  onClick={() => handleSendReply(message.id)}
+                                  disabled={sendingReply}
+                                  className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <span className="material-symbols-outlined">send</span>
+                                  <span>{sendingReply ? 'שולח...' : 'שלח תגובה'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setReplyingToMessageId(message.id)
+                                setReplyText('')
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 glass rounded-lg hover:bg-surface-variant transition-colors"
+                            >
+                              <span className="material-symbols-outlined">reply</span>
+                              <span>השב</span>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

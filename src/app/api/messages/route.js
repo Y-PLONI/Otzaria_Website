@@ -32,7 +32,8 @@ export async function GET(request) {
         }
 
         const messages = await Message.find(query)
-            .populate('sender', 'name email') // לוודא ששולפים שם ואימייל
+            .populate('sender', 'name email role') // לוודא ששולפים שם ואימייל
+            .populate('replies.sender', 'name email role')
             .sort({ createdAt: -1 });
 
         // המרה לפורמט נוח לקריאה בקלאיינט
@@ -45,7 +46,14 @@ export async function GET(request) {
             senderEmail: msg.sender?.email,
             status: msg.replies?.length > 0 ? 'replied' : (msg.isRead ? 'read' : 'unread'),
             createdAt: msg.createdAt,
-            replies: msg.replies
+            replies: (msg.replies || []).map(r => ({
+                sender: r.sender?._id || r.sender,
+                senderName: r.sender?.name,
+                senderEmail: r.sender?.email,
+                senderRole: r.sender?.role,
+                content: r.content,
+                createdAt: r.createdAt
+            }))
         }));
 
         return NextResponse.json({ success: true, messages: formattedMessages });
