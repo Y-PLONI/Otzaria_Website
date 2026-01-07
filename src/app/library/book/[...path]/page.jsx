@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
+import ImagePreviewModal from '@/components/ImagePreviewModal' // <--- ייבוא הקומפוננטה החדשה
 
 const pageStatusConfig = {
   available: {
@@ -32,7 +33,6 @@ export default function BookPage() {
   const router = useRouter()
   const params = useParams()
   
-  // פענוח ה-URL
   const rawPath = Array.isArray(params.path) ? params.path.join('/') : params.path
   const bookPath = decodeURIComponent(rawPath)
   
@@ -43,6 +43,7 @@ export default function BookPage() {
   const [confirmDialog, setConfirmDialog] = useState(null)
   const [uploadDialog, setUploadDialog] = useState(null)
   const [viewMode, setViewMode] = useState('single') 
+  const [previewImage, setPreviewImage] = useState(null) // <--- State חדש לתצוגה מקדימה
 
   useEffect(() => {
     loadBookData()
@@ -84,7 +85,7 @@ export default function BookPage() {
 
       const result = await response.json()
       if (result.success) {
-        loadBookData() // רענון מלא כדי לוודא סנכרון
+        loadBookData()
       } else {
         alert(`❌ ${result.error}`)
       }
@@ -108,8 +109,6 @@ export default function BookPage() {
         return;
         }
         try {
-          // תיקון: שליחת ID נכון מה-session
-          // ב-NextAuth שהגדרנו, ה-ID נמצא ב-session.user._id
           const userId = session.user._id || session.user.id;
           
           const response = await fetch(`/api/book/claim-page`, {
@@ -126,7 +125,6 @@ export default function BookPage() {
           const result = await response.json()
           
           if (result.success) {
-            // עדכון מקומי מהיר
             setPages(prevPages => 
               prevPages.map(page => 
                 page.number === pageNumber ? { ...page, status: 'in-progress', claimedBy: session.user.name, claimedById: userId } : page
@@ -147,7 +145,6 @@ export default function BookPage() {
   const handleMarkComplete = async (pageNumber) => {
     if (!session) return
 
-    // פתח דיאלוג העלאה
     setUploadDialog({
       pageNumber,
       onConfirm: async () => {
@@ -164,7 +161,6 @@ export default function BookPage() {
 
   const completePageWithoutUpload = async (pageNumber) => {
     try {
-      
       const pageId = pages.find(p => p.number === pageNumber)?.id;
       if (!pageId || !bookData.id) return alert('שגיאה בזיהוי העמוד או הספר');
 
@@ -173,7 +169,7 @@ export default function BookPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pageId: pageId,
-          bookId: bookData.id // ה-API מצפה גם ל-bookId לצורך עדכון המונה
+          bookId: bookData.id
         })
       })
       
@@ -196,11 +192,9 @@ export default function BookPage() {
 
   const uploadPageText = async (pageNumber) => {
     try {
-      // קרא את הקובץ השמור (הוא כבר קיים מהשמירה האוטומטית)
       const bookName = bookPath.replace(/[^a-zA-Z0-9א-ת]/g, '_')
       const fileName = `${bookName}_page_${pageNumber}.txt`
       
-      // קרא את התוכן מה-API
       const contentResponse = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`)
       const contentResult = await contentResponse.json()
       
@@ -212,7 +206,6 @@ export default function BookPage() {
       const data = contentResult.data
       let textContent = ''
       
-      // בנה את התוכן עם כותרות ברורות
       if (data.twoColumns) {
         const rightName = data.rightColumnName || 'חלק 1'
         const leftName = data.leftColumnName || 'חלק 2'
@@ -226,11 +219,9 @@ export default function BookPage() {
         return
       }
 
-      // צור קובץ טקסט להעלאה
       const blob = new Blob([textContent], { type: 'text/plain' })
       const file = new File([blob], fileName, { type: 'text/plain' })
 
-      // העלה את הקובץ
       const formData = new FormData()
       formData.append('file', file)
       formData.append('bookName', `${bookPath} - עמוד ${pageNumber}`)
@@ -245,7 +236,6 @@ export default function BookPage() {
       const uploadResult = await uploadResponse.json()
 
       if (uploadResult.success) {
-        // סמן את העמוד כהושלם
         await completePageWithoutUpload(pageNumber)
         alert('✅ הטקסט הועלה בהצלחה והעמוד סומן כהושלם!')
       } else {
@@ -300,7 +290,6 @@ export default function BookPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -341,7 +330,6 @@ export default function BookPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto">
-          {/* Stats Bar */}
           <div className="grid grid-cols-4 gap-4 mb-8">
             <div className="glass p-4 rounded-xl text-center border border-surface-variant/30">
               <p className="text-3xl font-bold text-on-surface">{stats.total}</p>
@@ -361,12 +349,10 @@ export default function BookPage() {
             </div>
           </div>
 
-          {/* Pages Grid */}
           <div className="glass-strong rounded-2xl p-6 border border-surface-variant/30">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-on-surface">עמודי הספר</h2>
               
-              {/* View Mode Toggle */}
               <div className="flex gap-2 bg-surface rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('single')}
@@ -399,13 +385,13 @@ export default function BookPage() {
                 : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4'
             }>
               {pages.map((page) => (
-                // תיקון: הוספת key ייחודי ברמה העליונה של האלמנט ברשימה
                 <div key={page.id || page.number} className="relative">
                    <PageCard
                       page={page}
                       onClaim={handleClaimPage}
                       onComplete={handleMarkComplete}
                       onRelease={handleReleasePage}
+                      onPreview={() => setPreviewImage(page.thumbnail)} // <--- שליחת פונקציית התצוגה המקדימה
                       currentUser={session?.user}
                       bookPath={bookPath}
                     />
@@ -416,7 +402,6 @@ export default function BookPage() {
         </div>
       </div>
 
-      {/* Confirm Dialog */}
       {confirmDialog && (
         <ConfirmDialog
           pageNumber={confirmDialog.pageNumber}
@@ -426,7 +411,6 @@ export default function BookPage() {
         />
       )}
 
-      {/* Upload Dialog */}
       {uploadDialog && (
         <UploadDialog
           pageNumber={uploadDialog.pageNumber}
@@ -436,12 +420,19 @@ export default function BookPage() {
           onCancel={uploadDialog.onCancel}
         />
       )}
+
+      {/* קומפוננטת התצוגה המקדימה */}
+      <ImagePreviewModal 
+        isOpen={!!previewImage}
+        onClose={() => setPreviewImage(null)}
+        imageSrc={previewImage}
+        altText="תצוגת עמוד"
+      />
     </div>
   )
 }
 
-// Page Card Component
-function PageCard({ page, onClaim, onComplete, onRelease, currentUser, bookPath }) {
+function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser, bookPath }) { // <--- קבלת onPreview
   const status = pageStatusConfig[page.status]
   const isClaimedByMe = currentUser && page.claimedBy === currentUser.name
 
@@ -449,8 +440,12 @@ function PageCard({ page, onClaim, onComplete, onRelease, currentUser, bookPath 
     <div 
       className="group relative glass rounded-xl overflow-hidden border-2 border-surface-variant hover:border-primary/50 transition-all"
     >
-      {/* Page Preview */}
-      <div className="aspect-[3/4] bg-surface flex items-center justify-center relative overflow-hidden">
+      {/* Page Preview - הוספת onClick ושינוי הסמן */}
+      <div 
+        className="aspect-[3/4] bg-surface flex items-center justify-center relative overflow-hidden cursor-zoom-in"
+        onClick={onPreview} // <--- הפעלת התצוגה המקדימה בלחיצה
+        title="לחץ להגדלה"
+      >
         {page.thumbnail ? (
           <>
             <img 
@@ -458,7 +453,7 @@ function PageCard({ page, onClaim, onComplete, onRelease, currentUser, bookPath 
               alt={`עמוד ${page.number}`}
               className="w-full h-full object-cover"
             />
-            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10">
+            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">
               {page.number}
             </div>
           </>
@@ -469,17 +464,17 @@ function PageCard({ page, onClaim, onComplete, onRelease, currentUser, bookPath 
                 description
               </span>
             </div>
-            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10">
+            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">
               {page.number}
             </div>
           </>
         )}
         
-        {/* כפתור שחרור - מחוץ לתנאי של התמונה */}
+        {/* כפתור שחרור - חייב stopPropagation כדי לא לפתוח את התמונה */}
         {page.status === 'in-progress' && isClaimedByMe && (
           <button
             onClick={(e) => {
-              e.stopPropagation()
+              e.stopPropagation() // <--- חשוב!
               e.preventDefault()
               onRelease(page.number)
             }}
@@ -494,7 +489,6 @@ function PageCard({ page, onClaim, onComplete, onRelease, currentUser, bookPath 
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
       </div>
 
-      {/* Page Info */}
       <div className="p-3">
         <div className="flex items-center justify-between mb-2">
           <span className="text-lg font-bold text-on-surface">עמוד {page.number}</span>
@@ -512,7 +506,6 @@ function PageCard({ page, onClaim, onComplete, onRelease, currentUser, bookPath 
           </p>
         )}
 
-        {/* Action Buttons */}
         {page.status === 'available' && (
           <button
             onClick={() => onClaim(page.number)}
@@ -543,7 +536,6 @@ function PageCard({ page, onClaim, onComplete, onRelease, currentUser, bookPath 
   )
 }
 
-// Confirm Dialog Component
 function ConfirmDialog({ pageNumber, userName, onConfirm, onCancel }) {
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
@@ -598,7 +590,6 @@ function ConfirmDialog({ pageNumber, userName, onConfirm, onCancel }) {
   )
 }
 
-// Upload Dialog Component
 function UploadDialog({ pageNumber, onConfirm, onSkip, onCancel }) {
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>

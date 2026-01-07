@@ -116,7 +116,7 @@ export default function UsersPage() {
                <div className="relative w-full md:w-96">
                 <input
                     type="text"
-                    placeholder="חפש לפי שם או אימייל..."
+                    placeholder="חפש לפי שם..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full px-4 py-3 pr-10 rounded-xl border border-surface-variant bg-white focus:outline-none focus:ring-2 focus:ring-primary shadow-sm transition-all"
