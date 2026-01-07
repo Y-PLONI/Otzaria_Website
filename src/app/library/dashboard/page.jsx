@@ -289,84 +289,86 @@ export default function DashboardPage() {
       {/* My Messages Modal */}
       {showMyMessages && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="glass-strong p-8 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-on-surface flex items-center gap-3">
-                <span className="material-symbols-outlined text-3xl text-primary">inbox</span>
-                ההודעות שלי
-              </h3>
-              <button
-                onClick={() => setShowMyMessages(false)}
-                className="p-2 hover:bg-surface-variant rounded-lg transition-colors"
-              >
-                <span className="material-symbols-outlined text-on-surface">close</span>
-              </button>
-            </div>
-
-            {myMessages.length === 0 ? (
-              <div className="text-center py-12">
-                <span className="material-symbols-outlined text-6xl text-on-surface/30 mb-4">
-                  inbox
-                </span>
-                <p className="text-on-surface/60">אין הודעות עדיין</p>
+          <div className="glass-strong rounded-2xl max-w-4xl w-full overflow-hidden">
+            <div className="p-8 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-on-surface flex items-center gap-3">
+                  <span className="material-symbols-outlined text-3xl text-primary">inbox</span>
+                  ההודעות שלי
+                </h3>
+                <button
+                  onClick={() => setShowMyMessages(false)}
+                  className="p-2 hover:bg-surface-variant rounded-lg transition-colors"
+                >
+                  <span className="material-symbols-outlined text-on-surface">close</span>
+                </button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {myMessages.map(message => (
-                  <div key={message.id} className="glass p-6 rounded-lg">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h4 className="text-xl font-bold text-on-surface mb-1">{message.subject}</h4>
-                        <p className="text-sm text-on-surface/60">
-                          {new Date(message.createdAt).toLocaleDateString('he-IL', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        message.status === 'replied' 
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {message.status === 'replied' ? 'נענה' : 'נשלח'}
-                      </span>
-                    </div>
-                    
-                    <p className="text-on-surface whitespace-pre-wrap mb-4">{message.content}</p>
 
-                    {message.replies && message.replies.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-surface-variant">
-                        <h5 className="font-bold text-on-surface mb-3 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-green-600">reply</span>
-                          תגובות מהמנהלים:
-                        </h5>
-                        <div className="space-y-3">
-                          {message.replies.map((reply, idx) => (
-                            <div key={idx} className="bg-green-50 p-4 rounded-lg">
-                              <p className="text-sm text-on-surface/60 mb-2">
-                                <span className="font-medium">{reply.senderName || 'מנהל'}</span>
-                                <span className="mx-2">•</span>
-                                {new Date(reply.createdAt).toLocaleDateString('he-IL', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </p>
-                              <p className="text-on-surface whitespace-pre-wrap">{reply.content}</p>
-                            </div>
-                          ))}
+              {myMessages.length === 0 ? (
+                <div className="text-center py-12">
+                  <span className="material-symbols-outlined text-6xl text-on-surface/30 mb-4">
+                    inbox
+                  </span>
+                  <p className="text-on-surface/60">אין הודעות עדיין</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {myMessages.map(message => (
+                    <div key={message.id} className="glass p-6 rounded-lg">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h4 className="text-xl font-bold text-on-surface mb-1">{message.subject}</h4>
+                          <p className="text-sm text-on-surface/60">
+                            {new Date(message.createdAt).toLocaleDateString('he-IL', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
                         </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          message.status === 'replied' 
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {message.status === 'replied' ? 'נענה' : 'נשלח'}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                      
+                      <p className="text-on-surface whitespace-pre-wrap mb-4">{message.content}</p>
+
+                      {message.replies && message.replies.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-surface-variant">
+                          <h5 className="font-bold text-on-surface mb-3 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-green-600">reply</span>
+                            תגובות מהמנהלים:
+                          </h5>
+                          <div className="space-y-3">
+                            {message.replies.map((reply, idx) => (
+                              <div key={idx} className="bg-green-50 p-4 rounded-lg">
+                                <p className="text-sm text-on-surface/60 mb-2">
+                                  <span className="font-medium">{reply.senderName || 'מנהל'}</span>
+                                  <span className="mx-2">•</span>
+                                  {new Date(reply.createdAt).toLocaleDateString('he-IL', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                                <p className="text-on-surface whitespace-pre-wrap">{reply.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
