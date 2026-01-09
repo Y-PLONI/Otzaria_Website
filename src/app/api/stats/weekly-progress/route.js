@@ -50,7 +50,7 @@ export async function GET() {
 
             filledData.push({
                 _id: dateStr,
-                date: d.toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' }), // פורמט לתצוגה: "יום א', 12.5"
+                date: d.toLocaleDateString('he-IL', { weekday: 'short'}),
                 count: count
             });
         }

@@ -67,7 +67,7 @@ jobs:
             # התקנה ובניה
             # בשרת, npm שומר cache פנימי ולכן זה יהיה מהיר גם בלי להעתיק את התיקייה
             echo "📦 Installing dependencies..."
-            npm ci --production
+            npm ci
 
             echo "🛠 Building project..."
             npm run build

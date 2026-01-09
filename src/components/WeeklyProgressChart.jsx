@@ -22,7 +22,6 @@ export default function WeeklyProgressChart() {
         const res = await fetch('/api/stats/weekly-progress')
         const json = await res.json()
         if (json.success) {
-          console.log('Chart data received:', json.data); // לוג לבדיקה בדפדפן
           setData(json.data)
           setTotal(json.total)
         }
