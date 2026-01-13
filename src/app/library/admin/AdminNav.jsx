@@ -23,6 +23,7 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
       icon: 'mail', 
       href: '/library/admin/messages' 
     },
+    { id: 'ocr', label: 'הגדרות OCR', icon: 'smart_toy', href: '/library/admin/ocr-settings' },
   ]
 
   return (

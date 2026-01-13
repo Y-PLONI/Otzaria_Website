@@ -9,12 +9,13 @@ import slugify from 'slugify';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
+import OcrExample from '@/models/OcrExample';
+import { processBatchWithGemini } from '@/lib/gemini';
 
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads');
 
 export async function uploadBookAction(formData) {
   try {
-    // 1. אבטחה - בדיקת סשן
     const session = await getServerSession(authOptions);
     if (session?.user?.role !== 'admin') {
         return { success: false, error: 'אין הרשאות ניהול' };
@@ -25,27 +26,25 @@ export async function uploadBookAction(formData) {
     const file = formData.get('pdf');
     const bookName = formData.get('bookName');
     const category = formData.get('category') || 'כללי';
+    const layoutType = formData.get('layoutType') || 'single_column';
+    const scriptType = formData.get('scriptType') || 'square';
+    const customPrompt = formData.get('customPrompt') || '';
 
     if (!file || !bookName) {
       return { success: false, error: 'חסרים נתונים' };
     }
 
-    // 2. יצירת שם תיקייה ייחודי (Slug)
+    // 1. יצירת תיקייה
     const slug = slugify(bookName, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g }) + '-' + Date.now();
     const bookFolder = path.join(UPLOAD_ROOT, 'books', slug);
-    
-    // יצירת התיקייה הפיזית
     await fs.ensureDir(bookFolder);
 
-    // 3. שמירת ה-PDF זמנית
-    // ב-Server Action אנו מקבלים File object, צריך להמיר ל-Buffer
     const arrayBuffer = await file.arrayBuffer();
     const pdfBuffer = Buffer.from(arrayBuffer);
     const tempPdfPath = path.join(bookFolder, 'source.pdf');
-    
     await fs.writeFile(tempPdfPath, pdfBuffer);
 
-    // 4. המרת PDF לתמונות
+    // 2. המרה לתמונות
     const options = {
       density: 150,
       saveFilename: "page",
@@ -55,7 +54,6 @@ export async function uploadBookAction(formData) {
       height: 1600 
     };
 
-    // המרה של כל העמודים (-1)
     const convert = fromPath(tempPdfPath, options);
     const result = await convert.bulk(-1, { responseType: "image" });
     
@@ -63,30 +61,109 @@ export async function uploadBookAction(formData) {
       throw new Error('Conversion failed');
     }
 
-    // 5. יצירת הספר ב-DB
+    // 3. שליפת דוגמאות
+    const examples = await OcrExample.find({ scriptType, layoutType }).lean();
+
+    // 4. יצירת הספר
     const newBook = await Book.create({
       name: bookName,
       slug: slug,
       category: category,
       folderPath: `/uploads/books/${slug}`,
       totalPages: result.length,
-      completedPages: 0
+      completedPages: 0,
+      editingInfo: { 
+          title: 'הנחיות עריכה', 
+          sections: [{ title: 'הנחיות AI', items: [customPrompt || 'ערוך את הטקסט שנוצר ע"י ה-AI'] }] 
+      }
     });
 
-    // 6. יצירת העמודים ב-DB
-    const pagesData = result.map((page, index) => ({
-      book: newBook._id,
-      pageNumber: index + 1,
-      imagePath: `/uploads/books/${slug}/page.${index + 1}.jpg`,
-      status: 'available'
-    }));
+    const imagePaths = [];
+    const pagesData = [];
 
-    await Page.insertMany(pagesData);
+    // האם הספר הוא דו-טורי (גם אם זה הסכמה המורכבת)
+    const isTwoCols = layoutType === 'double_column' || layoutType === 'complex_columns';
 
-    // ניקוי
+    result.forEach((page, index) => {
+        const pageNum = index + 1;
+        const relativePath = `/uploads/books/${slug}/page.${pageNum}.jpg`;
+        const fullPath = path.join(bookFolder, `page.${pageNum}.jpg`);
+        
+        imagePaths.push(fullPath);
+        
+        pagesData.push({
+            book: newBook._id,
+            pageNumber: pageNum,
+            imagePath: relativePath,
+            status: 'available',
+            content: '',
+            isTwoColumns: isTwoCols
+        });
+    });
+
+    // 5. OCR במנות
+    const BATCH_SIZE = 10;
+    const finalPagesData = [...pagesData];
+
+    for (let i = 0; i < imagePaths.length; i += BATCH_SIZE) {
+        const batchImages = imagePaths.slice(i, i + BATCH_SIZE);
+        const batchStartIndex = i; 
+
+        try {
+            console.log(`Processing batch ${i / BATCH_SIZE + 1} with ${layoutType}...`);
+            
+            const ocrResults = await processBatchWithGemini(
+                batchImages, 
+                layoutType, 
+                customPrompt, 
+                examples
+            );
+
+            if (Array.isArray(ocrResults)) {
+                ocrResults.forEach((res) => {
+                    // המרה ממספר עמוד יחסי (1-10) לאינדקס גלובלי
+                    const relativePageNum = res.page_number; 
+                    const globalIndex = batchStartIndex + (relativePageNum - 1);
+
+                    if (finalPagesData[globalIndex]) {
+                        const targetPage = finalPagesData[globalIndex];
+                        
+                        // טיפול בסוגים השונים של פלט
+                        if (layoutType === 'complex_columns' && res.columns) {
+                            // טיפול בסכמה המורכבת החדשה
+                            // המודל מחזיר מערך של אובייקטים: [{ side: 'right', text: '...' }, { side: 'left', text: '...' }]
+                            const rightText = res.columns.filter(c => c.side === 'right').map(c => c.text).join('\n');
+                            const leftText = res.columns.filter(c => c.side === 'left').map(c => c.text).join('\n');
+                            const centerText = res.columns.filter(c => c.side === 'center').map(c => c.text).join('\n'); // אם יש כותרות אמצע
+
+                            targetPage.rightColumn = rightText;
+                            targetPage.leftColumn = leftText;
+                            
+                            // התוכן הראשי לחיפוש יכיל הכל
+                            targetPage.content = [centerText, rightText, leftText].filter(Boolean).join('\n');
+
+                        } else if (layoutType === 'double_column') {
+                            // טיפול בסכמה השטוחה הישנה
+                            targetPage.rightColumn = res.right_column || '';
+                            targetPage.leftColumn = res.left_column || '';
+                            targetPage.content = (res.right_column || '') + '\n' + (res.left_column || '');
+                        } else {
+                            // טור אחד
+                            targetPage.content = res.content || '';
+                        }
+                    }
+                });
+            }
+
+        } catch (ocrError) {
+            console.error(`Error in OCR batch starting at index ${i}:`, ocrError);
+        }
+    }
+
+    // 6. שמירה
+    await Page.insertMany(finalPagesData);
     await fs.remove(tempPdfPath); 
 
-    // המרה לאובייקט פשוט כי אי אפשר להחזיר אובייקט Mongoose מורכב ב-Server Action
     return { 
       success: true, 
       message: 'הספר הועלה ועובד בהצלחה',
