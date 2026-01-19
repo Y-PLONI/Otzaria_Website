@@ -1,133 +1,156 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import fs from "fs-extra";
-import path from "path";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-// הגדרת סכמות פלט
-const SCHEMAS = {
-  // טור אחד פשוט
-  single_column: {
-    type: SchemaType.ARRAY,
-    items: {
-      type: SchemaType.OBJECT,
-      properties: {
-        page_number: { type: SchemaType.NUMBER, description: "The sequential number of the page in the batch (1-10)" },
-        content: { type: SchemaType.STRING, description: "The full Hebrew text extracted from the page" }
-      },
-      required: ["page_number", "content"]
-    }
-  },
-  
-  // שני טורים שטוחים (הסכמה הישנה)
-  double_column: {
-    type: SchemaType.ARRAY,
-    items: {
-      type: SchemaType.OBJECT,
-      properties: {
-        page_number: { type: SchemaType.NUMBER },
-        right_column: { type: SchemaType.STRING, description: "Text from the right column" },
-        left_column: { type: SchemaType.STRING, description: "Text from the left column" }
-      },
-      required: ["page_number", "right_column", "left_column"]
-    }
-  },
-
-  // סכמה מורכבת - טורים כאובייקטים נפרדים במערך
-  // זה מאפשר גמישות (טורים בצורת 'ר', 3 טורים וכו')
-  complex_columns: {
-    type: SchemaType.ARRAY,
-    items: {
-      type: SchemaType.OBJECT,
-      properties: {
-        page_number: { type: SchemaType.NUMBER },
-        columns: {
-          type: SchemaType.ARRAY,
-          description: "List of text columns/blocks identified on the page",
-          items: {
-            type: SchemaType.OBJECT,
-            properties: {
-              side: { 
-                type: SchemaType.STRING, 
-                description: "Position of the column: 'right', 'left', or 'center'",
-                enum: ["right", "left", "center"] 
-              },
-              text: { type: SchemaType.STRING, description: "The extracted text content" }
-            },
-            required: ["side", "text"]
-          }
-        }
-      },
-      required: ["page_number", "columns"]
-    }
-  }
-};
+import { GoogleGenAI, createUserContent, createPartFromUri } from '@google/genai';
+import fs from 'fs-extra';
 
 /**
- * פונקציה להמרת קובץ לאובייקט שג'מיני מקבל
+ * אתחול הלקוח של גוגל
+ * יוצרים מופע של GoogleGenAI עם מפתח ה-API
  */
-function fileToGenerativePart(path, mimeType) {
-  return {
-    inlineData: {
-      data: fs.readFileSync(path).toString("base64"),
-      mimeType
-    },
-  };
+if (!process.env.GEMINI_API_KEY) {
+  console.error('❌ GEMINI_API_KEY is not defined in environment variables!');
+}
+
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+/**
+ * העלאת קובץ ל-Gemini Files API
+ * @param {string} filePath - נתיב פיזי לקובץ JPG
+ * @param {string} displayName - שם מזהה לצורכי ניהול בגוגל (לא בשימוש - מושאר ריק)
+ * @returns {Promise<Object>} - אובייקט הקובץ הכולל את ה-URI (כולל uri, name, mimeType)
+ */
+export async function uploadFileToGemini(filePath, displayName) {
+  try {
+    // בדיקה שהקובץ קיים לפני העלאה
+    if (!(await fs.pathExists(filePath))) {
+      throw new Error(`File not found at path: ${filePath}`);
+    }
+
+    console.log(`☁️ Uploading to Gemini Cloud: ${filePath}...`);
+    
+    // קריאת הקובץ כ-Buffer
+    const fileBuffer = await fs.readFile(filePath);
+    const base64Data = fileBuffer.toString('base64');
+    
+    console.log(`📦 File size: ${fileBuffer.length} bytes, base64 length: ${base64Data.length}`);
+    
+    // שימוש ב-File API עם FormData (השיטה המומלצת מהתיעוד)
+    const apiKey = process.env.GEMINI_API_KEY;
+    const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
+    
+    console.log('🚀 Uploading via REST API...');
+    
+    // יצירת metadata
+    const metadata = {
+      file: {
+        mimeType: 'image/jpeg'
+      }
+    };
+    
+    // שליחת בקשת POST עם multipart/form-data
+    const FormData = (await import('formdata-node')).FormData;
+    const formData = new FormData();
+    formData.append('metadata', JSON.stringify(metadata));
+    formData.append('file', new Blob([fileBuffer], { type: 'image/jpeg' }));
+    
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Upload failed:', response.status, response.statusText);
+      console.error('❌ Error body:', errorText);
+      throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+    
+    const uploadedFile = await response.json();
+    console.log(`✅ Uploaded file:`, uploadedFile);
+    
+    // המבנה המוחזר צריך להכיל file.uri או uri
+    const fileUri = uploadedFile.file?.uri || uploadedFile.uri;
+    if (!fileUri) {
+      console.error('❌ No URI in response:', uploadedFile);
+      throw new Error('No URI returned from upload');
+    }
+    
+    return {
+      uri: fileUri,
+      name: uploadedFile.file?.name || uploadedFile.name,
+      mimeType: 'image/jpeg'
+    };
+  } catch (error) {
+    console.error(`❌ Error in uploadFileToGemini:`, error);
+    console.error(`❌ Error stack:`, error.stack);
+    throw error;
+  }
 }
 
 /**
- * עיבוד אצווה של תמונות באמצעות ג'מיני
+ * עיבוד אצווה של עד 10 עמודים מול המודל
+ * @param {Array<string>} pagesUris - מערך של URIs (מגוגל) של העמודים לעיבוד
+ * @param {Array<Object>} examplesContext - מערך דוגמאות {uri, expectedOutput}
+ * @param {string} layoutType - סוג הפריסה (single_column / double_column / complex_columns)
+ * @param {string} specificPrompt - הוראות נוספות מהמשתמש
  */
-export async function processBatchWithGemini(imagePaths, layoutType, specificPrompt, examples = []) {
-  const modelName = "gemini-1.5-pro"; // מודל חזק שמתאים ל-Structured Output
-  
-  const schema = SCHEMAS[layoutType] || SCHEMAS.single_column;
-
-  const model = genAI.getGenerativeModel({
-    model: modelName,
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: schema,
-      temperature: 0.1,
-    },
-  });
-
-  const promptParts = [];
-
-  promptParts.push(`
-    You are an expert Hebrew OCR specialist specialized in holy Jewish texts (Sifrei Kodesh).
-    Your task is to extract text from the provided images with extreme accuracy.
-    Respect Rashi script, specialized fonts, and layout.
-    
-    Selected Layout Schema: ${layoutType}.
-    ${specificPrompt ? `Specific Instructions: ${specificPrompt}` : ''}
-    
-    Output strictly valid JSON matching the schema.
-    For 'complex_columns', analyze the page structure and split text into 'columns' objects with correct 'side' property.
-  `);
-
-  if (examples && examples.length > 0) {
-    promptParts.push("Here are some examples of similar texts and their correct extraction:");
-    
-    for (const example of examples) {
-        const fullExamplePath = path.join(process.cwd(), 'public', example.imagePath);
-        if (fs.existsSync(fullExamplePath)) {
-            promptParts.push(fileToGenerativePart(fullExamplePath, "image/jpeg"));
-            promptParts.push(`Expected JSON Output: ${JSON.stringify(example.expectedOutput)}`);
-        }
-    }
-  }
-
-  promptParts.push("Now extract the text from the following images (return an array of page objects):");
-
-  const imageParts = imagePaths.map(img => fileToGenerativePart(img, "image/jpeg"));
-  
+export async function processOcrBatch(pagesUris, examplesContext, layoutType, specificPrompt) {
   try {
-    const result = await model.generateContent([...promptParts, ...imageParts]);
-    const responseText = result.response.text();
-    return JSON.parse(responseText);
-  } catch (e) {
-    console.error("Gemini Error:", e);
-    return [];
+    // הגדרת הוראות המערכת - המודל יתנהג כסורק OCR מקצועי
+    const systemInstruction = `You are a professional Hebrew OCR specialist. 
+Your goal is to transcribe images of Hebrew books into clean, accurate text.
+- Maintain original spelling and abbreviations (e.g., ").
+- If layout is 'double_column', provide "right_column" and "left_column" fields.
+- If layout is 'single_column', provide all text in the "content" field.
+- For 'complex_columns', try to identify different blocks of text.
+- Output MUST be a valid JSON array of objects. Each object represents one page in the order provided.
+- Schema per page object: {"page_number": number, "content": "string", "right_column": "string", "left_column": "string"}
+- Return ONLY the JSON array. No markdown tags or conversational filler.`;
+
+    // בניית תוכן ההודעה - parts שישולבו ב-createUserContent
+    const contentParts = [];
+
+    // 1. הוספת הוראות המערכת
+    contentParts.push(systemInstruction);
+
+    // 2. הוספת דוגמאות (Few-Shot) מהענן
+    if (examplesContext && examplesContext.length > 0) {
+      contentParts.push("REFERENCE EXAMPLES FOR FORMAT AND ACCURACY:");
+      examplesContext.forEach(ex => {
+        contentParts.push(createPartFromUri(ex.uri, 'image/jpeg'));
+        contentParts.push(`Expected JSON for this page: ${JSON.stringify(ex.expectedOutput)}`);
+      });
+    }
+
+    // 3. הוספת הנחיות ספציפיות לספר הנוכחי
+    if (specificPrompt) {
+      contentParts.push(`IMPORTANT - ADDITIONAL INSTRUCTIONS: ${specificPrompt}`);
+    }
+
+    // 4. הוספת העמודים של האצווה הנוכחית
+    contentParts.push(`NOW, TRANSCRIBE THESE ${pagesUris.length} PAGES IN ORDER:`);
+    pagesUris.forEach((uri) => {
+      contentParts.push(createPartFromUri(uri, 'image/jpeg'));
+    });
+
+    console.log(`📡 Sending batch of ${pagesUris.length} pages to Gemini...`);
+
+    // שליחת הבקשה עם הגדרות JSON mode
+    const response = await genAI.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: createUserContent(contentParts),
+      config: {
+        responseMimeType: 'application/json',
+        temperature: 0.1, // טמפרטורה נמוכה מבטיחה עקביות ודיוק ב-OCR
+      }
+    });
+
+    const responseText = response.text || '';
+    
+    // ניקוי שאריות אם המודל חרג מהפורמט (נדיר ב-JSON mode)
+    const cleanJson = responseText.replace(/```json|```/g, '').trim();
+    
+    return JSON.parse(cleanJson);
+  } catch (error) {
+    console.error("❌ Gemini API Error in processOcrBatch:", error);
+    throw error;
   }
 }

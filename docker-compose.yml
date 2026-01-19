@@ -3,6 +3,11 @@ services:
     build: .
     container_name: otzaria-app
     restart: always
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "3000:3000"
     environment:
@@ -12,6 +17,8 @@ services:
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - UPLOAD_DIR=/app/public/uploads
+      - NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/netfree-ca.crt
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
     volumes:
       - ./:/app
       - /app/node_modules

@@ -187,7 +187,7 @@ export default function UsersPage() {
                     
                     return (
                       <div
-                        key={user._id}
+                        key={user.id}
                         className="group glass p-4 rounded-xl hover:shadow-lg transition-all border border-transparent hover:border-primary/20 relative overflow-hidden"
                       >
                          {/* Rank Badge for Top 3 */}

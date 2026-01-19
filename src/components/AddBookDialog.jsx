@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { uploadBookAction } from '@/app/library/admin/upload-action'
 import { validateRequired, validateFile } from '@/lib/validation-utils'
 import Modal from './Modal'
@@ -16,20 +16,37 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
     const [layoutType, setLayoutType] = useState('single_column')
     const [scriptType, setScriptType] = useState('square')
     const [customPrompt, setCustomPrompt] = useState('')
+    
+    // רשימות נתונים
+    const [allExamples, setAllExamples] = useState([]) // כל הדוגמאות הגולמיות
     const [availableScriptTypes, setAvailableScriptTypes] = useState([])
+    const [selectedExampleId, setSelectedExampleId] = useState('') // הדוגמה הספציפית שנבחרה
 
     useEffect(() => {
         if (isOpen) {
             fetch('/api/admin/ocr-examples')
                 .then(res => res.json())
                 .then(data => {
-                    if (data.success && data.types) {
-                        setAvailableScriptTypes(data.types)
+                    if (data.success) {
+                        setAllExamples(data.examples || [])
+                        setAvailableScriptTypes(data.types || [])
                     }
                 })
                 .catch(console.error)
         }
     }, [isOpen])
+
+    // סינון דוגמאות רלוונטיות לפי הבחירות הנוכחיות
+    const relevantExamples = useMemo(() => {
+        return allExamples.filter(ex => 
+            ex.scriptType === scriptType && ex.layoutType === layoutType
+        )
+    }, [allExamples, scriptType, layoutType])
+
+    // איפוס בחירה כשמשנים פריסה או סוג כתב
+    useEffect(() => {
+        setSelectedExampleId('')
+    }, [scriptType, layoutType])
 
     const handleFileSelect = (e) => {
         if (e.target.files && e.target.files[0]) {
@@ -64,6 +81,11 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
         formData.append('layoutType', layoutType)
         formData.append('scriptType', scriptType)
         formData.append('customPrompt', customPrompt)
+        
+        // שליחת ה-ID של הדוגמה הספציפית אם נבחרה
+        if (selectedExampleId) {
+            formData.append('exampleId', selectedExampleId)
+        }
 
         try {
             const result = await uploadBookAction(formData)
@@ -91,6 +113,7 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
             setBookName('')
             setCategory('כללי')
             setCustomPrompt('')
+            setSelectedExampleId('')
             onClose()
         }
     }
@@ -171,12 +194,9 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
                                 <option value="double_column">שני טורים (שטוח)</option>
                                 <option value="complex_columns">מבנה מורכב (אובייקטים)</option>
                             </select>
-                            <p className="text-[10px] text-gray-500 mt-1">
-                                'מבנה מורכב' מאפשר זיהוי חכם של טורים וחלקי טקסט נפרדים.
-                            </p>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">סוג כתב (לדוגמאות)</label>
+                            <label className="block text-sm font-medium mb-1">סוג כתב</label>
                             <select
                                 value={scriptType}
                                 onChange={(e) => setScriptType(e.target.value)}
@@ -190,6 +210,31 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
                                 ))}
                             </select>
                         </div>
+                    </div>
+
+                    {/* בחירת דוגמה ספציפית */}
+                    <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1 text-purple-800">
+                            השתמש בדוגמה ספציפית (אופציונלי)
+                        </label>
+                        <select
+                            value={selectedExampleId}
+                            onChange={(e) => setSelectedExampleId(e.target.value)}
+                            disabled={isUploading || relevantExamples.length === 0}
+                            className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-purple-500"
+                        >
+                            <option value="">-- בחר אוטומטית (כל הדוגמאות התואמות) --</option>
+                            {relevantExamples.map(ex => (
+                                <option key={ex._id} value={ex._id}>
+                                    {ex.name} ({new Date(ex.createdAt).toLocaleDateString()})
+                                </option>
+                            ))}
+                        </select>
+                        {relevantExamples.length === 0 && (
+                            <p className="text-xs text-orange-600 mt-1">
+                                לא נמצאו דוגמאות התואמות לפריסה ולסוג הכתב שבחרת.
+                            </p>
+                        )}
                     </div>
 
                     <div>
