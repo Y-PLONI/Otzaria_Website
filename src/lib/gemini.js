@@ -25,54 +25,54 @@ export async function uploadFileToGemini(filePath, displayName) {
     }
 
     console.log(`☁️ Uploading to Gemini Cloud: ${filePath}...`);
-    
+
     // קריאת הקובץ כ-Buffer
     const fileBuffer = await fs.readFile(filePath);
     const base64Data = fileBuffer.toString('base64');
-    
+
     console.log(`📦 File size: ${fileBuffer.length} bytes, base64 length: ${base64Data.length}`);
-    
+
     // שימוש ב-File API עם FormData (השיטה המומלצת מהתיעוד)
     const apiKey = process.env.GEMINI_API_KEY;
     const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
-    
+
     console.log('🚀 Uploading via REST API...');
-    
+
     // יצירת metadata
     const metadata = {
       file: {
         mimeType: 'image/jpeg'
       }
     };
-    
+
     // שליחת בקשת POST עם multipart/form-data
     const FormData = (await import('formdata-node')).FormData;
     const formData = new FormData();
     formData.append('metadata', JSON.stringify(metadata));
     formData.append('file', new Blob([fileBuffer], { type: 'image/jpeg' }));
-    
+
     const response = await fetch(uploadUrl, {
       method: 'POST',
       body: formData,
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Upload failed:', response.status, response.statusText);
       console.error('❌ Error body:', errorText);
       throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
-    
+
     const uploadedFile = await response.json();
     console.log(`✅ Uploaded file:`, uploadedFile);
-    
+
     // המבנה המוחזר צריך להכיל file.uri או uri
     const fileUri = uploadedFile.file?.uri || uploadedFile.uri;
     if (!fileUri) {
       console.error('❌ No URI in response:', uploadedFile);
       throw new Error('No URI returned from upload');
     }
-    
+
     return {
       uri: fileUri,
       name: uploadedFile.file?.name || uploadedFile.name,
@@ -139,15 +139,14 @@ Your goal is to transcribe images of Hebrew books into clean, accurate text.
       contents: createUserContent(contentParts),
       config: {
         responseMimeType: 'application/json',
-        temperature: 0.1, // טמפרטורה נמוכה מבטיחה עקביות ודיוק ב-OCR
       }
     });
 
     const responseText = response.text || '';
-    
+
     // ניקוי שאריות אם המודל חרג מהפורמט (נדיר ב-JSON mode)
     const cleanJson = responseText.replace(/```json|```/g, '').trim();
-    
+
     return JSON.parse(cleanJson);
   } catch (error) {
     console.error("❌ Gemini API Error in processOcrBatch:", error);
