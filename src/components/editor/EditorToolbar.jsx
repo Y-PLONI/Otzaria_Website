@@ -84,6 +84,14 @@ export default function EditorToolbar({
 
             {/* OCR Method Selector */}
             <div className="flex items-center gap-0 bg-gray-100 rounded-md p-0.5">
+              <button 
+                onClick={() => setOcrMethod('ocrwin')} 
+                className={`px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1 h-7 ${ocrMethod === 'ocrwin' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                title="OCR Windows Server"
+              >
+                <span className="material-symbols-outlined text-sm">settings_remote</span>
+                <span className="hidden sm:inline">Win</span>
+              </button>
               <button onClick={() => setOcrMethod('tesseract')} className={`px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1 h-7 ${ocrMethod === 'tesseract' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
                 <span className="material-symbols-outlined text-sm">text_fields</span>
                 <span className="hidden sm:inline">OCR</span>

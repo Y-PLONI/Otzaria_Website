@@ -68,7 +68,7 @@ export default function EditPage() {
   const [selectionEnd, setSelectionEnd] = useState(null)
   const [selectionRect, setSelectionRect] = useState(null)
   const [ocrMethod, setOcrMethod] = useState('tesseract')
-  const { isProcessing: isOcrProcessing, performGeminiOCR, performTesseractOCR } = useOCR()
+  const { isProcessing: isOcrProcessing, performGeminiOCR, performTesseractOCR, performOCRWin } = useOCR()
 
   // Settings State
   const [showSettings, setShowSettings] = useState(false)
@@ -345,6 +345,8 @@ export default function EditPage() {
         let text = ''
         if (ocrMethod === 'gemini') {
             text = await performGeminiOCR(croppedBlob, userApiKey, selectedModel, customPrompt)
+        } else if (ocrMethod === 'ocrwin') { // הוספת התנאי החדש
+            text = await performOCRWin(croppedBlob)
         } else {
             text = await performTesseractOCR(croppedBlob)
         }
