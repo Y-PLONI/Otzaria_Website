@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
-import ImagePreviewModal from '@/components/ImagePreviewModal' // <--- ייבוא הקומפוננטה החדשה
+import ImagePreviewModal from '@/components/ImagePreviewModal'
 
 const pageStatusConfig = {
   available: {
@@ -43,7 +43,8 @@ export default function BookPage() {
   const [confirmDialog, setConfirmDialog] = useState(null)
   const [uploadDialog, setUploadDialog] = useState(null)
   const [viewMode, setViewMode] = useState('single') 
-  const [previewImage, setPreviewImage] = useState(null) // <--- State חדש לתצוגה מקדימה
+  const [previewImage, setPreviewImage] = useState(null)
+  const [activeFilter, setActiveFilter] = useState('all')
 
   const loadBookData = useCallback(async () => {
     try {
@@ -94,6 +95,38 @@ export default function BookPage() {
       alert('❌ שגיאה בשחרור העמוד')
     }
   }
+
+  const handleUncompletePage = async (pageNumber) => {
+    if (!session) return;
+    if (!confirm('האם אתה בטוח שברצונך לבטל את הסימון "הושלם"?\nהעמוד יחזור לסטטוס "בטיפול" והנקודות שקיבלת ירדו.')) return;
+
+    try {
+      const pageId = pages.find(p => p.number === pageNumber)?.id;
+      if (!pageId) return alert('שגיאה בזיהוי העמוד');
+
+      const response = await fetch(`/api/book/uncomplete-page`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageId: pageId })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // עדכון ה-State המקומי עם העמוד המעודכן שחזר מהשרת
+        setPages(prevPages => 
+          prevPages.map(page => 
+            page.number === pageNumber ? result.page : page
+          )
+        );
+      } else {
+        alert(`❌ ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Error uncompleting page:', err);
+      alert('❌ שגיאה בביטול הסימון');
+    }
+  };
 
   const handleClaimPage = async (pageNumber) => {
     if (!session) {
@@ -152,14 +185,10 @@ export default function BookPage() {
         await uploadPageText(pageNumber)
         setUploadDialog(null)
       },
-      onSkip: async () => {
-        await completePageWithoutUpload(pageNumber)
-        setUploadDialog(null)
-      },
       onCancel: () => setUploadDialog(null)
     })
   }
-
+  
   const completePageWithoutUpload = async (pageNumber) => {
     try {
       const pageId = pages.find(p => p.number === pageNumber)?.id;
@@ -331,23 +360,24 @@ export default function BookPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto">
+          {/* Filters */}
           <div className="grid grid-cols-4 gap-4 mb-8">
-            <div className="glass p-4 rounded-xl text-center border border-surface-variant/30">
+            <button onClick={() => setActiveFilter('all')} className={`glass p-4 rounded-xl text-center border transition-all ${activeFilter === 'all' ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-surface-variant/30 hover:border-primary/50'}`}>
               <p className="text-3xl font-bold text-on-surface">{stats.total}</p>
               <p className="text-sm text-on-surface/70">סה&quot;כ עמודים</p>
-            </div>
-            <div className="glass p-4 rounded-xl text-center border-2 border-gray-300">
+            </button>
+            <button onClick={() => setActiveFilter('available')} className={`glass p-4 rounded-xl text-center border-2 transition-all ${activeFilter === 'available' ? 'border-gray-500 bg-gray-50 ring-2 ring-gray-200' : 'border-gray-300 hover:border-gray-400'}`}>
               <p className="text-3xl font-bold text-gray-700">{stats.available}</p>
               <p className="text-sm text-gray-700">זמינים</p>
-            </div>
-            <div className="glass p-4 rounded-xl text-center border-2 border-blue-300">
+            </button>
+            <button onClick={() => setActiveFilter('in-progress')} className={`glass p-4 rounded-xl text-center border-2 transition-all ${activeFilter === 'in-progress' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-blue-300 hover:border-blue-400'}`}>
               <p className="text-3xl font-bold text-blue-700">{stats.inProgress}</p>
               <p className="text-sm text-blue-700">בטיפול</p>
-            </div>
-            <div className="glass p-4 rounded-xl text-center border-2 border-green-300">
+            </button>
+            <button onClick={() => setActiveFilter('completed')} className={`glass p-4 rounded-xl text-center border-2 transition-all ${activeFilter === 'completed' ? 'border-green-500 bg-green-50 ring-2 ring-green-200' : 'border-green-300 hover:border-green-400'}`}>
               <p className="text-3xl font-bold text-green-700">{stats.completed}</p>
               <p className="text-sm text-green-700">הושלמו</p>
-            </div>
+            </button>
           </div>
 
           <div className="glass-strong rounded-2xl p-6 border border-surface-variant/30">
@@ -355,50 +385,30 @@ export default function BookPage() {
               <h2 className="text-2xl font-bold text-on-surface">עמודי הספר</h2>
               
               <div className="flex gap-2 bg-surface rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('single')}
-                  className={`p-2 rounded transition-colors ${
-                    viewMode === 'single'
-                      ? 'bg-primary text-on-primary'
-                      : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'
-                  }`}
-                  title="עמוד אחד"
-                >
+                <button onClick={() => setViewMode('single')} className={`p-2 rounded transition-colors ${viewMode === 'single' ? 'bg-primary text-on-primary' : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'}`} title="עמוד אחד">
                   <span className="material-symbols-outlined">crop_portrait</span>
                 </button>
-                <button
-                  onClick={() => setViewMode('double')}
-                  className={`p-2 rounded transition-colors ${
-                    viewMode === 'double'
-                      ? 'bg-primary text-on-primary'
-                      : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'
-                  }`}
-                  title="שני עמודים"
-                >
+                <button onClick={() => setViewMode('double')} className={`p-2 rounded transition-colors ${viewMode === 'double' ? 'bg-primary text-on-primary' : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'}`} title="שני עמודים">
                   <span className="material-symbols-outlined">auto_stories</span>
                 </button>
               </div>
             </div>
             
-            <div className={
-              viewMode === 'single'
-                ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
-                : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4'
-            }>
-              {pages.map((page) => (
-                <div
-                  key={page.id || page.number}
-                  className="relative"
-                  style={{ contentVisibility: 'auto', containIntrinsicSize: '300px 400px' }}
-                >
+            <div className={viewMode === 'single' ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4' : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4'}>
+              {pages
+                .filter(page => activeFilter === 'all' || page.status === activeFilter)
+                .map((page) => (
+                <div key={page.id || page.number} className="relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '300px 400px' }}>
                    <PageCard
                       page={page}
                       onClaim={handleClaimPage}
                       onComplete={handleMarkComplete}
                       onRelease={handleReleasePage}
-                      onPreview={() => setPreviewImage(page.thumbnail)} // <--- שליחת פונקציית התצוגה המקדימה
+                      onUncomplete={handleUncompletePage} // <--- הוספנו כאן את הפונקציה
+                      onPreview={() => setPreviewImage(page.thumbnail)}
                       currentUser={session?.user}
                       bookPath={bookPath}
+                      isAdmin={session?.user?.role === 'admin'}
                     />
                 </div>
               ))}
@@ -408,88 +418,48 @@ export default function BookPage() {
       </div>
 
       {confirmDialog && (
-        <ConfirmDialog
-          pageNumber={confirmDialog.pageNumber}
-          userName={session?.user?.name}
-          onConfirm={confirmDialog.onConfirm}
-          onCancel={confirmDialog.onCancel}
-        />
+        <ConfirmDialog pageNumber={confirmDialog.pageNumber} userName={session?.user?.name} onConfirm={confirmDialog.onConfirm} onCancel={confirmDialog.onCancel} />
       )}
 
       {uploadDialog && (
-        <UploadDialog
-          pageNumber={uploadDialog.pageNumber}
-          bookName={bookData?.name}
-          onConfirm={uploadDialog.onConfirm}
-          onSkip={uploadDialog.onSkip}
-          onCancel={uploadDialog.onCancel}
-        />
+        <UploadDialog pageNumber={uploadDialog.pageNumber} bookName={bookData?.name} onConfirm={uploadDialog.onConfirm} onSkip={uploadDialog.onSkip} onCancel={uploadDialog.onCancel} />
       )}
 
-      {/* קומפוננטת התצוגה המקדימה */}
-      <ImagePreviewModal 
-        isOpen={!!previewImage}
-        onClose={() => setPreviewImage(null)}
-        imageSrc={previewImage}
-        altText="תצוגת עמוד"
-      />
+      <ImagePreviewModal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} imageSrc={previewImage} altText="תצוגת עמוד" />
     </div>
   )
 }
 
-function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser, bookPath }) { // <--- קבלת onPreview
+function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin }) {
   const status = pageStatusConfig[page.status]
-  const isClaimedByMe = currentUser && page.claimedBy === currentUser.name
+  
+  const isClaimedByMe = currentUser && (
+    page.claimedBy === currentUser.name || 
+    page.claimedById === (currentUser.id || currentUser._id)
+  );
+
+  const canEnterEditor = page.status === 'available' || isClaimedByMe || isAdmin;
+  const editUrl = `/library/edit/${encodeURIComponent(bookPath)}/${page.number}`;
 
   return (
-    <div 
-      className="group relative glass rounded-xl overflow-hidden border-2 border-surface-variant hover:border-primary/50 transition-all"
-    >
-      {/* Page Preview - הוספת onClick ושינוי הסמן */}
-      <div 
-        className="aspect-[3/4] bg-surface flex items-center justify-center relative overflow-hidden cursor-zoom-in"
-        onClick={onPreview} // <--- הפעלת התצוגה המקדימה בלחיצה
-        title="לחץ להגדלה"
-      >
+    <div className="group relative glass rounded-xl overflow-hidden border-2 border-surface-variant hover:border-primary/50 transition-all flex flex-col h-full">
+      <div className="aspect-[3/4] bg-surface flex items-center justify-center relative overflow-hidden cursor-zoom-in" onClick={onPreview} title="לחץ להגדלה">
         {page.thumbnail ? (
           <>
-            <img 
-              src={page.thumbnail} 
-              alt={`עמוד ${page.number}`}
-              loading="lazy"
-              decoding="async"
-              fetchPriority="low"
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">
-              {page.number}
-            </div>
+            <img src={page.thumbnail} alt={`עמוד ${page.number}`} loading="lazy" decoding="async" fetchPriority="low" className="w-full h-full object-cover" />
+            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">{page.number}</div>
           </>
         ) : (
           <>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="material-symbols-outlined text-6xl text-on-surface/20">
-                description
-              </span>
+              <span className="material-symbols-outlined text-6xl text-on-surface/20">description</span>
             </div>
-            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">
-              {page.number}
-            </div>
+            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">{page.number}</div>
           </>
         )}
         
-        {/* כפתור שחרור - חייב stopPropagation כדי לא לפתוח את התמונה */}
         {page.status === 'in-progress' && isClaimedByMe && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation() // <--- חשוב!
-              e.preventDefault()
-              onRelease(page.number)
-            }}
-            className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white p-2 rounded-lg transition-all shadow-lg z-20 cursor-pointer hover:scale-110"
-            title="שחרר עמוד"
-            type="button"
-          >
+          <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRelease(page.number); }} className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white p-2 rounded-lg transition-all shadow-lg z-20 cursor-pointer hover:scale-110" title="שחרר עמוד" type="button">
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
         )}
@@ -497,48 +467,54 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
       </div>
 
-      <div className="p-3">
+      <div className="p-3 flex flex-col flex-1">
         <div className="flex items-center justify-between mb-2">
           <span className="text-lg font-bold text-on-surface">עמוד {page.number}</span>
-          <span className={`
-            px-2 py-0.5 rounded text-xs font-bold border
-            ${status.bgColor} ${status.color} ${status.borderColor}
-          `}>
+          <span className={`px-2 py-0.5 rounded text-xs font-bold border ${status.bgColor} ${status.color} ${status.borderColor}`}>
             {status.label}
           </span>
         </div>
 
         {page.claimedBy && (
-          <p className="text-xs text-on-surface/60 mb-2 truncate">
-            {isClaimedByMe ? 'שלך' : page.claimedBy}
+          <p className="text-xs text-on-surface/60 mb-2 truncate font-medium">
+            {isClaimedByMe ? 'משויך אליך' : `ע"י ${page.claimedBy}`}
           </p>
         )}
 
-        {page.status === 'available' && (
-          <button
-            onClick={() => onClaim(page.number)}
-            className="w-full py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-accent transition-colors"
-          >
-            ערוך
-          </button>
-        )}
-
-        {page.status === 'in-progress' && isClaimedByMe && (
-          <div className="flex gap-2">
-            <Link
-              href={`/library/edit/${encodeURIComponent(bookPath)}/${page.number}`}
-              className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex items-center justify-center"
-            >
-              ערוך
+        <div className="mt-auto grid gap-2">
+          {canEnterEditor && (
+            <Link href={editUrl} className={`flex items-center justify-center gap-2 w-full py-2 rounded-lg text-sm font-bold transition-colors ${page.status === 'available' ? 'bg-white border-2 border-primary text-primary hover:bg-primary/5' : 'bg-primary/10 text-primary hover:bg-primary/20'}`} title={page.status === 'available' ? 'היכנס לצפייה או עריכה (הדף ייתפס רק בשמירה)' : 'היכנס לדף'}>
+              <span className="material-symbols-outlined text-lg">visibility</span>
+              <span>{page.status === 'available' ? 'היכנס לדף' : 'צפייה / עריכה'}</span>
             </Link>
-            <button
-              onClick={() => onComplete(page.number)}
-              className="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center"
-            >
-              סיים
+          )}
+
+          {page.status === 'available' && (
+            <button onClick={() => onClaim(page.number)} className="w-full py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-accent transition-colors flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-lg">lock</span>
+              <span>תפוס לעריכה</span>
             </button>
-          </div>
-        )}
+          )}
+
+          {page.status === 'in-progress' && isClaimedByMe && (
+            <button onClick={() => onComplete(page.number)} className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-lg">check</span>
+              <span>סיים עריכה</span>
+            </button>
+          )}
+
+          {page.status === 'completed' && (isClaimedByMe || isAdmin) && (
+            <button 
+              onClick={() => onUncomplete(page.number)}
+              className="w-full py-2 bg-gray-600 text-white rounded-lg text-sm font-bold hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+              title="החזר לסטטוס בטיפול"
+            >
+              <span className="material-symbols-outlined text-lg">undo</span>
+              <span>בטל סיום</span>
+            </button>
+          )}
+
+        </div>
       </div>
     </div>
   )
@@ -550,23 +526,14 @@ function ConfirmDialog({ pageNumber, userName, onConfirm, onCancel }) {
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-primary">
-              edit_note
-            </span>
+            <span className="material-symbols-outlined text-4xl text-primary">edit_note</span>
           </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-2">
-            עבודה על עמוד {pageNumber}
-          </h2>
-          <p className="text-on-surface/70">
-            האם אתה מעוניין לעבוד על עמוד זה?
-          </p>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">עבודה על עמוד {pageNumber}</h2>
+          <p className="text-on-surface/70">האם אתה מעוניין לעבוד על עמוד זה?</p>
         </div>
-
         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-blue-600 mt-0.5">
-              info
-            </span>
+            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
             <div className="text-sm text-blue-800">
               <p className="font-bold mb-1">מה יקרה?</p>
               <ul className="space-y-1">
@@ -577,83 +544,49 @@ function ConfirmDialog({ pageNumber, userName, onConfirm, onCancel }) {
             </div>
           </div>
         </div>
-
         <div className="flex gap-3">
-          <button
-            onClick={onConfirm}
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors font-bold"
-          >
+          <button onClick={onConfirm} className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors font-bold">
             <span className="material-symbols-outlined">check_circle</span>
             <span>כן, אני רוצה לעבוד על זה</span>
           </button>
-          <button
-            onClick={onCancel}
-            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors"
-          >
-            ביטול
-          </button>
+          <button onClick={onCancel} className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors">ביטול</button>
         </div>
       </div>
     </div>
   )
 }
 
-function UploadDialog({ pageNumber, onConfirm, onSkip, onCancel }) {
+function UploadDialog({ pageNumber, onConfirm, onCancel }) {
+  // ... נשאר ללא שינוי
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-green-600">
-              upload_file
-            </span>
+            <span className="material-symbols-outlined text-4xl text-green-600">upload_file</span>
           </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-2">
-            סיום עבודה על עמוד {pageNumber}
-          </h2>
-          <p className="text-on-surface/70">
-            האם ברצונך להעלות את הטקסט שערכת למערכת?
-          </p>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על עמוד {pageNumber}</h2>
+          <p className="text-on-surface/70">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
         </div>
-
         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-blue-600 mt-0.5">
-              info
-            </span>
+            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
             <div className="text-sm text-blue-800">
               <p className="font-bold mb-1">מה יקרה?</p>
               <ul className="space-y-1">
                 <li>• הטקסט שערכת יועלה כקובץ חדש</li>
                 <li>• הקובץ יישלח לאישור מנהל</li>
                 <li>• העמוד יסומן כהושלם</li>
-                <li>• ניתן גם לדלג על ההעלאה</li>
               </ul>
             </div>
           </div>
         </div>
-
         <div className="flex flex-col gap-3">
-          <button
-            onClick={onConfirm}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold"
-          >
+          <button onClick={onConfirm} className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold">
             <span className="material-symbols-outlined">upload</span>
             <span>כן, העלה את הטקסט</span>
           </button>
-          <button
-            onClick={onSkip}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors font-bold"
-          >
-            <span className="material-symbols-outlined">check_circle</span>
-            <span>דלג על העלאה וסמן כהושלם</span>
-          </button>
-          <button
-            onClick={onCancel}
-            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors"
-          >
-            ביטול
-          </button>
+          <button onClick={onCancel} className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors">ביטול</button>
         </div>
       </div>
     </div>
