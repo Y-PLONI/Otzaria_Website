@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
+import { validateSafePath } from "./_lib";
 
 export type VersionInfo = {
   version: number;
@@ -22,6 +23,7 @@ export class VersionManager {
   metadata: Metadata;
 
   constructor(filePath: string) {
+    validateSafePath(filePath);
     this.filePath = filePath;
     const baseDir = path.dirname(filePath);
     const filename = path.basename(filePath);

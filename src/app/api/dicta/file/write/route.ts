@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
+import { validateSafePath } from "../../_lib";
 
 export async function POST(request: Request) {
   try {
@@ -7,6 +8,7 @@ export async function POST(request: Request) {
     if (!file_path) {
       return NextResponse.json({ detail: "חסר נתיב קובץ" }, { status: 400 });
     }
+    validateSafePath(file_path);
     await fs.writeFile(file_path, content ?? "", "utf-8");
     return NextResponse.json({ saved: true });
   } catch (err: unknown) {

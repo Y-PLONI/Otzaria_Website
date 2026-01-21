@@ -7,22 +7,33 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const UPLOAD_DIR = path.join(process.cwd(), "var", "dicta-uploads");
 
+export function validateSafePath(filePath: string) {
+  if (!filePath) throw new Error("נא לבחור קובץ תחילה");
+  const resolvedPath = path.resolve(filePath);
+  const resolvedUploadDir = path.resolve(UPLOAD_DIR);
+  if (!resolvedPath.startsWith(resolvedUploadDir)) {
+    throw new Error("גישה נדחתה: נתיב לא חוקי");
+  }
+}
+
 export async function ensureUploadDir() {
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
 }
 
 export function ensureTxt(filePath: string) {
-  if (!filePath) throw new Error("נא לבחור קובץ תחילה");
+  validateSafePath(filePath);
   if (!filePath.toLowerCase().endsWith(".txt")) {
     throw new Error("סוג הקובץ אינו נתמך. בחר קובץ טקסט [בסיומת TXT.]");
   }
 }
 
 export async function readText(filePath: string) {
+  validateSafePath(filePath);
   return fs.readFile(filePath, "utf-8");
 }
 
 export async function writeText(filePath: string, content: string) {
+  validateSafePath(filePath);
   await fs.writeFile(filePath, content, "utf-8");
 }
 
@@ -629,6 +640,7 @@ export async function imageToHtml(pathOrUrl: string) {
   let fileExtension = "png";
 
   if (fsSync.existsSync(cleaned)) {
+    validateSafePath(cleaned);
     imgData = await fs.readFile(cleaned);
     fileExtension = path.extname(cleaned).replace(".", "") || "png";
   } else if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) {
@@ -647,8 +659,9 @@ export async function imageToHtml(pathOrUrl: string) {
 }
 
 export async function dictaSync(folderPath: string) {
+  validateSafePath(folderPath);
   if (!folderPath) throw new Error("יש לבחור תיקייה תחילה");
-  const baseUrl = "https://raw.githubusercontent.com/zevisvei/otzaria-library/refs/heads/main/";
+  const baseUrl = process.env.DICTA_GITHUB_REPO || "https://raw.githubusercontent.com/zevisvei/otzaria-library/refs/heads/main/";
   const log: string[] = [];
 
   const listResp = await fetch(`${baseUrl}DictaToOtzaria/ספרים/לא ערוך/list.txt`);
@@ -740,7 +753,9 @@ export async function ocrProcess(
   pagesPerChunk: number,
   delaySeconds: number
 ) {
-  if (!pdfPath || !fsSync.existsSync(pdfPath)) throw new Error("אנא בחר קובץ PDF תחילה");
+  if (!pdfPath) throw new Error("אנא בחר קובץ PDF תחילה");
+  validateSafePath(pdfPath);
+  if (!fsSync.existsSync(pdfPath)) throw new Error("קובץ PDF לא נמצא");
   const key = apiKey || process.env.GEMINI_API_KEY || "";
   if (!key) throw new Error("אנא הגדר API Key בהגדרות");
 
@@ -788,12 +803,12 @@ export async function ocrProcess(
 
         const usage = (response.response as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }).usageMetadata;
         if (usage) {
-          totalInputTokens += usage.promptTokenCount || 0;
-          totalOutputTokens += usage.candidatesTokenCount || 0;
+          totalInputTokens += usage.promptTokenCount ?? 0;
+          totalOutputTokens += usage.candidatesTokenCount ?? 0;
         }
         success = true;
-      } catch (err: unknown) {
-        const errorStr = err instanceof Error ? err.message : String(err);
+      } catch (err: any) {
+        const errorStr = err?.message || String(err);
         if (errorStr.includes("429") || /quota|rate/i.test(errorStr)) {
           retryCount += 1;
           if (retryCount < 3) {

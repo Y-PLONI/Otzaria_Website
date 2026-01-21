@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import fsSync from "fs";
+import { validateSafePath } from "../_lib";
 
 export async function POST(request: Request) {
   try {
     const { file_path } = await request.json();
+    validateSafePath(file_path);
     if (!file_path || !fsSync.existsSync(file_path)) {
       return NextResponse.json({ detail: "הקובץ לא נמצא" }, { status: 404 });
     }
