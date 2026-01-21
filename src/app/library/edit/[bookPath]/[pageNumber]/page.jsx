@@ -372,7 +372,7 @@ const completePageLogic = async () => {
       link.href = url;
       
       const cleanBookName = bookData?.name?.replace(/[^a-zA-Z0-9א-ת]/g, '_') || 'book';
-      link.download = `${cleanBookName}_page_${pageNumber}.jpg`;
+      link.download = `${cleanBookName}_page_${pageNumber}.${(blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`;
       
       document.body.appendChild(link);
       link.click();
