@@ -148,7 +148,6 @@ const loadPageData = async () => {
            const foundPage = bookResult.pages.find(p => p.number === pageNumber);
            if (foundPage) {
              setPageData(foundPage);
-             console.log('Page found with ID:', foundPage._id || foundPage.id); // לוג לוודא שה-ID קיים
            }
         }
       } else {
@@ -222,8 +221,6 @@ const completePageLogic = async () => {
       const safeBookId = bookData?.id || bookData?._id;
       
       const safePageId = pageData?.id || pageData?._id;
-
-      console.log('Completing page with IDs:', { bookId: safeBookId, pageId: safePageId });
 
       if (!safePageId || !safeBookId) {
         alert('שגיאה: חסר מזהה עמוד או ספר. נסה לרענן את העמוד.');
