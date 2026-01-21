@@ -394,6 +394,7 @@ export default function BookPage() {
                       onPreview={() => setPreviewImage(page.thumbnail)} // <--- שליחת פונקציית התצוגה המקדימה
                       currentUser={session?.user}
                       bookPath={bookPath}
+                      isAdmin={session?.user?.role === 'admin'}
                     />
                 </div>
               ))}
