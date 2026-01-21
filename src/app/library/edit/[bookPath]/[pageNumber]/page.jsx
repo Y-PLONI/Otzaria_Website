@@ -145,7 +145,7 @@ const loadPageData = async () => {
         setBookData(bookResult.book)
         
         if (bookResult.pages && bookResult.pages.length > 0) {
-           const foundPage = bookResult.pages.find(p => p.number == pageNumber);
+           const foundPage = bookResult.pages.find(p => p.number === pageNumber);
            if (foundPage) {
              setPageData(foundPage);
              console.log('Page found with ID:', foundPage._id || foundPage.id); // לוג לוודא שה-ID קיים
