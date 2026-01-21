@@ -360,6 +360,31 @@ const completePageLogic = async () => {
     }
   }
 
+  const handleDownloadImage = async () => {
+    if (!pageData?.thumbnail) return alert('אין תמונה להורדה');
+    
+    try {
+      const response = await fetch(pageData.thumbnail);
+      const blob = await response.blob();
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const cleanBookName = bookData?.name?.replace(/[^a-zA-Z0-9א-ת]/g, '_') || 'book';
+      link.download = `${cleanBookName}_page_${pageNumber}.jpg`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(pageData.thumbnail, '_blank');
+    }
+  };
+
   const confirmSplit = () => {
     setRightColumn(content)
     setLeftColumn('')
@@ -575,6 +600,7 @@ const completePageLogic = async () => {
         twoColumns={twoColumns} toggleColumns={toggleColumns}
         layoutOrientation={layoutOrientation} setLayoutOrientation={setLayoutOrientation}
         swapPanels={swapPanels}
+        handleDownloadImage={handleDownloadImage}
         togglePanelOrder={togglePanelOrder}
         handleRemoveDigits={handleRemoveDigits}
         handleFinish={handleFinishClick} // מעבירים את פונקציית פתיחת הדיאלוג
