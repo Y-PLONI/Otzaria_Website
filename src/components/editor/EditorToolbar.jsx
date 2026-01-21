@@ -1,6 +1,7 @@
 export default function EditorToolbar({
   pageNumber,
   totalPages,
+  handleDownloadImage,
   imageZoom,
   setImageZoom,
   ocrMethod,
@@ -62,6 +63,14 @@ export default function EditorToolbar({
           100%
         </button>
       </div>
+
+      <button 
+        onClick={handleDownloadImage}
+        className="w-7 h-7 hover:bg-gray-100 text-gray-600 hover:text-blue-600 rounded-md flex items-center justify-center transition-colors"
+        title="הורד תמונה למחשב"
+      >
+        <span className="material-symbols-outlined text-sm">download</span>
+      </button>
 
       <div className="w-px h-5 bg-gray-200"></div>
 
