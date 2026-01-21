@@ -432,20 +432,31 @@ export default function BookPage() {
   )
 }
 
-function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser, bookPath }) { // <--- קבלת onPreview
+function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser, bookPath, isAdmin }) {
   const status = pageStatusConfig[page.status]
+  
+  // בדיקה אם המשתמש הוא הבעלים
   const isClaimedByMe = currentUser && (
     page.claimedBy === currentUser.name || 
     page.claimedById === (currentUser.id || currentUser._id)
   );
+
+  // לוגיקת הרשאות כניסה לעורך (צפייה/עריכה)
+  // 1. פנוי - כולם יכולים
+  // 2. תפוס/הושלם - רק מנהלים או הבעלים
+  const canEnterEditor = page.status === 'available' || isClaimedByMe || isAdmin;
+
+  // קישור לעורך
+  const editUrl = `/library/edit/${encodeURIComponent(bookPath)}/${page.number}`;
+
   return (
     <div 
-      className="group relative glass rounded-xl overflow-hidden border-2 border-surface-variant hover:border-primary/50 transition-all"
+      className="group relative glass rounded-xl overflow-hidden border-2 border-surface-variant hover:border-primary/50 transition-all flex flex-col h-full"
     >
-      {/* Page Preview - הוספת onClick ושינוי הסמן */}
+      {/* Page Preview */}
       <div 
         className="aspect-[3/4] bg-surface flex items-center justify-center relative overflow-hidden cursor-zoom-in"
-        onClick={onPreview} // <--- הפעלת התצוגה המקדימה בלחיצה
+        onClick={onPreview}
         title="לחץ להגדלה"
       >
         {page.thumbnail ? (
@@ -475,11 +486,11 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
           </>
         )}
         
-        {/* כפתור שחרור - חייב stopPropagation כדי לא לפתוח את התמונה */}
+        {/* כפתור שחרור - רק אם בטיפול ושייך לי */}
         {page.status === 'in-progress' && isClaimedByMe && (
           <button
             onClick={(e) => {
-              e.stopPropagation() // <--- חשוב!
+              e.stopPropagation()
               e.preventDefault()
               onRelease(page.number)
             }}
@@ -494,7 +505,7 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
       </div>
 
-      <div className="p-3">
+      <div className="p-3 flex flex-col flex-1">
         <div className="flex items-center justify-between mb-2">
           <span className="text-lg font-bold text-on-surface">עמוד {page.number}</span>
           <span className={`
@@ -506,47 +517,49 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
         </div>
 
         {page.claimedBy && (
-          <p className="text-xs text-on-surface/60 mb-2 truncate">
-            {isClaimedByMe ? 'שלך' : page.claimedBy}
+          <p className="text-xs text-on-surface/60 mb-2 truncate font-medium">
+            {isClaimedByMe ? 'משויך אליך' : `ע"י ${page.claimedBy}`}
           </p>
         )}
-        <div className="flex gap-2">
-          {/* מצב 1: הדף זמין - כפתור עריכה רגיל */}
+
+        <div className="mt-auto grid gap-2">
+          {/* כפתור כניסה/צפייה - מופיע אם יש הרשאה */}
+          {canEnterEditor && (
+            <Link
+              href={editUrl}
+              className={`flex items-center justify-center gap-2 w-full py-2 rounded-lg text-sm font-bold transition-colors ${
+                page.status === 'available' 
+                  ? 'bg-white border-2 border-primary text-primary hover:bg-primary/5' 
+                  : 'bg-primary/10 text-primary hover:bg-primary/20'
+              }`}
+              title={page.status === 'available' ? 'היכנס לצפייה או עריכה (הדף ייתפס רק בשמירה)' : 'היכנס לדף'}
+            >
+              <span className="material-symbols-outlined text-lg">visibility</span>
+              <span>{page.status === 'available' ? 'היכנס לדף' : 'צפייה / עריכה'}</span>
+            </Link>
+          )}
+
+          {/* כפתורים נוספים לפי סטטוס */}
+          
+          {/* כפתור תפיסה מהירה (רק אם פנוי) */}
           {page.status === 'available' && (
             <button
               onClick={() => onClaim(page.number)}
-              className="w-full py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-accent transition-colors"
+              className="w-full py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-accent transition-colors flex items-center justify-center gap-2"
             >
-              ערוך
+              <span className="material-symbols-outlined text-lg">lock</span>
+              <span>תפוס לעריכה</span>
             </button>
           )}
 
-          {/* מצב 2: הדף בטיפול שלי - כפתורי עריכה וסיום */}
+          {/* כפתור סיום (רק אם בטיפול ושייך לי) */}
           {page.status === 'in-progress' && isClaimedByMe && (
-            <>
-              <Link
-                href={`/library/edit/${encodeURIComponent(bookPath)}/${page.number}`}
-                className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex items-center justify-center"
-              >
-                ערוך
-              </Link>
-              <button
-                onClick={() => onComplete(page.number)}
-                className="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center"
-              >
-                סיים
-              </button>
-            </>
-          )}
-
-          {/* מצב 3: הדף הושלם על ידי - כפתור חזרה לעריכה */}
-          {page.status === 'completed' && isClaimedByMe && (
             <button
-              onClick={() => onClaim(page.number)}
-              className="w-full py-2 border-2 border-primary text-primary hover:bg-primary/5 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2"
+              onClick={() => onComplete(page.number)}
+              className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
             >
-              <span className="material-symbols-outlined text-sm">history</span>
-              חזור לעריכה
+              <span className="material-symbols-outlined text-lg">check</span>
+              <span>סיים עריכה</span>
             </button>
           )}
         </div>

@@ -134,16 +134,17 @@ export default function EditPage() {
     if (bookData?.name) document.title = `עריכה: ${bookData.name} - עמוד ${pageNumber}`
   }, [bookData, pageNumber])
 
-const loadPageData = async () => {
+  const loadPageData = async () => {
     try {
       setLoading(true)
+      setError(null) // איפוס שגיאות קודמות
       
+      // שליפת פרטי הספר (לצורך הכותרת וכו')
       const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}`)
       const bookResult = await bookRes.json()
 
       if (bookResult.success) {
         setBookData(bookResult.book)
-        
         if (bookResult.pages && bookResult.pages.length > 0) {
            const foundPage = bookResult.pages.find(p => p.number === pageNumber);
            if (foundPage) {
@@ -154,20 +155,30 @@ const loadPageData = async () => {
         throw new Error(bookResult.error)
       }
 
+      // שליפת תוכן העמוד - כאן תתבצע בדיקת ההרשאות בשרת
       const contentRes = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`)
+      
+      // טיפול ספציפי בשגיאת הרשאות (403)
+      if (contentRes.status === 403) {
+          const errorData = await contentRes.json();
+          throw new Error(errorData.error || 'אין לך הרשאה לערוך דף זה');
+      }
+
       const contentResult = await contentRes.json()
 
       if (contentResult.success && contentResult.data) {
         const { data } = contentResult
         
-        setPageData(prev => prev || data);
-        
+        // עדכון נתונים לעורך
+        setPageData(prev => ({...prev, ...data})); // מיזוג נתונים
         setContent(data.content || '')
         setLeftColumn(data.leftColumn || '')
         setRightColumn(data.rightColumn || '')
         setRightColumnName(data.rightColumnName || 'חלק 1')
         setLeftColumnName(data.leftColumnName || 'חלק 2')
         setTwoColumns(data.twoColumns || false)
+      } else {
+          throw new Error(contentResult.error || 'שגיאה בטעינת תוכן העמוד');
       }
     } catch (err) {
       console.error(err);
@@ -513,9 +524,47 @@ const completePageLogic = async () => {
       }
   }
 
-  if (loading) return <div className="text-center p-20">טוען...</div>
-  if (error) return <div className="text-center p-20 text-red-500">{error}</div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <span className="material-symbols-outlined animate-spin text-6xl text-primary mb-4 block">
+          progress_activity
+        </span>
+        <p className="text-on-surface/70">טוען נתונים...</p>
+      </div>
+    </div>
+  )
 
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="text-center glass-strong p-10 rounded-2xl max-w-lg w-full shadow-xl border border-red-100">
+          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="material-symbols-outlined text-5xl text-red-500">
+              lock
+            </span>
+          </div>
+          <h2 className="text-2xl font-bold text-on-surface mb-3">אין גישה לדף זה</h2>
+          <p className="text-on-surface/70 mb-8 text-lg leading-relaxed">{error}</p>
+          <div className="flex gap-4 justify-center">
+            <Link 
+              href={`/library/book/${encodeURIComponent(bookPath)}`}
+              className="px-6 py-3 bg-primary text-on-primary rounded-xl hover:bg-accent transition-colors font-medium flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+              חזרה לרשימת הדפים
+            </Link>
+            <Link 
+              href="/library/dashboard"
+              className="px-6 py-3 bg-surface text-on-surface border border-outline rounded-xl hover:bg-surface-variant transition-colors font-medium"
+            >
+              האיזור האישי
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div 
       className={`bg-background flex flex-col overflow-hidden transition-all duration-300 ${
