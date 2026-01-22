@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -47,6 +47,8 @@ export default function EditPage() {
   const [isResizing, setIsResizing] = useState(false)
   
   const [swapPanels, setSwapPanels] = useState(false)
+  const [isOCRBlocking, setIsOCRBlocking] = useState(false)
+  const cancelOCRRef = useRef(false)
    
   // Full Screen & Toolbar State
   const [isFullScreen, setIsFullScreen] = useState(false)
@@ -91,6 +93,7 @@ export default function EditPage() {
     const savedPanelWidth = localStorage.getItem('imagePanelWidth')
     const savedOrientation = localStorage.getItem('layoutOrientation')
     const savedSwap = localStorage.getItem('swapPanels')
+    const savedFont = localStorage.getItem('selectedFont')
     
     if (savedApiKey) setUserApiKey(savedApiKey)
     if (savedPrompt) setCustomPrompt(savedPrompt)
@@ -98,6 +101,7 @@ export default function EditPage() {
     if (savedPanelWidth) setImagePanelWidth(parseFloat(savedPanelWidth))
     if (savedOrientation) setLayoutOrientation(savedOrientation)
     if (savedSwap) setSwapPanels(savedSwap === 'true')
+    if (savedFont) setSelectedFont(savedFont)
   }, [])
 
   // Full Screen Handler
@@ -134,16 +138,17 @@ export default function EditPage() {
     if (bookData?.name) document.title = `עריכה: ${bookData.name} - עמוד ${pageNumber}`
   }, [bookData, pageNumber])
 
-const loadPageData = async () => {
+  const loadPageData = async () => {
     try {
       setLoading(true)
+      setError(null) // איפוס שגיאות קודמות
       
+      // שליפת פרטי הספר (לצורך הכותרת וכו')
       const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}`)
       const bookResult = await bookRes.json()
 
       if (bookResult.success) {
         setBookData(bookResult.book)
-        
         if (bookResult.pages && bookResult.pages.length > 0) {
            const foundPage = bookResult.pages.find(p => p.number === pageNumber);
            if (foundPage) {
@@ -154,20 +159,30 @@ const loadPageData = async () => {
         throw new Error(bookResult.error)
       }
 
+      // שליפת תוכן העמוד - כאן תתבצע בדיקת ההרשאות בשרת
       const contentRes = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`)
+      
+      // טיפול ספציפי בשגיאת הרשאות (403)
+      if (contentRes.status === 403) {
+          const errorData = await contentRes.json();
+          throw new Error(errorData.error || 'אין לך הרשאה לערוך דף זה');
+      }
+
       const contentResult = await contentRes.json()
 
       if (contentResult.success && contentResult.data) {
         const { data } = contentResult
         
-        setPageData(prev => prev || data);
-        
+        // עדכון נתונים לעורך
+        setPageData(prev => ({...prev, ...data})); // מיזוג נתונים
         setContent(data.content || '')
         setLeftColumn(data.leftColumn || '')
         setRightColumn(data.rightColumn || '')
         setRightColumnName(data.rightColumnName || 'חלק 1')
         setLeftColumnName(data.leftColumnName || 'חלק 2')
         setTwoColumns(data.twoColumns || false)
+      } else {
+          throw new Error(contentResult.error || 'שגיאה בטעינת תוכן העמוד');
       }
     } catch (err) {
       console.error(err);
@@ -178,6 +193,11 @@ const loadPageData = async () => {
   }
 
   // --- Handlers ---
+
+  const handleFontChange = (newFont) => {
+    setSelectedFont(newFont)
+    localStorage.setItem('selectedFont', newFont)
+  }
 
   const togglePanelOrder = () => {
     const newState = !swapPanels
@@ -466,6 +486,9 @@ const completePageLogic = async () => {
   const handleOCR = async () => {
     if (!selectionRect) return alert('בחר אזור')
     
+    cancelOCRRef.current = false
+    setIsOCRBlocking(true)
+
     const response = await fetch(pageData.thumbnail)
     const blob = await response.blob()
     const img = await createImageBitmap(blob)
@@ -479,6 +502,9 @@ const completePageLogic = async () => {
     
     try {
         let text = ''
+        
+        if (cancelOCRRef.current) return
+
         if (ocrMethod === 'gemini') {
             text = await performGeminiOCR(croppedBlob, userApiKey, selectedModel, customPrompt)
         } else if (ocrMethod === 'ocrwin') { 
@@ -487,8 +513,17 @@ const completePageLogic = async () => {
             text = await performTesseractOCR(croppedBlob)
         }
         
-        if (!text) return alert('לא זוהה טקסט')
+        if (cancelOCRRef.current) {
+            console.log('OCR process was cancelled by user')
+            return
+        }
+
+        if (!text) {
+             setIsOCRBlocking(false)
+             return alert('לא זוהה טקסט')
+        }
         
+        // עדכון הטקסט
         if (twoColumns) {
             const newRight = rightColumn + '\n' + text
             setRightColumn(newRight)
@@ -498,12 +533,22 @@ const completePageLogic = async () => {
             setContent(newContent)
             handleAutoSaveWrapper(newContent)
         }
+        
         setSelectionRect(null)
         setIsSelectionMode(false)
-        alert('OCR הושלם')
+
     } catch (e) {
-        alert('שגיאה ב-OCR: ' + e.message)
+        if (!cancelOCRRef.current) {
+            alert('שגיאה ב-OCR: ' + e.message)
+        }
+    } finally {
+        setIsOCRBlocking(false)
     }
+  }
+
+  const handleCancelOCR = () => {
+      cancelOCRRef.current = true
+      setIsOCRBlocking(false)
   }
 
   const getInstructions = () => {
@@ -513,9 +558,47 @@ const completePageLogic = async () => {
       }
   }
 
-  if (loading) return <div className="text-center p-20">טוען...</div>
-  if (error) return <div className="text-center p-20 text-red-500">{error}</div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <span className="material-symbols-outlined animate-spin text-6xl text-primary mb-4 block">
+          progress_activity
+        </span>
+        <p className="text-on-surface/70">טוען נתונים...</p>
+      </div>
+    </div>
+  )
 
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="text-center glass-strong p-10 rounded-2xl max-w-lg w-full shadow-xl border border-red-100">
+          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="material-symbols-outlined text-5xl text-red-500">
+              lock
+            </span>
+          </div>
+          <h2 className="text-2xl font-bold text-on-surface mb-3">אין גישה לדף זה</h2>
+          <p className="text-on-surface/70 mb-8 text-lg leading-relaxed">{error}</p>
+          <div className="flex gap-4 justify-center">
+            <Link 
+              href={`/library/book/${encodeURIComponent(bookPath)}`}
+              className="px-6 py-3 bg-primary text-on-primary rounded-xl hover:bg-accent transition-colors font-medium flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+              חזרה לרשימת הדפים
+            </Link>
+            <Link 
+              href="/library/dashboard"
+              className="px-6 py-3 bg-surface text-on-surface border border-outline rounded-xl hover:bg-surface-variant transition-colors font-medium"
+            >
+              האיזור האישי
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div 
       className={`bg-background flex flex-col overflow-hidden transition-all duration-300 ${
@@ -544,7 +627,7 @@ const completePageLogic = async () => {
         handleOCRSelection={handleOCR} setSelectionRect={setSelectionRect}
         setIsSelectionMode={setIsSelectionMode} insertTag={insertTag}
         setShowFindReplace={setShowFindReplace}
-        selectedFont={selectedFont} setSelectedFont={setSelectedFont}
+        selectedFont={selectedFont} setSelectedFont={handleFontChange}
         twoColumns={twoColumns} toggleColumns={toggleColumns}
         layoutOrientation={layoutOrientation} setLayoutOrientation={setLayoutOrientation}
         swapPanels={swapPanels}
@@ -632,6 +715,29 @@ const completePageLogic = async () => {
         editingInstructions={getInstructions()}
       />
 
+      {isOCRBlocking && (
+        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center transition-all duration-300">
+          <div className="bg-white/10 border border-white/20 p-8 rounded-2xl flex flex-col items-center shadow-2xl backdrop-blur-md">
+            
+            <div className="relative w-16 h-16 mb-6">
+              <div className="absolute inset-0 border-4 border-t-blue-500 border-r-transparent border-b-blue-500 border-l-transparent rounded-full animate-spin"></div>
+              <div className="absolute inset-2 border-4 border-t-purple-500 border-r-transparent border-b-purple-500 border-l-transparent rounded-full animate-spin reverse-spin opacity-70" style={{ animationDirection: 'reverse', animationDuration: '2s' }}></div>
+            </div>
+
+            <h3 className="text-white text-xl font-bold mb-2 tracking-wide">מזהה טקסט...</h3>
+            <p className="text-gray-300 text-sm mb-6">אנא המתן, הפעולה עשויה לקחת מספר שניות</p>
+
+            <button 
+              onClick={handleCancelOCR}
+              className="px-6 py-2 bg-red-500/20 hover:bg-red-500/40 text-red-200 border border-red-500/50 rounded-full transition-colors flex items-center gap-2 text-sm font-medium"
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+              ביטול
+            </button>
+          </div>
+        </div>
+      )}
+
       {showUploadDialog && (
         <UploadDialog
           pageNumber={pageNumber}
@@ -692,6 +798,7 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
             ביטול
           </button>
         </div>
+        
       </div>
     </div>
   )
