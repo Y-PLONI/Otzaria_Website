@@ -22,7 +22,7 @@ export async function POST(request) {
     await connectDB();
 
     const body = await request.json();
-    const { bookIds, newName } = body;
+    const { bookIds, newName, isHidden } = body;
 
     if (!bookIds || !Array.isArray(bookIds) || bookIds.length < 2) {
       return NextResponse.json({ error: 'יש לבחור לפחות 2 ספרים למיזוג' }, { status: 400 });
