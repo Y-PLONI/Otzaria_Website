@@ -78,7 +78,7 @@ export async function POST(request) {
         thumbnail: newThumbnailPath,
         totalPages: 0,
         completedPages: 0,
-        isHidden: false
+        isHidden: isHidden || false
     });
 
     console.log(`New book created: ${newBook.name} (${newBook._id})`);
