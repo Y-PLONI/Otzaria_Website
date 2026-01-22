@@ -48,11 +48,32 @@ export function useOCR() {
     )
     return result.data.text.trim()
   }
+  // בתוך ה-Hook useOCR
+  const performOCRWin = async (croppedBlob) => {
+    // 1. יוצרים טופס וירטואלי
+    const formData = new FormData();
+    // 2. שמים בפנים את חתיכת התמונה שגזרנו
+    formData.append('file', croppedBlob);
+
+    // 3. שולחים את הטופס ל-API שלנו
+    const response = await fetch('/api/ocrwin', {
+      method: 'POST',
+      // שים לב: לא שמים Headers של Content-Type, ה-fetch יודע לזהות לבד שזה FormData
+      body: formData
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'OCRWIN failed');
+    }
+    return result.text;
+  };
 
   return {
     isProcessing,
     setIsProcessing,
     performGeminiOCR,
-    performTesseractOCR
+    performTesseractOCR,
+    performOCRWin // ייצוא הפונקציה החדשה
   }
 }

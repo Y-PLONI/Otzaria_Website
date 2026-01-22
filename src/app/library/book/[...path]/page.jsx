@@ -44,6 +44,7 @@ export default function BookPage() {
   const [uploadDialog, setUploadDialog] = useState(null)
   const [viewMode, setViewMode] = useState('single') 
   const [previewImage, setPreviewImage] = useState(null) // <--- State חדש לתצוגה מקדימה
+  const [activeFilter, setActiveFilter] = useState('all')
 
   const loadBookData = useCallback(async () => {
     try {
@@ -152,14 +153,9 @@ export default function BookPage() {
         await uploadPageText(pageNumber)
         setUploadDialog(null)
       },
-      onSkip: async () => {
-        await completePageWithoutUpload(pageNumber)
-        setUploadDialog(null)
-      },
       onCancel: () => setUploadDialog(null)
     })
   }
-
   const completePageWithoutUpload = async (pageNumber) => {
     try {
       const pageId = pages.find(p => p.number === pageNumber)?.id;
@@ -332,22 +328,50 @@ export default function BookPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-4 gap-4 mb-8">
-            <div className="glass p-4 rounded-xl text-center border border-surface-variant/30">
+            <button 
+              onClick={() => setActiveFilter('all')}
+              className={`glass p-4 rounded-xl text-center border transition-all ${
+                activeFilter === 'all' 
+                ? 'border-primary ring-2 ring-primary/20 bg-primary/5' 
+                : 'border-surface-variant/30 hover:border-primary/50'
+              }`}
+            >
               <p className="text-3xl font-bold text-on-surface">{stats.total}</p>
               <p className="text-sm text-on-surface/70">סה&quot;כ עמודים</p>
-            </div>
-            <div className="glass p-4 rounded-xl text-center border-2 border-gray-300">
+            </button>
+            <button 
+              onClick={() => setActiveFilter('available')}
+              className={`glass p-4 rounded-xl text-center border-2 transition-all ${
+                activeFilter === 'available'
+                  ? 'border-gray-500 bg-gray-50 ring-2 ring-gray-200'
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}
+            >
               <p className="text-3xl font-bold text-gray-700">{stats.available}</p>
               <p className="text-sm text-gray-700">זמינים</p>
-            </div>
-            <div className="glass p-4 rounded-xl text-center border-2 border-blue-300">
+            </button>
+            <button 
+              onClick={() => setActiveFilter('in-progress')}
+              className={`glass p-4 rounded-xl text-center border-2 transition-all ${
+                activeFilter === 'in-progress'
+                  ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                  : 'border-blue-300 hover:border-blue-400'
+              }`}
+            >
               <p className="text-3xl font-bold text-blue-700">{stats.inProgress}</p>
               <p className="text-sm text-blue-700">בטיפול</p>
-            </div>
-            <div className="glass p-4 rounded-xl text-center border-2 border-green-300">
+            </button>
+            <button 
+              onClick={() => setActiveFilter('completed')}
+              className={`glass p-4 rounded-xl text-center border-2 transition-all ${
+                activeFilter === 'completed'
+                  ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                  : 'border-green-300 hover:border-green-400'
+              }`}
+            >
               <p className="text-3xl font-bold text-green-700">{stats.completed}</p>
               <p className="text-sm text-green-700">הושלמו</p>
-            </div>
+            </button>
           </div>
 
           <div className="glass-strong rounded-2xl p-6 border border-surface-variant/30">
@@ -385,7 +409,9 @@ export default function BookPage() {
                 ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
                 : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4'
             }>
-              {pages.map((page) => (
+              {pages
+                .filter(page => activeFilter === 'all' || page.status === activeFilter)
+                .map((page) => (
                 <div
                   key={page.id || page.number}
                   className="relative"
@@ -399,6 +425,7 @@ export default function BookPage() {
                       onPreview={() => setPreviewImage(page.thumbnail)} // <--- שליחת פונקציית התצוגה המקדימה
                       currentUser={session?.user}
                       bookPath={bookPath}
+                      isAdmin={session?.user?.role === 'admin'}
                     />
                 </div>
               ))}
@@ -437,18 +464,31 @@ export default function BookPage() {
   )
 }
 
-function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser, bookPath }) { // <--- קבלת onPreview
+function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser, bookPath, isAdmin }) {
   const status = pageStatusConfig[page.status]
-  const isClaimedByMe = currentUser && page.claimedBy === currentUser.name
+  
+  // בדיקה אם המשתמש הוא הבעלים
+  const isClaimedByMe = currentUser && (
+    page.claimedBy === currentUser.name || 
+    page.claimedById === (currentUser.id || currentUser._id)
+  );
+
+  // לוגיקת הרשאות כניסה לעורך (צפייה/עריכה)
+  // 1. פנוי - כולם יכולים
+  // 2. תפוס/הושלם - רק מנהלים או הבעלים
+  const canEnterEditor = page.status === 'available' || isClaimedByMe || isAdmin;
+
+  // קישור לעורך
+  const editUrl = `/library/edit/${encodeURIComponent(bookPath)}/${page.number}`;
 
   return (
     <div 
-      className="group relative glass rounded-xl overflow-hidden border-2 border-surface-variant hover:border-primary/50 transition-all"
+      className="group relative glass rounded-xl overflow-hidden border-2 border-surface-variant hover:border-primary/50 transition-all flex flex-col h-full"
     >
-      {/* Page Preview - הוספת onClick ושינוי הסמן */}
+      {/* Page Preview */}
       <div 
         className="aspect-[3/4] bg-surface flex items-center justify-center relative overflow-hidden cursor-zoom-in"
-        onClick={onPreview} // <--- הפעלת התצוגה המקדימה בלחיצה
+        onClick={onPreview}
         title="לחץ להגדלה"
       >
         {page.thumbnail ? (
@@ -478,11 +518,11 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
           </>
         )}
         
-        {/* כפתור שחרור - חייב stopPropagation כדי לא לפתוח את התמונה */}
+        {/* כפתור שחרור - רק אם בטיפול ושייך לי */}
         {page.status === 'in-progress' && isClaimedByMe && (
           <button
             onClick={(e) => {
-              e.stopPropagation() // <--- חשוב!
+              e.stopPropagation()
               e.preventDefault()
               onRelease(page.number)
             }}
@@ -497,7 +537,7 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
       </div>
 
-      <div className="p-3">
+      <div className="p-3 flex flex-col flex-1">
         <div className="flex items-center justify-between mb-2">
           <span className="text-lg font-bold text-on-surface">עמוד {page.number}</span>
           <span className={`
@@ -509,36 +549,52 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
         </div>
 
         {page.claimedBy && (
-          <p className="text-xs text-on-surface/60 mb-2 truncate">
-            {isClaimedByMe ? 'שלך' : page.claimedBy}
+          <p className="text-xs text-on-surface/60 mb-2 truncate font-medium">
+            {isClaimedByMe ? 'משויך אליך' : `ע"י ${page.claimedBy}`}
           </p>
         )}
 
-        {page.status === 'available' && (
-          <button
-            onClick={() => onClaim(page.number)}
-            className="w-full py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-accent transition-colors"
-          >
-            ערוך
-          </button>
-        )}
-
-        {page.status === 'in-progress' && isClaimedByMe && (
-          <div className="flex gap-2">
+        <div className="mt-auto grid gap-2">
+          {/* כפתור כניסה/צפייה - מופיע אם יש הרשאה */}
+          {canEnterEditor && (
             <Link
-              href={`/library/edit/${encodeURIComponent(bookPath)}/${page.number}`}
-              className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex items-center justify-center"
+              href={editUrl}
+              className={`flex items-center justify-center gap-2 w-full py-2 rounded-lg text-sm font-bold transition-colors ${
+                page.status === 'available' 
+                  ? 'bg-white border-2 border-primary text-primary hover:bg-primary/5' 
+                  : 'bg-primary/10 text-primary hover:bg-primary/20'
+              }`}
+              title={page.status === 'available' ? 'היכנס לצפייה או עריכה (הדף ייתפס רק בשמירה)' : 'היכנס לדף'}
             >
-              ערוך
+              <span className="material-symbols-outlined text-lg">visibility</span>
+              <span>{page.status === 'available' ? 'היכנס לדף' : 'צפייה / עריכה'}</span>
             </Link>
+          )}
+
+          {/* כפתורים נוספים לפי סטטוס */}
+          
+          {/* כפתור תפיסה מהירה (רק אם פנוי) */}
+          {page.status === 'available' && (
+            <button
+              onClick={() => onClaim(page.number)}
+              className="w-full py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-accent transition-colors flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined text-lg">lock</span>
+              <span>תפוס לעריכה</span>
+            </button>
+          )}
+
+          {/* כפתור סיום (רק אם בטיפול ושייך לי) */}
+          {page.status === 'in-progress' && isClaimedByMe && (
             <button
               onClick={() => onComplete(page.number)}
-              className="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center"
+              className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
             >
-              סיים
+              <span className="material-symbols-outlined text-lg">check</span>
+              <span>סיים עריכה</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
@@ -598,7 +654,7 @@ function ConfirmDialog({ pageNumber, userName, onConfirm, onCancel }) {
   )
 }
 
-function UploadDialog({ pageNumber, onConfirm, onSkip, onCancel }) {
+function UploadDialog({ pageNumber, onConfirm, onCancel }) {
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
@@ -627,7 +683,6 @@ function UploadDialog({ pageNumber, onConfirm, onSkip, onCancel }) {
                 <li>• הטקסט שערכת יועלה כקובץ חדש</li>
                 <li>• הקובץ יישלח לאישור מנהל</li>
                 <li>• העמוד יסומן כהושלם</li>
-                <li>• ניתן גם לדלג על ההעלאה</li>
               </ul>
             </div>
           </div>
@@ -640,13 +695,6 @@ function UploadDialog({ pageNumber, onConfirm, onSkip, onCancel }) {
           >
             <span className="material-symbols-outlined">upload</span>
             <span>כן, העלה את הטקסט</span>
-          </button>
-          <button
-            onClick={onSkip}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors font-bold"
-          >
-            <span className="material-symbols-outlined">check_circle</span>
-            <span>דלג על העלאה וסמן כהושלם</span>
           </button>
           <button
             onClick={onCancel}

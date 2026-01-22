@@ -25,8 +25,7 @@ export default function ImagePanel({
     const containerX = e.clientX - containerRect.left
     const containerY = e.clientY - containerRect.top
     const scale = imageZoom / 100
-    // RTL correction
-    const displayX = containerRect.width - containerX
+    const displayX = containerX 
     const displayY = containerY
     const x = (displayX / scale)
     const y = (displayY / scale)
@@ -148,7 +147,7 @@ export default function ImagePanel({
               className="rounded-lg shadow-lg transition-all duration-200 select-none"
               style={{
                 transform: `scale(${imageZoom / 100})`,
-                transformOrigin: 'top right',
+                transformOrigin: 'top left',
                 maxWidth: 'none',
                 pointerEvents: 'none'
               }}
@@ -158,7 +157,7 @@ export default function ImagePanel({
               <div
                 className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none selection-overlay"
                 style={{
-                  right: `${Math.min(selectionStart.displayX, selectionEnd.displayX)}px`,
+                  left: `${Math.min(selectionStart.displayX, selectionEnd.displayX)}px`,
                   top: `${Math.min(selectionStart.displayY, selectionEnd.displayY)}px`,
                   width: `${Math.abs(selectionStart.displayX - selectionEnd.displayX)}px`,
                   height: `${Math.abs(selectionStart.displayY - selectionEnd.displayY)}px`
@@ -169,7 +168,7 @@ export default function ImagePanel({
               <div
                 className="absolute border-4 border-green-500 bg-green-500/10 pointer-events-none animate-pulse selection-overlay"
                 style={{
-                  right: `${selectionRect.x * (imageZoom / 100)}px`,
+                  left: `${selectionRect.x * (imageZoom / 100)}px`,
                   top: `${selectionRect.y * (imageZoom / 100)}px`,
                   width: `${selectionRect.width * (imageZoom / 100)}px`,
                   height: `${selectionRect.height * (imageZoom / 100)}px`

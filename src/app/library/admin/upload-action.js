@@ -26,6 +26,7 @@ export async function uploadBookAction(formData) {
     const file = formData.get('pdf');
     const bookName = formData.get('bookName');
     const category = formData.get('category') || 'כללי';
+    const isHidden = formData.get('isHidden') === 'true';
     const layoutType = formData.get('layoutType') || 'single_column';
     const scriptType = formData.get('scriptType') || 'square';
     const customPrompt = formData.get('customPrompt') || '';
@@ -33,8 +34,37 @@ export async function uploadBookAction(formData) {
 
     if (!file || !bookName) return { success: false, error: 'Missing data' };
 
-    // 1. יצירת תיקייה והמרת PDF
-    const slug = slugify(bookName, { lower: true, strict: true }) + '-' + Date.now();
+    // 2. יצירת שם תיקייה ייחודי (Slug)
+        let baseSlug = slugify(bookName, {
+        replacement: '-',  
+        remove: /[*+~.()'"!:@\/\\?]/g, 
+        lower: false,      
+        strict: false      // מאפשר תווים בעברית (Unicode)
+    });
+
+    // ניקוי מקפים מיותרים בהתחלה או בסוף
+    baseSlug = baseSlug.replace(/^-+|-+$/g, '');
+    
+    if (!baseSlug) baseSlug = 'book'; // Fallback אם השם כולו היה תווים אסורים
+
+    let slug = baseSlug;
+    let counter = 1;
+
+    // לולאה למציאת שם פנוי (כמו בווינדוס: name, name-1, name-2)
+    while (true) {
+        // בדיקה כפולה: גם ב-DB וגם במערכת הקבצים
+        const existingBook = await Book.findOne({ slug: slug });
+        const folderExists = await fs.pathExists(path.join(UPLOAD_ROOT, 'books', slug));
+
+        if (!existingBook && !folderExists) {
+            break; // השם פנוי!
+        }
+
+        // אם תפוס, נסה את המספר הבא
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+    }
+    
     const bookFolder = path.join(UPLOAD_ROOT, 'books', slug);
     await fs.ensureDir(bookFolder);
 
@@ -80,7 +110,9 @@ export async function uploadBookAction(formData) {
       editingInfo: { 
         title: 'הנחיות עריכה', 
         sections: [{ title: 'הנחיות אוטומטיות', items: [customPrompt || 'ערוך את הטקסט'] }] 
-      }
+      },
+      completedPages: 0,
+      isHidden: isHidden
     });
 
     // 4. העלאת כל עמודי הספר ל-Gemini Files API (לפני העיבוד)

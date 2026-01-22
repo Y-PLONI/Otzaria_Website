@@ -11,6 +11,7 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
     const [isUploading, setIsUploading] = useState(false)
     const [error, setError] = useState(null)
     const [category, setCategory] = useState('כללי')
+    const [isHidden, setIsHidden] = useState(false);
     const [statusMessage, setStatusMessage] = useState('')
 
     const [layoutType, setLayoutType] = useState('single_column')
@@ -78,6 +79,7 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
         formData.append('pdf', file)
         formData.append('bookName', bookName)
         formData.append('category', category)
+        formData.append('isHidden', isHidden);
         formData.append('layoutType', layoutType)
         formData.append('scriptType', scriptType)
         formData.append('customPrompt', customPrompt)
@@ -173,6 +175,20 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
                         disabled={isUploading}
                         className="w-full block text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                     />
+                </div>
+
+                <div className="flex items-center gap-2 py-2">
+                    <input
+                        type="checkbox"
+                        id="isHidden"
+                        checked={isHidden}
+                        onChange={(e) => setIsHidden(e.target.checked)}
+                        className="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    />
+                    <label htmlFor="isHidden" className="text-sm font-bold text-gray-700 flex items-center gap-1 cursor-pointer">
+                        <span className="material-symbols-outlined text-sm">visibility_off</span>
+                        ספר מוסתר (יוצג למנהלים בלבד)
+                    </label>
                 </div>
 
                 <div className="border-t border-gray-200 my-4 pt-4 bg-gray-50 p-4 rounded-lg">
