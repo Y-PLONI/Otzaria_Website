@@ -246,6 +246,7 @@ export default function AdminBooksPage() {
                 >
                     <span className="material-symbols-outlined">call_merge</span>
                     <span className="font-bold">מיזוג ספרים</span>
+                    <span className="text-xs opacity-80">(לא להשתמש עדיין)</span>
                 </button>
 
                 <button
