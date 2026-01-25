@@ -12,6 +12,7 @@ export default function AdminBooksPage() {
   const [showAddBook, setShowAddBook] = useState(false)
   const [editingBookInfo, setEditingBookInfo] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeTab, setActiveTab] = useState('all')
 
   const loadBooks = async () => {
     try {
@@ -79,9 +80,19 @@ export default function AdminBooksPage() {
     }
   };
 
-  const filteredBooks = books.filter(book => 
-    book.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredBooks = books.filter(book => {
+    const matchesSearch = book.name.toLowerCase().includes(searchTerm.toLowerCase())
+    if (!matchesSearch) return false
+
+    const total = book.totalPages || 0
+    const completed = book.completedPages || 0
+
+    if (activeTab === 'in_progress') return completed > 0 && completed < total
+    if (activeTab === 'hidden') return book.isHidden === true
+    if (activeTab === 'completed') return total > 0 && completed >= total
+    
+    return true
+  })
 
   if (loading) return (
     <div className="flex justify-center items-center h-64">
@@ -116,6 +127,27 @@ export default function AdminBooksPage() {
           <span className="material-symbols-outlined">add_circle</span>
           <span className="font-bold">הוסף ספר חדש</span>
         </button>
+      </div>
+
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+        {[
+            { id: 'all', label: 'כל הספרים' },
+            { id: 'in_progress', label: 'בטיפול' },
+            { id: 'hidden', label: 'מוסתרים' },
+            { id: 'completed', label: 'הושלמו' },
+        ].map(tab => (
+            <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                    activeTab === tab.id 
+                    ? 'bg-primary text-on-primary' 
+                    : 'bg-white/50 text-gray-600 hover:bg-white/80'
+                }`}
+            >
+                {tab.label}
+            </button>
+        ))}
       </div>
 
       {books.length === 0 ? (
