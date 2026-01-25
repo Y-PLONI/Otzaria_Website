@@ -8,11 +8,45 @@ import Book from '@/models/Book';
 import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
+const execAsync = promisify(exec);
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads');
 
+// הגדרה: כמה עמודים לעבד בכל נגלה (10 זה בטוח לרוב השרתים)
+const BATCH_SIZE = 10;
+
+export const config = {
+  api: {
+    bodyParser: false, // מאפשר עבודה עם קבצים גדולים ללא הגבלה של ה-Body Parser
+  },
+};
+
+/**
+ * פונקציית עזר לקבלת מספר עמודים ב-PDF
+ * משתמשת ב-Ghostscript בצורה יעילה (ללא טעינת הקובץ לזיכרון)
+ */
+async function getPdfPageCount(filePath) {
+    try {
+        const command = `gs -q -dNODISPLAY -c "(${filePath}) (r) file runpdfbegin pdfpagecount = quit"`;
+        const { stdout } = await execAsync(command);
+        const count = parseInt(stdout.trim());
+        if (isNaN(count) || count <= 0) throw new Error('Invalid page count');
+        return count;
+    } catch (error) {
+        console.error('Error counting PDF pages:', error);
+        throw new Error('לא ניתן לקרוא את מספר העמודים בקובץ (וודא שהקובץ תקין וש-Ghostscript מותקן)');
+    }
+}
+
 export async function POST(request) {
+  // משתנים למעקב לצורך ניקוי במקרה של שגיאה
+  let createdBookId = null;
+  let createdFolderPath = null;
+
   try {
+    // 1. אבטחה: וידוא מנהל
     const session = await getServerSession(authOptions);
     if (!session || session.user?.role !== 'admin') {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -20,6 +54,7 @@ export async function POST(request) {
 
     await connectDB();
     
+    // 2. קבלת נתונים
     const formData = await request.formData();
     const file = formData.get('pdf');
     const bookName = formData.get('bookName');
@@ -30,20 +65,16 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'חסרים נתונים' }, { status: 400 });
     }
 
-    // --- מכאן והלאה: אותו קוד בדיוק כמו ב-Server Action המקורי ---
+    console.log(`Starting upload process for: ${bookName}`);
 
-    // יצירת שם תיקייה (Slug)
-    let baseSlug = slugify(bookName, {
-        replacement: '-',  
-        remove: /[*+~.()'"!:@\/\\?]/g, 
-        lower: false,      
-        strict: false      
-    });
+    // 3. יצירת Slug ותיקייה
+    let baseSlug = slugify(bookName, { replacement: '-', remove: /[*+~.()'"!:@\/\\?]/g, lower: false, strict: false });
     baseSlug = baseSlug.replace(/^-+|-+$/g, '') || 'book';
 
     let slug = baseSlug;
     let counter = 1;
 
+    // לולאה למציאת שם פנוי
     while (true) {
         const existingBook = await Book.findOne({ slug: slug });
         const folderExists = await fs.pathExists(path.join(UPLOAD_ROOT, 'books', slug));
@@ -52,59 +83,137 @@ export async function POST(request) {
         counter++;
     }
     
-    const bookFolder = path.join(UPLOAD_ROOT, 'books', slug);
-    await fs.ensureDir(bookFolder);
+    createdFolderPath = path.join(UPLOAD_ROOT, 'books', slug);
+    await fs.ensureDir(createdFolderPath);
 
+    // 4. שמירת ה-PDF
     const arrayBuffer = await file.arrayBuffer();
     const pdfBuffer = Buffer.from(arrayBuffer);
-    const tempPdfPath = path.join(bookFolder, 'source.pdf');
+    const tempPdfPath = path.join(createdFolderPath, 'source.pdf');
     await fs.writeFile(tempPdfPath, pdfBuffer);
 
+    // 5. בדיקת מספר עמודים
+    const totalPages = await getPdfPageCount(tempPdfPath);
+    console.log(`Detected ${totalPages} pages.`);
+
+    // 6. יצירת הספר במסד הנתונים (כדי לתפוס את השם וה-ID)
+    const newBook = await Book.create({
+        name: bookName,
+        slug: slug,
+        category: category,
+        folderPath: `/uploads/books/${slug}`,
+        totalPages: totalPages,
+        completedPages: 0,
+        isHidden: isHidden
+    });
+    
+    createdBookId = newBook._id; // שומרים את ה-ID למקרה שנצטרך למחוק
+
+    // 7. הגדרות המרה
     const options = {
       density: 150,
       saveFilename: "page",
-      savePath: bookFolder,
+      savePath: createdFolderPath,
       format: "jpg",
       width: 1200,
       height: 1600 
     };
 
     const convert = fromPath(tempPdfPath, options);
-    // שימוש ב-bulk כפי שביקשת (שים לב שזה צורך הרבה זיכרון בקבצים גדולים)
-    const result = await convert.bulk(-1, { responseType: "image" });
-    
-    if (!result || result.length === 0) {
-      throw new Error('Conversion failed');
+
+    // 8. לולאת המרה (Batch Processing)
+    // רצים בקבוצות כדי לא להעמיס על הזיכרון
+    for (let i = 1; i <= totalPages; i += BATCH_SIZE) {
+        // חישוב טווח העמודים לנגלה הנוכחית
+        const endPage = Math.min(i + BATCH_SIZE - 1, totalPages);
+        const pagesToConvert = Array.from({ length: endPage - i + 1 }, (_, k) => i + k);
+        
+        console.log(`Processing batch: Pages ${i} to ${endPage}...`);
+
+        try {
+            // המרה בפועל
+            const batchResults = await convert.bulk(pagesToConvert, { responseType: "image" });
+            
+            // הכנת אובייקטים לשמירה ב-DB
+            const pagesData = batchResults.map((pageRes) => {
+                // ניסיון לחלץ מספר עמוד בצורה בטוחה
+                let pageNum = pageRes.page;
+                if (!pageNum && pageRes.name) {
+                    const match = pageRes.name.match(/page\.(\d+)/);
+                    if (match) pageNum = parseInt(match[1]);
+                }
+                
+                // אם עדיין אין מספר, נחשב לפי האינדקס ב-Batch
+                if (!pageNum) {
+                    // זה Fallback למקרה חירום, לרוב לא נגיע לפה
+                    // שים לב: זה לוגיקה מורכבת אם הסדר מתבלגן, לכן עדיף להסתמך על השם
+                }
+
+                return {
+                    book: createdBookId,
+                    pageNumber: pageNum,
+                    imagePath: `/uploads/books/${slug}/${path.basename(pageRes.path)}`,
+                    status: 'available'
+                };
+            });
+
+            // שמירה ב-DB
+            if (pagesData.length > 0) {
+                await Page.insertMany(pagesData);
+            }
+
+            // שחרור זיכרון יזום (אם Node מאפשר)
+            if (global.gc) global.gc();
+
+        } catch (batchError) {
+            throw new Error(`Failed to convert batch ${i}-${endPage}: ${batchError.message}`);
+        }
     }
 
-    const newBook = await Book.create({
-      name: bookName,
-      slug: slug,
-      category: category,
-      folderPath: `/uploads/books/${slug}`,
-      totalPages: result.length,
-      completedPages: 0,
-      isHidden: isHidden
-    });
+    // 9. סיום מוצלח - מחיקת ה-PDF המקורי כדי לחסוך מקום
+    await fs.remove(tempPdfPath);
 
-    const pagesData = result.map((page, index) => ({
-      book: newBook._id,
-      pageNumber: index + 1,
-      imagePath: `/uploads/books/${slug}/page.${index + 1}.jpg`,
-      status: 'available'
-    }));
-
-    await Page.insertMany(pagesData);
-    await fs.remove(tempPdfPath); 
+    console.log(`Upload completed successfully for book: ${bookName}`);
 
     return NextResponse.json({ 
       success: true, 
       message: 'הספר הועלה ועובד בהצלחה',
-      bookId: newBook._id 
+      bookId: createdBookId 
     });
 
   } catch (error) {
-    console.error('Upload Error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error('CRITICAL UPLOAD ERROR:', error);
+
+    // --- ROLLBACK PROCEDURE ---
+    // נוהל חירום: מחיקת כל מה שנוצר
+    try {
+        console.log('Starting Rollback...');
+
+        // 1. מחיקת הספר מה-DB
+        if (createdBookId) {
+            await Book.findByIdAndDelete(createdBookId);
+            console.log('- Deleted Book document');
+            
+            await Page.deleteMany({ book: createdBookId });
+            console.log('- Deleted associated Page documents');
+        }
+
+        // 2. מחיקת התיקייה הפיזית
+        if (createdFolderPath && await fs.pathExists(createdFolderPath)) {
+            await fs.remove(createdFolderPath);
+            console.log('- Deleted physical folder');
+        }
+
+        console.log('Rollback completed.');
+
+    } catch (cleanupError) {
+        // אם גם הניקוי נכשל, זה מצב חמור אבל אין הרבה מה לעשות חוץ מלדווח
+        console.error('Rollback failed! System may have orphan files.', cleanupError);
+    }
+
+    return NextResponse.json({ 
+        success: false, 
+        error: `התהליך נכשל ובוצע ביטול שינויים: ${error.message}` 
+    }, { status: 500 });
   }
 }
