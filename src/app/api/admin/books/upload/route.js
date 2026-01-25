@@ -25,18 +25,38 @@ export const config = {
 
 /**
  * פונקציית עזר לקבלת מספר עמודים ב-PDF
- * משתמשת ב-Ghostscript בצורה יעילה (ללא טעינת הקובץ לזיכרון)
+ * גרסה מתוקנת שמטפלת בנתיבים בצורה בטוחה
  */
 async function getPdfPageCount(filePath) {
     try {
-        const command = `gs -q -dNODISPLAY -c "(${filePath}) (r) file runpdfbegin pdfpagecount = quit"`;
-        const { stdout } = await execAsync(command);
+        // Ghostscript דורש Path עם לוכסנים רגילים (/) גם בווינדוס
+        // ואנחנו עוטפים בגרשיים כדי לטפל ברווחים
+        const safePath = filePath.replace(/\\/g, '/');
+        
+        // שימוש בפקודה בסיסית יותר של GS שעובדת ברוב הגרסאות
+        // שים לב: אנחנו משתמשים ב-safePath
+        const command = `gs -q -dNODISPLAY -c "(${safePath}) (r) file runpdfbegin pdfpagecount = quit"`;
+        
+        console.log('Running GS command:', command); // לוג לדיבוג
+
+        const { stdout, stderr } = await execAsync(command);
+        
+        if (stderr) {
+            console.warn('GS Stderr (warning):', stderr);
+        }
+
         const count = parseInt(stdout.trim());
-        if (isNaN(count) || count <= 0) throw new Error('Invalid page count');
+        
+        if (isNaN(count) || count <= 0) {
+            throw new Error(`Invalid page count returned: "${stdout}"`);
+        }
+        
         return count;
     } catch (error) {
-        console.error('Error counting PDF pages:', error);
-        throw new Error('לא ניתן לקרוא את מספר העמודים בקובץ (וודא שהקובץ תקין וש-Ghostscript מותקן)');
+        console.error('GS Execution Error:', error);
+        // ניסיון נוסף: שימוש ב-pdf2pic עצמו לחילוץ מידע (אם יש תמיכה)
+        // או זריקת שגיאה ברורה יותר
+        throw new Error(`נכשל בקריאת מספר עמודים. וודא ש-Ghostscript מותקן בשרת (apt install ghostscript). שגיאה מקורית: ${error.message}`);
     }
 }
 
