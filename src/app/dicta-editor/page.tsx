@@ -29,11 +29,15 @@ export default function DictaEditorPage() {
     <div className="dicta-editor">
       <header className="top-bar">
         <div className="top-bar__start">
-          <button className="icon-btn" id="openFileBtn" title="בחר קובץ">
-            <span className="material-symbols-outlined">folder_open</span>
+          <button className="icon-btn" id="openBookBtn" title="בחר ספר">
+            <span className="material-symbols-outlined">library_books</span>
           </button>
-          <div className="file-info" id="selectedFileName">כרטיסייה חדשה</div>
-          <button className="version-btn" id="versionBtn" title="ניהול גירסאות">v1</button>
+          <button className="icon-btn" id="saveBookBtn" title="שמור ספר למסד" style={{ display: "none" }}>
+            <span className="material-symbols-outlined">cloud_upload</span>
+          </button>
+          <div className="file-info" id="selectedFileName">לחץ על הכפתור משמאל לבחירת ספר</div>
+          {/* <button className="version-btn" id="versionBtn" title="ניהול גירסאות">v1</button> */} 
+          {/* Versions disabled for now in DB mode to avoid confusion */}
         </div>
 
         <div className="top-bar__end">
@@ -101,6 +105,24 @@ export default function DictaEditorPage() {
         </button>
 
         <div id="popupsContainer"></div>
+      </div>
+
+      <div style={{ display: "none" }} id="tmpl-bookSelector">
+        <div className="popup-card large">
+          <div className="popup-header">בחר ספר לעריכה</div>
+          <div className="popup-content">
+            <div className="row" style={{justifyContent: 'space-between'}}>
+               <h3>רשימת ספרים</h3>
+               <button className="m3-btn text" id="refreshBooksBtn">רענן</button>
+            </div>
+            <div id="bookListContainer" className="scrollbar" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                טוען...
+            </div>
+            <div className="result-msg" style={{ marginTop: '12px', fontSize: '0.85em', color: 'gray', textAlign: 'center' }}>
+                לחץ "תפוס" כדי להתחיל לערוך ספר פנוי
+            </div>
+          </div>
+        </div>
       </div>
 
       <div style={{ display: "none" }} id="tmpl-createHeaders">

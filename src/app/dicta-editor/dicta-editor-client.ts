@@ -1,7 +1,7 @@
 const API_BASE = "/api/dicta";
 
 type ToolState = {
-  selectedFilePath: string;
+  currentBookId: string | null;
   selectedImagePath: string;
   ocrPdfPath: string;
   originalText: string | null;
@@ -10,7 +10,7 @@ type ToolState = {
 };
 
 const state: ToolState = {
-  selectedFilePath: "",
+  currentBookId: null,
   selectedImagePath: "",
   ocrPdfPath: "",
   originalText: null,
@@ -37,6 +37,8 @@ type HeaderErrorResponse = {
   missing_levels: number[];
 };
 type VersionListResponse = { versions: VersionItem[] };
+type BookItem = { _id: string; title: string; status: string; claimedBy?: { _id: string; name: string } | null; updatedAt: string; content?: string };
+type BookLoadResponse = BookItem;
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const extractApiError = (data: unknown, status: number) => {
@@ -48,10 +50,20 @@ const extractApiError = (data: unknown, status: number) => {
 };
 
 async function apiPost<T>(path: string, payload: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  // Unified tools endpoint: /tools/xxx becomes /tools with tool=xxx
+  let finalPath = path;
+  let finalPayload = payload;
+  
+  const toolMatch = path.match(/^\/tools\/(.+)$/);
+  if (toolMatch) {
+    finalPath = "/tools";
+    finalPayload = { tool: toolMatch[1], ...payload };
+  }
+
+  const res = await fetch(`${API_BASE}${finalPath}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(finalPayload),
   });
 
   let data: unknown = null;
@@ -69,6 +81,7 @@ async function apiPost<T>(path: string, payload: Record<string, unknown>): Promi
   return data as T;
 }
 
+// Deprecated: used only for temp files if needed, but we now use book flow
 async function apiUpload(file: File) {
   const form = new FormData();
   form.append("file", file);
@@ -78,16 +91,71 @@ async function apiUpload(file: File) {
   return data;
 }
 
+async function apiGetBooks() {
+    const res = await fetch(`${API_BASE}/books`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json() as BookItem[];
+}
+
+async function apiLoadBook(id: string) {
+    const res = await fetch(`${API_BASE}/books/${id}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json() as BookLoadResponse;
+}
+
+async function apiCreateBook(title: string) {
+    const res = await fetch(`${API_BASE}/books`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, content: "" })
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json() as BookItem;
+}
+
+async function apiUpdateBook(id: string, content: string) {
+    const res = await fetch(`${API_BASE}/books/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content })
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+}
+
+async function apiClaimBook(id: string) {
+    const res = await fetch(`${API_BASE}/books/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: 'claim' })
+    });
+    if(!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    return await res.json();
+}
+
+async function apiReleaseBook(id: string) {
+    const res = await fetch(`${API_BASE}/books/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: 'release' })
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+}
+
 function setResult(el: HTMLElement | null, text: string, isError = false) {
   if (!el) return;
   el.textContent = text;
   (el as HTMLElement).style.color = isError ? "red" : "inherit";
 }
 
-function ensureFileSelected() {
-  if (!state.selectedFilePath) {
-    alert("נא לבחור קובץ תחילה");
-    throw new Error("No file selected");
+function ensureBookSelected() {
+  if (!state.currentBookId) {
+    alert("נא לבחור ספר תחילה");
+    throw new Error("No book selected");
   }
 }
 
@@ -103,18 +171,33 @@ function init() {
   });
 
   fetch(`${API_BASE}/health`).then(() => console.log("API Connected")).catch(() => console.error("API Disconnected"));
+
+  // Check if bookId is passed in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const bookIdFromUrl = urlParams.get('bookId');
+  
+  if (bookIdFromUrl) {
+    // Load specific book from URL
+    loadBook(bookIdFromUrl);
+  } else {
+    // Auto-open book selector on page load
+    setTimeout(() => openTool('bookSelector'), 300);
+  }
 }
 
 function setupTopBar() {
-  qs("openFileBtn")?.addEventListener("click", () => (qs("filePicker") as HTMLInputElement)?.click());
-  qs("filePicker")?.addEventListener("change", handleUploadFile as EventListener);
+  qs("openBookBtn")?.addEventListener("click", () => openTool('bookSelector'));
+  qs("saveBookBtn")?.addEventListener("click", saveCurrentBook);
+  // qs("openFileBtn")?.addEventListener("click", () => (qs("filePicker") as HTMLInputElement)?.click());
+  // qs("filePicker")?.addEventListener("change", handleUploadFile as EventListener);
 
   qs("fontPlusBtn")?.addEventListener("click", () => adjustFontSize(2));
   qs("fontMinusBtn")?.addEventListener("click", () => adjustFontSize(-2));
 
-  qs("versionBtn")?.addEventListener("click", () => openTool("versions"));
+  // qs("versionBtn")?.addEventListener("click", () => openTool("versions"));
   qs("editFab")?.addEventListener("click", toggleEditMode as EventListener);
 }
+
 
 function adjustFontSize(delta: number) {
   const el = qs("filePreview") as HTMLElement;
@@ -127,23 +210,13 @@ function adjustFontSize(delta: number) {
 }
 
 async function handleUploadFile() {
-  const input = qs("filePicker") as HTMLInputElement | null;
-  const file = input?.files?.[0];
-  if (!file) return;
-
-  try {
-    const res = await apiUpload(file);
-    state.selectedFilePath = res.path;
-    const nameEl = qs("selectedFileName");
-    if (nameEl) nameEl.textContent = file.name;
-    await refreshPreview();
-  } catch (e: unknown) {
-    alert("שגיאה בטעינת הקובץ: " + getErrorMessage(e));
-  }
+  // Deprecated: File upload is now handled through the book management system
+  // This function is kept for backwards compatibility but should not be called
+  console.warn("handleUploadFile is deprecated. Use the book selector instead.");
 }
 
 async function refreshPreview() {
-  if (!state.selectedFilePath) return;
+  if (!state.currentBookId) return;
 
   if (state.isEditing) {
     state.isEditing = false;
@@ -155,23 +228,25 @@ async function refreshPreview() {
     }
   }
 
-  const data = await apiPost<FileReadResponse>("/file/read", { file_path: state.selectedFilePath });
+  // Load content directly from MongoDB
+  const data = await apiLoadBook(state.currentBookId);
 
   const editFab = qs("editFab") as HTMLElement;
   if (editFab) editFab.style.display = "flex";
 
-  const content = data.content
+  const bookContent = data.content || "";
+  const content = bookContent
     .replace(/^<h([1-6])>(.*?)<\/h\1>/gim, '<div class="content_h$1">$2</div>')
     .replace(/\n/g, "<br>");
 
   const preview = qs("filePreview");
   if (preview) preview.innerHTML = content;
 
-  buildNavigation(String(data.content).split("\n"));
+  buildNavigation(bookContent.split("\n"));
 }
 
 async function toggleEditMode() {
-  ensureFileSelected();
+  ensureBookSelected();
   const fab = qs("editFab") as HTMLElement;
   const preview = qs("filePreview") as HTMLElement;
   if (!fab || !preview) return;
@@ -182,11 +257,12 @@ async function toggleEditMode() {
     fab.classList.add("saving");
     fab.title = "שמור שינויים";
 
-    const data = await apiPost<FileReadResponse>("/file/read", { file_path: state.selectedFilePath });
+    // Load content from MongoDB
+    const data = await apiLoadBook(state.currentBookId!);
 
     const textarea = document.createElement("textarea");
     textarea.className = "editor-textarea";
-    textarea.value = data.content;
+    textarea.value = data.content || "";
 
     preview.innerHTML = "";
     preview.appendChild(textarea);
@@ -199,10 +275,8 @@ async function toggleEditMode() {
     const newContent = textarea.value;
 
     try {
-      await apiPost("/file/write", {
-        file_path: state.selectedFilePath,
-        content: newContent,
-      });
+      // Save content directly to MongoDB
+      await apiUpdateBook(state.currentBookId!, newContent);
       await refreshPreview();
     } catch (e: unknown) {
       alert("שגיאה בשמירת הקובץ: " + getErrorMessage(e));
@@ -329,10 +403,200 @@ const LISTS = {
   SL_END: ["", ".", ",", "'", "',", "'.", "]", ")", "']", "')", "].", ").", "],", "),", "'),", "').", "'],", "']."],
 };
 
+async function loadBookList() {
+    const listContainer = qs("bookListContainer");
+    if (!listContainer) return;
+    listContainer.innerHTML = 'טוען...';
+    try {
+        const books = await apiGetBooks();
+        renderBookList(books);
+    } catch (e) {
+        listContainer.innerHTML = `<div style="color:red">Error: ${getErrorMessage(e)}</div>`;
+    }
+}
+
+function renderBookList(books: BookItem[]) {
+    const listContainer = qs("bookListContainer");
+    if (!listContainer) return;
+    listContainer.innerHTML = '';
+    
+    if (books.length === 0) {
+        listContainer.innerHTML = '<div style="padding:10px; text-align:center">אין ספרים זמינים כרגע.</div>';
+        return;
+    }
+
+    const ul = document.createElement("div");
+    ul.className = "book-list"; 
+    
+    books.forEach(book => {
+        const row = document.createElement("div");
+        row.className = "book-list-item";
+        row.style.padding = "10px";
+        row.style.borderBottom = "1px solid #eee";
+        row.style.display = "flex";
+        row.style.justifyContent = "space-between";
+        row.style.alignItems = "center";
+        
+        // סטטוס הספר
+        const statusBadge = getStatusBadge(book.status);
+        const claimedByText = book.claimedBy ? ` (${book.claimedBy.name})` : '';
+        
+        row.innerHTML = `
+            <div style="flex:1">
+                <strong>${book.title}</strong>
+                <div style="font-size: 0.8em; color: gray; margin-top: 4px;">
+                    ${statusBadge}${claimedByText}
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <span style="font-size: 0.75em; color: gray;">${new Date(book.updatedAt).toLocaleDateString()}</span>
+            </div>
+        `;
+        
+        // כפתור פעולה בהתאם לסטטוס
+        const actionBtn = document.createElement("button");
+        actionBtn.className = "m3-btn text";
+        actionBtn.style.marginRight = "8px";
+        
+        if (book.status === 'available') {
+            actionBtn.textContent = "תפוס";
+            actionBtn.onclick = (e) => { e.stopPropagation(); claimAndLoadBook(book._id); };
+        } else if (state.currentBookId === book._id) {
+            actionBtn.textContent = "פתח";
+            actionBtn.onclick = (e) => { e.stopPropagation(); loadBook(book._id); };
+        } else {
+            // ספר תפוס ע"י מישהו אחר
+            actionBtn.textContent = "תפוס";
+            actionBtn.disabled = true;
+            actionBtn.style.opacity = "0.5";
+        }
+        
+        row.querySelector('div:last-child')?.prepend(actionBtn);
+        
+        // Highlight active
+        if (state.currentBookId === book._id) {
+            row.style.backgroundColor = "#e3f2fd";
+        }
+
+        ul.appendChild(row);
+    });
+    listContainer.appendChild(ul);
+}
+
+function getStatusBadge(status: string) {
+    switch(status) {
+        case 'available': return '<span style="color: green;">🟢 פנוי</span>';
+        case 'in-progress': return '<span style="color: orange;">🟠 בעריכה</span>';
+        case 'completed': return '<span style="color: blue;">🔵 הושלם</span>';
+        default: return status;
+    }
+}
+
+async function claimAndLoadBook(id: string) {
+    try {
+        await apiClaimBook(id);
+        await loadBook(id);
+    } catch (e) {
+        alert("שגיאה בתפיסת הספר: " + getErrorMessage(e));
+    }
+}
+
+async function loadBook(id: string) {
+    try {
+        const data = await apiLoadBook(id);
+        state.currentBookId = data._id;
+        
+        // Update UI
+        const nameEl = qs("selectedFileName");
+        if (nameEl) nameEl.textContent = data.title;
+        
+        // Show save button
+        const saveBtn = qs("saveBookBtn") as HTMLElement;
+        if (saveBtn) saveBtn.style.display = "flex";
+        
+        // Show edit FAB
+        const editFab = qs("editFab") as HTMLElement;
+        if (editFab) editFab.style.display = "flex";
+        
+        // Load content into preview
+        const preview = qs("filePreview");
+        const bookContent = data.content || "";
+        if (preview) {
+            const content = bookContent
+                .replace(/^<h([1-6])>(.*?)<\/h\1>/gim, '<div class="content_h$1">$2</div>')
+                .replace(/\n/g, "<br>");
+            preview.innerHTML = content;
+        }
+        
+        buildNavigation(bookContent.split("\n"));
+        
+        closePopup();
+    } catch (e) {
+        alert("שגיאה בטעינת הספר: " + getErrorMessage(e));
+    }
+}
+
+async function createNewBook() {
+    const input = qs("newBookTitle") as HTMLInputElement;
+    const title = input?.value?.trim();
+    if (!title) return alert("נא להזין שם לספר");
+    
+    try {
+        const newBook = await apiCreateBook(title);
+        input.value = "";
+        await loadBookList(); // Refresh list
+        // Optionally auto-open:
+        // loadBook(newBook._id);
+    } catch (e) {
+        alert("שגיאה ביצירת ספר: " + getErrorMessage(e));
+    }
+}
+
+async function saveCurrentBook() {
+    if (!state.currentBookId) return alert("אין ספר פתוח לשמירה");
+    
+    let content = "";
+    
+    if (state.isEditing) {
+        const textarea = (qs("filePreview") as HTMLElement)?.querySelector("textarea");
+        content = textarea?.value || "";
+    } else {
+        // If not in edit mode, load current content from DB 
+        // (tools auto-save, so this is mainly for consistency)
+        try {
+            const data = await apiLoadBook(state.currentBookId);
+            content = data.content || "";
+        } catch (e) {
+            return alert("שגיאה בקריאת הספר: " + getErrorMessage(e));
+        }
+    }
+
+    const btn = qs("saveBookBtn");
+    if(btn) btn.textContent = "שומר...";
+    
+    try {
+        await apiUpdateBook(state.currentBookId, content);
+        
+        if (state.isEditing) {
+           await refreshPreview();
+        }
+        
+        alert("הספר נשמר בהצלחה!");
+    } catch (e) {
+        alert("שגיאה בשמירה: " + getErrorMessage(e));
+    } finally {
+        if(btn) btn.innerHTML = '<span class="material-symbols-outlined">save</span> שמור ספר';
+    }
+}
+
 function bindToolEvents(tool: string) {
   const pqs = (sel: string) => (qs("popupsContainer") as HTMLElement | null)?.querySelector(`#${sel}`) as HTMLElement | null;
 
   switch (tool) {
+    case "bookSelector":
+        pqs("refreshBooksBtn")?.addEventListener("click", loadBookList);
+        loadBookList();
+        break;
     case "createHeaders":
       pqs("createHeadersBtn")?.addEventListener("click", createHeaders);
       setupCombobox("headersCombobox", "createHeadersFind", LISTS.HEADERS);
@@ -541,9 +805,9 @@ function splitList(value: string) {
 }
 
 async function createHeaders() {
-  ensureFileSelected();
+  ensureBookSelected();
   const res = await apiPost<ToolResult>("/tools/create-headers", {
-    file_path: state.selectedFilePath,
+    book_id: state.currentBookId,
     find_word: (qs("createHeadersFind") as HTMLInputElement)?.value,
     end: Number((qs("createHeadersEnd") as HTMLInputElement)?.value),
     level_num: Number((qs("createHeadersLevel") as HTMLInputElement)?.value),
@@ -553,9 +817,9 @@ async function createHeaders() {
 }
 
 async function createSingleLetterHeaders() {
-  ensureFileSelected();
+  ensureBookSelected();
   const res = await apiPost<ToolResult>("/tools/create-single-letter-headers", {
-    file_path: state.selectedFilePath,
+    book_id: state.currentBookId,
     end_suffix: (qs("singleLetterEnd") as HTMLInputElement)?.value,
     end: Number((qs("singleLetterMax") as HTMLInputElement)?.value),
     level_num: Number((qs("singleLetterLevel") as HTMLInputElement)?.value),
@@ -569,9 +833,9 @@ async function createSingleLetterHeaders() {
 }
 
 async function changeHeadingLevel() {
-  ensureFileSelected();
+  ensureBookSelected();
   const res = await apiPost<ToolResult>("/tools/change-heading-level", {
-    file_path: state.selectedFilePath,
+    book_id: state.currentBookId,
     current_level: (qs("changeHeadingCurrent") as HTMLInputElement)?.value,
     new_level: (qs("changeHeadingNew") as HTMLInputElement)?.value,
   });
@@ -580,9 +844,9 @@ async function changeHeadingLevel() {
 }
 
 async function emphasizeAndPunctuate() {
-  ensureFileSelected();
+  ensureBookSelected();
   const res = await apiPost<ToolResult>("/tools/emphasize-and-punctuate", {
-    file_path: state.selectedFilePath,
+    book_id: state.currentBookId,
     add_ending: (qs("punctuateEnding") as HTMLSelectElement)?.value,
     emphasize_start: (qs("punctuateEmphasize") as HTMLInputElement)?.checked,
   });
@@ -591,9 +855,9 @@ async function emphasizeAndPunctuate() {
 }
 
 async function addPageNumber() {
-  ensureFileSelected();
+  ensureBookSelected();
   const res = await apiPost<ToolResult>("/tools/add-page-number", {
-    file_path: state.selectedFilePath,
+    book_id: state.currentBookId,
     replace_with: (qs("addPageNumberType") as HTMLSelectElement)?.value,
   });
   setResult(qs("addPageNumberResult"), res.message || "בוצע", !res.changed);
@@ -601,9 +865,9 @@ async function addPageNumber() {
 }
 
 async function createPageBHeaders() {
-  ensureFileSelected();
+  ensureBookSelected();
   const res = await apiPost<ToolResult>("/tools/create-page-b-headers", {
-    file_path: state.selectedFilePath,
+    book_id: state.currentBookId,
     header_level: Number((qs("pageBHeaderLevel") as HTMLInputElement)?.value),
   });
   setResult(qs("pageBHeaderResult"), res.count ? `נוספו ${res.count}` : "אין שינוי", !res.count);
@@ -611,9 +875,9 @@ async function createPageBHeaders() {
 }
 
 async function replacePageBHeaders() {
-  ensureFileSelected();
+  ensureBookSelected();
   const res = await apiPost<ToolResult>("/tools/replace-page-b-headers", {
-    file_path: state.selectedFilePath,
+    book_id: state.currentBookId,
     replace_type: (qs("replacePageBType") as HTMLSelectElement)?.value,
   });
   setResult(qs("replacePageBResult"), res.count ? `בוצעו ${res.count}` : "אין שינוי", !res.count);
@@ -621,12 +885,13 @@ async function replacePageBHeaders() {
 }
 
 async function cleanText() {
-  ensureFileSelected();
-  const original = await apiPost<FileReadResponse>("/file/read", { file_path: state.selectedFilePath });
-  state.originalText = original.content;
+  ensureBookSelected();
+  // Store original for undo (load from DB)
+  const original = await apiLoadBook(state.currentBookId!);
+  state.originalText = original.content || null;
 
   const res = await apiPost<ToolResult>("/tools/text-cleaner", {
-    file_path: state.selectedFilePath,
+    book_id: state.currentBookId,
     options: {
       remove_empty_lines: (qs("cleanEmpty") as HTMLInputElement)?.checked,
       remove_double_spaces: (qs("cleanSpaces") as HTMLInputElement)?.checked,
@@ -642,8 +907,8 @@ async function cleanText() {
 }
 
 async function undoCleanText() {
-  if (!state.originalText) return;
-  await apiPost("/file/write", { file_path: state.selectedFilePath, content: state.originalText });
+  if (!state.originalText || !state.currentBookId) return;
+  await apiUpdateBook(state.currentBookId, state.originalText);
   setResult(qs("cleanTextResult"), "שוחזר");
   await refreshPreview();
 }
@@ -690,7 +955,7 @@ async function ocrRun() {
 }
 
 async function headerErrorCheck() {
-  ensureFileSelected();
+  ensureBookSelected();
 
   (qs("hcUnmatchedRegex") as HTMLTextAreaElement).value = "";
   (qs("hcUnmatchedTags") as HTMLTextAreaElement).value = "";
@@ -704,7 +969,7 @@ async function headerErrorCheck() {
 
   try {
     const res = await apiPost<HeaderErrorResponse>("/tools/header-error-checker", {
-      file_path: state.selectedFilePath,
+      book_id: state.currentBookId,
       re_start: (qs("headerCheckStart") as HTMLInputElement)?.value,
       re_end: (qs("headerCheckEnd") as HTMLInputElement)?.value,
       gershayim: (qs("headerCheckGershayim") as HTMLInputElement)?.checked,
@@ -728,43 +993,18 @@ async function headerErrorCheck() {
 }
 
 async function saveVersion() {
-  ensureFileSelected();
-  const desc = (qs("versionDescription") as HTMLInputElement)?.value;
-  await apiPost("/version/create", {
-    file_path: state.selectedFilePath,
-    description: desc,
-  });
-  const input = qs("versionDescription") as HTMLInputElement;
-  if (input) input.value = "";
-  loadVersions();
+  ensureBookSelected();
+  // Version system is currently disabled for DB-based workflow
+  // TODO: Implement version history in MongoDB
+  alert("מערכת הגרסאות אינה זמינה במצב עבודה עם MongoDB");
+  return;
 }
 
 async function loadVersions() {
-  if (!state.selectedFilePath) return;
-  const res = await apiPost<VersionListResponse>("/version/list", { file_path: state.selectedFilePath });
+  // Version system is currently disabled for DB-based workflow
   const list = qs("versionList") as HTMLElement;
   if (!list) return;
-  list.innerHTML = "";
-
-  res.versions.forEach((v) => {
-    const row = document.createElement("div");
-    row.style.borderBottom = "1px solid #eee";
-    row.style.padding = "4px";
-    row.innerHTML = `
-      <div><b>${v.version_id}</b>: ${v.description || '-'} (${v.timestamp})</div>
-      <div>
-        <button class="m3-btn text" style="height:24px;font-size:12px" data-version="${v.filename}">שחזר</button>
-      </div>
-    `;
-    const restoreBtn = row.querySelector("button");
-    restoreBtn?.addEventListener("click", async () => {
-      if (!confirm("האם אתה בטוח שברצונך לשחזר גירסה זו?")) return;
-      await apiPost("/version/restore", { file_path: state.selectedFilePath, version_filename: v.filename });
-      alert("שוחזר בהצלחה");
-      await refreshPreview();
-    });
-    list.appendChild(row);
-  });
+  list.innerHTML = "<div style='padding: 10px; color: gray;'>מערכת הגרסאות אינה זמינה במצב עבודה עם MongoDB</div>";
 }
 
 export function initDictaEditor() {

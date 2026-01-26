@@ -36,6 +36,8 @@ export const config = {
     '/library/edit/:path*',
     '/library/users/:path*',
     '/api/admin/:path*', // הגנה גם על ה-API של האדמין
-    '/api/upload-text/:path*'
+    '/api/upload-text/:path*',
+    '/api/dicta/books/:path*', // הגנה על API של ספרי דיקטה
+    '/dicta-editor/:path*' // עורך דיקטה דורש התחברות
   ]
 };
