@@ -611,12 +611,26 @@ export default function EditPage() {
       }
   }
 
-  const handleCloseInfoDialog = (doNotShowAgain) => {
-    setShowInfoDialog(false)
+  const handleCloseInfoDialog = async (doNotShowAgain) => {
+    setShowInfoDialog(false);
+    
     if (doNotShowAgain && bookPath) {
-      localStorage.setItem(`hide_instructions_${bookPath}`, 'true')
+      localStorage.setItem(`hide_instructions_${bookPath}`, 'true');
+
+      try {
+        await fetch('/api/user/preferences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            action: 'hide_instructions',
+            bookPath: bookPath 
+          })
+        });
+      } catch (err) {
+        console.error('Failed to save preference to server', err);
+      }
     }
-  }
+  };
 
   if (loading) return <div className="text-center p-20">טוען...</div>
   if (error) return <div className="text-center p-20 text-red-500">{error}</div>
@@ -809,3 +823,4 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
     </div>
   )
 }
+
