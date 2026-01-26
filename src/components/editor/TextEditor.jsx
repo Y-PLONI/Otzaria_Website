@@ -1,4 +1,6 @@
-export default function TextEditor({
+import { forwardRef } from 'react'
+
+const TextEditor = forwardRef(({
   content,
   leftColumn,
   rightColumn,
@@ -11,9 +13,10 @@ export default function TextEditor({
   selectedFont,
   columnWidth,
   onColumnResizeStart
-}) {
+}, ref) => {
   return (
     <div
+      ref={ref}
       className="flex flex-col overflow-auto p-4 editor-container text-editor-container"
       style={{ flex: 1 }}
       onWheel={(e) => e.stopPropagation()}
@@ -75,4 +78,7 @@ export default function TextEditor({
       )}
     </div>
   )
-}
+})
+
+TextEditor.displayName = 'TextEditor'
+export default TextEditor
