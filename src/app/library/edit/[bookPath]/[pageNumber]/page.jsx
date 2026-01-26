@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 
@@ -47,7 +47,11 @@ export default function EditPage() {
   const [columnWidth, setColumnWidth] = useState(50)
   const [isColumnResizing, setIsColumnResizing] = useState(false)
   
-  // Refs for optimized resizing
+  // DOM Refs
+  const splitContainerRef = useRef(null)
+  const textEditorContainerRef = useRef(null)
+  
+  // Value Refs for persistent access during resizing
   const imagePanelWidthRef = useRef(imagePanelWidth)
   const columnWidthRef = useRef(columnWidth)
 
@@ -420,46 +424,49 @@ export default function EditPage() {
     setIsColumnResizing(true)
   }
 
-  useEffect(() => {
-    if (!isResizing && !isColumnResizing) return
-    const handleMouseMove = (e) => {
-      if (isResizing) {
-        const container = document.querySelector('.split-container')
-        if (!container) return
-        const rect = container.getBoundingClientRect()
-        let newSize 
-        if (layoutOrientation === 'horizontal') {
-          newSize = swapPanels 
-            ? ((rect.bottom - e.clientY) / rect.height) * 100 
-            : ((e.clientY - rect.top) / rect.height) * 100    
-        } else {
-          newSize = swapPanels 
-              ? ((e.clientX - rect.left) / rect.width) * 100
-              : ((rect.right - e.clientX) / rect.width) * 100
-        }
-        setImagePanelWidth(Math.min(Math.max(newSize, 20), 80))
-      } else if (isColumnResizing) {
-        const editorContainer = document.querySelector('.text-editor-container')
-        if (!editorContainer) return
-        const rect = editorContainer.getBoundingClientRect()
-        const relativeX = rect.right - e.clientX
-        const newWidth = (relativeX / rect.width) * 100
-        setColumnWidth(Math.min(Math.max(newWidth, 10), 90))
+  const handleMouseMove = useCallback((e) => {
+    if (isResizing) {
+      const container = splitContainerRef.current
+      if (!container) return
+      const rect = container.getBoundingClientRect()
+      let newSize 
+      if (layoutOrientation === 'horizontal') {
+        newSize = swapPanels 
+          ? ((rect.bottom - e.clientY) / rect.height) * 100 
+          : ((e.clientY - rect.top) / rect.height) * 100    
+      } else {
+        newSize = swapPanels 
+            ? ((e.clientX - rect.left) / rect.width) * 100
+            : ((rect.right - e.clientX) / rect.width) * 100
       }
+      setImagePanelWidth(Math.min(Math.max(newSize, 20), 80))
+    } else if (isColumnResizing) {
+      const editorContainer = textEditorContainerRef.current
+      if (!editorContainer) return
+      const rect = editorContainer.getBoundingClientRect()
+      const relativeX = rect.right - e.clientX
+      const newWidth = (relativeX / rect.width) * 100
+      setColumnWidth(Math.min(Math.max(newWidth, 10), 90))
     }
-    const handleMouseUp = () => {
-      setIsResizing(false)
-      setIsColumnResizing(false)
-      localStorage.setItem('imagePanelWidth', imagePanelWidthRef.current.toString())
-      localStorage.setItem('columnWidth', columnWidthRef.current.toString())
+  }, [isResizing, isColumnResizing, layoutOrientation, swapPanels])
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false)
+    setIsColumnResizing(false)
+    localStorage.setItem('imagePanelWidth', imagePanelWidthRef.current.toString())
+    localStorage.setItem('columnWidth', columnWidthRef.current.toString())
+  }, [])
+
+  useEffect(() => {
+    if (isResizing || isColumnResizing) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
     }
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isResizing, isColumnResizing, layoutOrientation, swapPanels])
+  }, [isResizing, isColumnResizing, handleMouseMove, handleMouseUp])
 
   const toggleColumns = () => {
     if (!twoColumns) setShowSplitDialog(true)
@@ -707,6 +714,7 @@ export default function EditPage() {
       <div className={`flex-1 flex flex-col overflow-hidden ${isFullScreen ? 'p-0' : 'p-6'}`}>
         <div className={`flex-1 flex flex-col overflow-hidden ${isFullScreen ? '' : 'glass-strong rounded-xl border border-surface-variant'}`}>
           <div 
+            ref={splitContainerRef}
             className="flex-1 flex overflow-hidden split-container" 
             style={{ 
                 flexDirection: layoutOrientation === 'horizontal' 
@@ -725,6 +733,7 @@ export default function EditPage() {
               isResizing={isResizing} handleResizeStart={handleResizeStart}
             />
             <TextEditor 
+              ref={textEditorContainerRef}
               content={content} leftColumn={leftColumn} rightColumn={rightColumn}
               twoColumns={twoColumns} rightColumnName={rightColumnName} leftColumnName={leftColumnName}
               handleAutoSave={(txt) => { setContent(txt); handleAutoSaveWrapper(txt); }}
