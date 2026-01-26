@@ -107,24 +107,6 @@ export default function DictaEditorPage() {
         <div id="popupsContainer"></div>
       </div>
 
-      <div style={{ display: "none" }} id="tmpl-bookSelector">
-        <div className="popup-card large">
-          <div className="popup-header">בחר ספר לעריכה</div>
-          <div className="popup-content">
-            <div className="row" style={{justifyContent: 'space-between'}}>
-               <h3>רשימת ספרים</h3>
-               <button className="m3-btn text" id="refreshBooksBtn">רענן</button>
-            </div>
-            <div id="bookListContainer" className="scrollbar" style={{ maxHeight: '350px', overflowY: 'auto' }}>
-                טוען...
-            </div>
-            <div className="result-msg" style={{ marginTop: '12px', fontSize: '0.85em', color: 'gray', textAlign: 'center' }}>
-                לחץ "תפוס" כדי להתחיל לערוך ספר פנוי
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div style={{ display: "none" }} id="tmpl-createHeaders">
         <div className="popup-card">
           <div className="popup-header">יצירת כותרות</div>

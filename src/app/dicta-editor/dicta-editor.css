@@ -2,14 +2,14 @@
 @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap");
 
 .dicta-editor {
-  --bg-color: #FFF8E7;
-  --toolbar-bg: #FFF8E7;
-  --nav-bg: #FFF8E7;
-  --text-color: #333;
-  --primary-color: #8B4513;
-  --popup-bg: #FFF8E1;
+  --bg-color: #fefbf6;
+  --toolbar-bg: #fefbf6;
+  --nav-bg: #fefbf6;
+  --text-color: #1c1b1a;
+  --primary-color: #6b5d4f;
+  --popup-bg: #f8f4ef;
   --popup-alert-bg: #FCE4EC;
-  --border-color: #D7CCC8;
+  --border-color: #e7e0d8;
 
   margin: 0;
   padding: 0;

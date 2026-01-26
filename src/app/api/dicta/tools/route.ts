@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import connectDB from "@/lib/db";
+import DictaBook from "@/models/DictaBook";
 import {
   addPageNumberToHeadingDB,
   changeHeadingLevelDB,
@@ -16,7 +20,38 @@ import {
 
 export const runtime = "nodejs";
 
+// Extended session user type
+type SessionUser = {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+  _id?: string;
+  id?: string;
+};
+
 type ToolHandler = (params: Record<string, unknown>) => Promise<unknown>;
+
+// Helper to check if user has access to a book
+async function checkBookAccess(bookId: string, userId: string, isAdmin: boolean): Promise<{ allowed: boolean; error?: string }> {
+  await connectDB();
+  const book = await DictaBook.findById(bookId);
+  
+  if (!book) {
+    return { allowed: false, error: "Book not found" };
+  }
+  
+  // Available books: anyone can access (but they should claim first for editing)
+  // In-progress: only owner or admin
+  if (book.status === "in-progress") {
+    const isOwner = book.claimedBy?.toString() === userId;
+    if (!isAdmin && !isOwner) {
+      return { allowed: false, error: "Forbidden: This book is being edited by another user" };
+    }
+  }
+  
+  return { allowed: true };
+}
 
 const toolHandlers: Record<string, ToolHandler> = {
   "add-page-number": async (params) => {
@@ -113,6 +148,17 @@ const toolHandlers: Record<string, ToolHandler> = {
 
 export async function POST(request: Request) {
   try {
+    // Check authentication
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = await getServerSession(authOptions as any) as { user?: SessionUser } | null;
+    if (!session?.user) {
+      return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
+    }
+    
+    const user = session.user;
+    const userId = user._id || user.id || "";
+    const isAdmin = user.role === "admin";
+
     const body = await request.json();
     const { tool, ...params } = body;
 
@@ -123,6 +169,15 @@ export async function POST(request: Request) {
     const handler = toolHandlers[tool];
     if (!handler) {
       return NextResponse.json({ detail: `כלי לא מוכר: ${tool}` }, { status: 400 });
+    }
+
+    // For book-related tools, check book access
+    const bookId = params.book_id as string;
+    if (bookId) {
+      const access = await checkBookAccess(bookId, userId, isAdmin);
+      if (!access.allowed) {
+        return NextResponse.json({ detail: access.error }, { status: 403 });
+      }
     }
 
     const result = await handler(params);

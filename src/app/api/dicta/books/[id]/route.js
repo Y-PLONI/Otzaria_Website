@@ -11,12 +11,23 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user._id || session.user.id;
+    const isAdmin = session.user.role === 'admin';
+
     await connectDB();
     const { id } = await params;
     const book = await DictaBook.findById(id).populate('claimedBy', 'name');
     
     if (!book) {
       return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+    }
+
+    // Check access: available books are accessible by all, in-progress only by owner or admin
+    if (book.status === 'in-progress') {
+      const isOwner = book.claimedBy?._id?.toString() === userId;
+      if (!isAdmin && !isOwner) {
+        return NextResponse.json({ error: 'Forbidden: This book is being edited by another user' }, { status: 403 });
+      }
     }
 
     // Return book data directly from MongoDB (no temp file needed)

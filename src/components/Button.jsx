@@ -5,16 +5,16 @@ import Link from 'next/link'
 /**
  * Reusable button component supporting both button and link elements
  * @param {Object} props
- * @param {string} props.label - Button text
- * @param {string} props.href - Link href (if this is a link button)
- * @param {Function} props.onClick - Click handler (if this is a button)
- * @param {string} props.variant - Button style: 'primary', 'secondary', 'outline', 'ghost'
- * @param {string} props.size - Button size: 'sm', 'md', 'lg'
- * @param {string} props.icon - Material icon name to show before text
- * @param {boolean} props.loading - Show loading state
- * @param {boolean} props.disabled - Disable button
- * @param {boolean} props.fullWidth - Make button full width
- * @param {string} props.className - Additional CSS classes
+ * @param {string} [props.label] - Button text
+ * @param {string} [props.href] - Link href (if this is a link button)
+ * @param {Function} [props.onClick] - Click handler (if this is a button)
+ * @param {string} [props.variant] - Button style: 'primary', 'secondary', 'outline', 'ghost'
+ * @param {string} [props.size] - Button size: 'sm', 'md', 'lg'
+ * @param {string} [props.icon] - Material icon name to show before text
+ * @param {boolean} [props.loading] - Show loading state
+ * @param {boolean} [props.disabled] - Disable button
+ * @param {boolean} [props.fullWidth] - Make button full width
+ * @param {string} [props.className] - Additional CSS classes
  */
 export default function Button({
   label,

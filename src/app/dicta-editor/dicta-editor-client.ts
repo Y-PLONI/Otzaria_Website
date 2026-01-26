@@ -160,6 +160,16 @@ function ensureBookSelected() {
 }
 
 function init() {
+  // Check if bookId is passed in URL - if not, redirect to book selection page
+  const urlParams = new URLSearchParams(window.location.search);
+  const bookIdFromUrl = urlParams.get('bookId');
+  
+  if (!bookIdFromUrl) {
+    // Redirect to book selection page
+    window.location.href = '/dicta-editor/books';
+    return;
+  }
+
   setupTopBar();
   setupToolbar();
 
@@ -172,24 +182,16 @@ function init() {
 
   fetch(`${API_BASE}/health`).then(() => console.log("API Connected")).catch(() => console.error("API Disconnected"));
 
-  // Check if bookId is passed in URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const bookIdFromUrl = urlParams.get('bookId');
-  
-  if (bookIdFromUrl) {
-    // Load specific book from URL
-    loadBook(bookIdFromUrl);
-  } else {
-    // Auto-open book selector on page load
-    setTimeout(() => openTool('bookSelector'), 300);
-  }
+  // Load specific book from URL
+  loadBook(bookIdFromUrl);
 }
 
 function setupTopBar() {
-  qs("openBookBtn")?.addEventListener("click", () => openTool('bookSelector'));
+  // Change book button now navigates to book selection page
+  qs("openBookBtn")?.addEventListener("click", () => {
+    window.location.href = '/dicta-editor/books';
+  });
   qs("saveBookBtn")?.addEventListener("click", saveCurrentBook);
-  // qs("openFileBtn")?.addEventListener("click", () => (qs("filePicker") as HTMLInputElement)?.click());
-  // qs("filePicker")?.addEventListener("change", handleUploadFile as EventListener);
 
   qs("fontPlusBtn")?.addEventListener("click", () => adjustFontSize(2));
   qs("fontMinusBtn")?.addEventListener("click", () => adjustFontSize(-2));
@@ -403,104 +405,6 @@ const LISTS = {
   SL_END: ["", ".", ",", "'", "',", "'.", "]", ")", "']", "')", "].", ").", "],", "),", "'),", "').", "'],", "']."],
 };
 
-async function loadBookList() {
-    const listContainer = qs("bookListContainer");
-    if (!listContainer) return;
-    listContainer.innerHTML = 'טוען...';
-    try {
-        const books = await apiGetBooks();
-        renderBookList(books);
-    } catch (e) {
-        listContainer.innerHTML = `<div style="color:red">Error: ${getErrorMessage(e)}</div>`;
-    }
-}
-
-function renderBookList(books: BookItem[]) {
-    const listContainer = qs("bookListContainer");
-    if (!listContainer) return;
-    listContainer.innerHTML = '';
-    
-    if (books.length === 0) {
-        listContainer.innerHTML = '<div style="padding:10px; text-align:center">אין ספרים זמינים כרגע.</div>';
-        return;
-    }
-
-    const ul = document.createElement("div");
-    ul.className = "book-list"; 
-    
-    books.forEach(book => {
-        const row = document.createElement("div");
-        row.className = "book-list-item";
-        row.style.padding = "10px";
-        row.style.borderBottom = "1px solid #eee";
-        row.style.display = "flex";
-        row.style.justifyContent = "space-between";
-        row.style.alignItems = "center";
-        
-        // סטטוס הספר
-        const statusBadge = getStatusBadge(book.status);
-        const claimedByText = book.claimedBy ? ` (${book.claimedBy.name})` : '';
-        
-        row.innerHTML = `
-            <div style="flex:1">
-                <strong>${book.title}</strong>
-                <div style="font-size: 0.8em; color: gray; margin-top: 4px;">
-                    ${statusBadge}${claimedByText}
-                </div>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <span style="font-size: 0.75em; color: gray;">${new Date(book.updatedAt).toLocaleDateString()}</span>
-            </div>
-        `;
-        
-        // כפתור פעולה בהתאם לסטטוס
-        const actionBtn = document.createElement("button");
-        actionBtn.className = "m3-btn text";
-        actionBtn.style.marginRight = "8px";
-        
-        if (book.status === 'available') {
-            actionBtn.textContent = "תפוס";
-            actionBtn.onclick = (e) => { e.stopPropagation(); claimAndLoadBook(book._id); };
-        } else if (state.currentBookId === book._id) {
-            actionBtn.textContent = "פתח";
-            actionBtn.onclick = (e) => { e.stopPropagation(); loadBook(book._id); };
-        } else {
-            // ספר תפוס ע"י מישהו אחר
-            actionBtn.textContent = "תפוס";
-            actionBtn.disabled = true;
-            actionBtn.style.opacity = "0.5";
-        }
-        
-        row.querySelector('div:last-child')?.prepend(actionBtn);
-        
-        // Highlight active
-        if (state.currentBookId === book._id) {
-            row.style.backgroundColor = "#e3f2fd";
-        }
-
-        ul.appendChild(row);
-    });
-    listContainer.appendChild(ul);
-}
-
-function getStatusBadge(status: string) {
-    switch(status) {
-        case 'available': return '<span style="color: green;">🟢 פנוי</span>';
-        case 'in-progress': return '<span style="color: orange;">🟠 בעריכה</span>';
-        case 'completed': return '<span style="color: blue;">🔵 הושלם</span>';
-        default: return status;
-    }
-}
-
-async function claimAndLoadBook(id: string) {
-    try {
-        await apiClaimBook(id);
-        await loadBook(id);
-    } catch (e) {
-        alert("שגיאה בתפיסת הספר: " + getErrorMessage(e));
-    }
-}
-
 async function loadBook(id: string) {
     try {
         const data = await apiLoadBook(id);
@@ -533,22 +437,6 @@ async function loadBook(id: string) {
         closePopup();
     } catch (e) {
         alert("שגיאה בטעינת הספר: " + getErrorMessage(e));
-    }
-}
-
-async function createNewBook() {
-    const input = qs("newBookTitle") as HTMLInputElement;
-    const title = input?.value?.trim();
-    if (!title) return alert("נא להזין שם לספר");
-    
-    try {
-        const newBook = await apiCreateBook(title);
-        input.value = "";
-        await loadBookList(); // Refresh list
-        // Optionally auto-open:
-        // loadBook(newBook._id);
-    } catch (e) {
-        alert("שגיאה ביצירת ספר: " + getErrorMessage(e));
     }
 }
 
@@ -593,10 +481,6 @@ function bindToolEvents(tool: string) {
   const pqs = (sel: string) => (qs("popupsContainer") as HTMLElement | null)?.querySelector(`#${sel}`) as HTMLElement | null;
 
   switch (tool) {
-    case "bookSelector":
-        pqs("refreshBooksBtn")?.addEventListener("click", loadBookList);
-        loadBookList();
-        break;
     case "createHeaders":
       pqs("createHeadersBtn")?.addEventListener("click", createHeaders);
       setupCombobox("headersCombobox", "createHeadersFind", LISTS.HEADERS);
