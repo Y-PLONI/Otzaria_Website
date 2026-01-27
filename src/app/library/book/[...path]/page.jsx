@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
-import ImagePreviewModal from '@/components/ImagePreviewModal' // <--- ייבוא הקומפוננטה החדשה
+import ImagePreviewModal from '@/components/ImagePreviewModal'
 
 const pageStatusConfig = {
   available: {
@@ -43,7 +43,7 @@ export default function BookPage() {
   const [confirmDialog, setConfirmDialog] = useState(null)
   const [uploadDialog, setUploadDialog] = useState(null)
   const [viewMode, setViewMode] = useState('single') 
-  const [previewImage, setPreviewImage] = useState(null) // <--- State חדש לתצוגה מקדימה
+  const [previewImage, setPreviewImage] = useState(null)
   const [activeFilter, setActiveFilter] = useState('all')
 
   const loadBookData = useCallback(async () => {
@@ -96,6 +96,38 @@ export default function BookPage() {
     }
   }
 
+  const handleUncompletePage = async (pageNumber) => {
+    if (!session) return;
+    if (!confirm('האם אתה בטוח שברצונך לבטל את הסימון "הושלם"?\nהעמוד יחזור לסטטוס "בטיפול" והנקודות שקיבלת ירדו.')) return;
+
+    try {
+      const pageId = pages.find(p => p.number === pageNumber)?.id;
+      if (!pageId) return alert('שגיאה בזיהוי העמוד');
+
+      const response = await fetch(`/api/book/uncomplete-page`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageId: pageId })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // עדכון ה-State המקומי עם העמוד המעודכן שחזר מהשרת
+        setPages(prevPages => 
+          prevPages.map(page => 
+            page.number === pageNumber ? result.page : page
+          )
+        );
+      } else {
+        alert(`❌ ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Error uncompleting page:', err);
+      alert('❌ שגיאה בביטול הסימון');
+    }
+  };
+
   const handleClaimPage = async (pageNumber) => {
     if (!session) {
       router.push('/library/auth/login')
@@ -129,7 +161,13 @@ export default function BookPage() {
           if (result.success) {
             setPages(prevPages => 
               prevPages.map(page => 
-                page.number === pageNumber ? { ...page, status: 'in-progress', claimedBy: session.user.name, claimedById: userId } : page
+                page.number === pageNumber ? { 
+                  ...page, 
+                  status: 'in-progress', 
+                  claimedBy: session.user.name, 
+                  claimedById: userId,
+                  claimedAt: new Date().toISOString()
+                } : page
               )
             )
           } else {
@@ -156,6 +194,7 @@ export default function BookPage() {
       onCancel: () => setUploadDialog(null)
     })
   }
+  
   const completePageWithoutUpload = async (pageNumber) => {
     try {
       const pageId = pages.find(p => p.number === pageNumber)?.id;
@@ -327,6 +366,7 @@ export default function BookPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto">
+          {/* Filters */}
           <div className="grid grid-cols-4 gap-4 mb-8">
             <button 
               onClick={() => setActiveFilter('all')}
@@ -379,26 +419,10 @@ export default function BookPage() {
               <h2 className="text-2xl font-bold text-on-surface">עמודי הספר</h2>
               
               <div className="flex gap-2 bg-surface rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('single')}
-                  className={`p-2 rounded transition-colors ${
-                    viewMode === 'single'
-                      ? 'bg-primary text-on-primary'
-                      : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'
-                  }`}
-                  title="עמוד אחד"
-                >
+                <button onClick={() => setViewMode('single')} className={`p-2 rounded transition-colors ${viewMode === 'single' ? 'bg-primary text-on-primary' : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'}`} title="עמוד אחד">
                   <span className="material-symbols-outlined">crop_portrait</span>
                 </button>
-                <button
-                  onClick={() => setViewMode('double')}
-                  className={`p-2 rounded transition-colors ${
-                    viewMode === 'double'
-                      ? 'bg-primary text-on-primary'
-                      : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'
-                  }`}
-                  title="שני עמודים"
-                >
+                <button onClick={() => setViewMode('double')} className={`p-2 rounded transition-colors ${viewMode === 'double' ? 'bg-primary text-on-primary' : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'}`} title="שני עמודים">
                   <span className="material-symbols-outlined">auto_stories</span>
                 </button>
               </div>
@@ -422,7 +446,8 @@ export default function BookPage() {
                       onClaim={handleClaimPage}
                       onComplete={handleMarkComplete}
                       onRelease={handleReleasePage}
-                      onPreview={() => setPreviewImage(page.thumbnail)} // <--- שליחת פונקציית התצוגה המקדימה
+                      onUncomplete={handleUncompletePage} // <--- הוספנו כאן את הפונקציה
+                      onPreview={() => setPreviewImage(page.thumbnail)}
                       currentUser={session?.user}
                       bookPath={bookPath}
                       isAdmin={session?.user?.role === 'admin'}
@@ -435,39 +460,107 @@ export default function BookPage() {
       </div>
 
       {confirmDialog && (
-        <ConfirmDialog
-          pageNumber={confirmDialog.pageNumber}
-          userName={session?.user?.name}
-          onConfirm={confirmDialog.onConfirm}
-          onCancel={confirmDialog.onCancel}
-        />
+        <ConfirmDialog pageNumber={confirmDialog.pageNumber} userName={session?.user?.name} onConfirm={confirmDialog.onConfirm} onCancel={confirmDialog.onCancel} />
       )}
 
       {uploadDialog && (
-        <UploadDialog
-          pageNumber={uploadDialog.pageNumber}
-          bookName={bookData?.name}
-          onConfirm={uploadDialog.onConfirm}
-          onSkip={uploadDialog.onSkip}
-          onCancel={uploadDialog.onCancel}
-        />
+        <UploadDialog pageNumber={uploadDialog.pageNumber} bookName={bookData?.name} onConfirm={uploadDialog.onConfirm} onSkip={uploadDialog.onSkip} onCancel={uploadDialog.onCancel} />
       )}
 
-      {/* קומפוננטת התצוגה המקדימה */}
-      <ImagePreviewModal 
-        isOpen={!!previewImage}
-        onClose={() => setPreviewImage(null)}
-        imageSrc={previewImage}
-        altText="תצוגת עמוד"
-      />
+      <ImagePreviewModal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} imageSrc={previewImage} altText="תצוגת עמוד" />
     </div>
   )
 }
 
-function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser, bookPath, isAdmin }) {
+function toGematria(num) {
+  if (num === 15) return 'ט"ו';
+  if (num === 16) return 'ט"ז';
+  
+  const letters = [
+      { val: 400, char: 'ת' },
+      { val: 300, char: 'ש' },
+      { val: 200, char: 'ר' },
+      { val: 100, char: 'ק' },
+      { val: 90, char: 'צ' },
+      { val: 80, char: 'פ' },
+      { val: 70, char: 'ע' },
+      { val: 60, char: 'ס' },
+      { val: 50, char: 'נ' },
+      { val: 40, char: 'מ' },
+      { val: 30, char: 'ל' },
+      { val: 20, char: 'כ' },
+      { val: 10, char: 'י' },
+      { val: 9, char: 'ט' },
+      { val: 8, char: 'ח' },
+      { val: 7, char: 'ז' },
+      { val: 6, char: 'ו' },
+      { val: 5, char: 'ה' },
+      { val: 4, char: 'ד' },
+      { val: 3, char: 'ג' },
+      { val: 2, char: 'ב' },
+      { val: 1, char: 'א' }
+  ];
+
+  let result = '';
+  let n = num;
+  
+  for (const { val, char } of letters) {
+      while (n >= val) {
+          result += char;
+          n -= val;
+      }
+  }
+  
+  if (result.length > 1) {
+      return result.slice(0, -1) + '"' + result.slice(-1);
+  } 
+  return result + "'";
+}
+
+function formatHebrewDate(dateString) {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    const parts = new Intl.DateTimeFormat('he-IL-u-ca-hebrew-nu-latn', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).formatToParts(date);
+    
+    const dayPart = parts.find(p => p.type === 'day');
+    const monthPart = parts.find(p => p.type === 'month');
+    const yearPart = parts.find(p => p.type === 'year');
+    
+    if (!dayPart || !monthPart || !yearPart) return '';
+    
+    const day = parseInt(dayPart.value, 10);
+    const year = parseInt(yearPart.value, 10);
+    
+    return `${toGematria(day)} ב${monthPart.value} ${toGematria(year % 1000)}`;
+  } catch (e) {
+    return '';
+  }
+}
+
+function formatTimeAgo(dateString) {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = now - date;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'היום';
+    if (diffDays === 1) return 'אתמול';
+    return `לפני ${diffDays} ימים`;
+  } catch (e) {
+    return '';
+  }
+}
+
+function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin }) {
   const status = pageStatusConfig[page.status]
   
-  // בדיקה אם המשתמש הוא הבעלים
   const isClaimedByMe = currentUser && (
     page.claimedBy === currentUser.name || 
     page.claimedById === (currentUser.id || currentUser._id)
@@ -493,28 +586,15 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
       >
         {page.thumbnail ? (
           <>
-            <img 
-              src={page.thumbnail} 
-              alt={`עמוד ${page.number}`}
-              loading="lazy"
-              decoding="async"
-              fetchPriority="low"
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">
-              {page.number}
-            </div>
+            <img src={page.thumbnail} alt={`עמוד ${page.number}`} loading="lazy" decoding="async" fetchPriority="low" className="w-full h-full object-cover" />
+            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">{page.number}</div>
           </>
         ) : (
           <>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="material-symbols-outlined text-6xl text-on-surface/20">
-                description
-              </span>
+              <span className="material-symbols-outlined text-6xl text-on-surface/20">description</span>
             </div>
-            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">
-              {page.number}
-            </div>
+            <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">{page.number}</div>
           </>
         )}
         
@@ -540,18 +620,22 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
       <div className="p-3 flex flex-col flex-1">
         <div className="flex items-center justify-between mb-2">
           <span className="text-lg font-bold text-on-surface">עמוד {page.number}</span>
-          <span className={`
-            px-2 py-0.5 rounded text-xs font-bold border
-            ${status.bgColor} ${status.color} ${status.borderColor}
-          `}>
+          <span className={`px-2 py-0.5 rounded text-xs font-bold border ${status.bgColor} ${status.color} ${status.borderColor}`}>
             {status.label}
           </span>
         </div>
 
         {page.claimedBy && (
-          <p className="text-xs text-on-surface/60 mb-2 truncate font-medium">
-            {isClaimedByMe ? 'משויך אליך' : `ע"י ${page.claimedBy}`}
-          </p>
+          <div className="mb-2">
+            <p className="text-xs text-on-surface/60 truncate font-medium" title={isClaimedByMe ? 'משויך אליך' : `ע"י ${page.claimedBy}`}>
+              {isClaimedByMe ? 'משויך אליך' : `ע"י ${page.claimedBy}`}
+            </p>
+            {page.claimedAt && (
+              <p className="text-[10px] text-on-surface/50 leading-tight">
+                {formatHebrewDate(page.claimedAt)}, {formatTimeAgo(page.claimedAt)}
+              </p>
+            )}
+          </div>
         )}
 
         <div className="mt-auto grid gap-2">
@@ -584,16 +668,24 @@ function PageCard({ page, onClaim, onComplete, onRelease, onPreview, currentUser
             </button>
           )}
 
-          {/* כפתור סיום (רק אם בטיפול ושייך לי) */}
           {page.status === 'in-progress' && isClaimedByMe && (
-            <button
-              onClick={() => onComplete(page.number)}
-              className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-            >
+            <button onClick={() => onComplete(page.number)} className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
               <span className="material-symbols-outlined text-lg">check</span>
               <span>סיים עריכה</span>
             </button>
           )}
+
+          {page.status === 'completed' && (isClaimedByMe || isAdmin) && (
+            <button 
+              onClick={() => onUncomplete(page.number)}
+              className="w-full py-2 bg-gray-600 text-white rounded-lg text-sm font-bold hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+              title="החזר לסטטוס בטיפול"
+            >
+              <span className="material-symbols-outlined text-lg">undo</span>
+              <span>בטל סיום</span>
+            </button>
+          )}
+
         </div>
       </div>
     </div>
@@ -606,23 +698,14 @@ function ConfirmDialog({ pageNumber, userName, onConfirm, onCancel }) {
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-primary">
-              edit_note
-            </span>
+            <span className="material-symbols-outlined text-4xl text-primary">edit_note</span>
           </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-2">
-            עבודה על עמוד {pageNumber}
-          </h2>
-          <p className="text-on-surface/70">
-            האם אתה מעוניין לעבוד על עמוד זה?
-          </p>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">עבודה על עמוד {pageNumber}</h2>
+          <p className="text-on-surface/70">האם אתה מעוניין לעבוד על עמוד זה?</p>
         </div>
-
         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-blue-600 mt-0.5">
-              info
-            </span>
+            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
             <div className="text-sm text-blue-800">
               <p className="font-bold mb-1">מה יקרה?</p>
               <ul className="space-y-1">
@@ -633,21 +716,12 @@ function ConfirmDialog({ pageNumber, userName, onConfirm, onCancel }) {
             </div>
           </div>
         </div>
-
         <div className="flex gap-3">
-          <button
-            onClick={onConfirm}
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors font-bold"
-          >
+          <button onClick={onConfirm} className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors font-bold">
             <span className="material-symbols-outlined">check_circle</span>
             <span>כן, אני רוצה לעבוד על זה</span>
           </button>
-          <button
-            onClick={onCancel}
-            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors"
-          >
-            ביטול
-          </button>
+          <button onClick={onCancel} className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors">ביטול</button>
         </div>
       </div>
     </div>
@@ -660,23 +734,14 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-green-600">
-              upload_file
-            </span>
+            <span className="material-symbols-outlined text-4xl text-green-600">upload_file</span>
           </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-2">
-            סיום עבודה על עמוד {pageNumber}
-          </h2>
-          <p className="text-on-surface/70">
-            האם ברצונך להעלות את הטקסט שערכת למערכת?
-          </p>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על עמוד {pageNumber}</h2>
+          <p className="text-on-surface/70">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
         </div>
-
         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-blue-600 mt-0.5">
-              info
-            </span>
+            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
             <div className="text-sm text-blue-800">
               <p className="font-bold mb-1">מה יקרה?</p>
               <ul className="space-y-1">
@@ -687,12 +752,8 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
             </div>
           </div>
         </div>
-
         <div className="flex flex-col gap-3">
-          <button
-            onClick={onConfirm}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold"
-          >
+          <button onClick={onConfirm} className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold">
             <span className="material-symbols-outlined">upload</span>
             <span>כן, העלה את הטקסט</span>
           </button>
