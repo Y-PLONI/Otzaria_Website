@@ -43,13 +43,16 @@ export const authOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       // user קיים רק בהתחברות הראשונית (Login)
       if (user) {
         // תיקון: משתמשים ב-user.id כי זה מה שהחזרנו ב-authorize
         token.id = user.id; 
         token.role = user.role;
         token.acceptReminders = user.acceptReminders;
+      }
+      if (trigger === "update" && session?.acceptReminders) {
+        token.acceptReminders = session.acceptReminders;
       }
       return token;
     },
