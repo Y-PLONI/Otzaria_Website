@@ -8,11 +8,11 @@ export default function BookReminderPage() {
     
     // רשימות נתונים
     const [books, setBooks] = useState([]);
-    const [allUsers, setAllUsers] = useState([]);
+    const [allUsers, setAllUsers] = useState([]); 
     
     // בחירות המשתמש
     const [selectedBookPath, setSelectedBookPath] = useState('');
-    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.');
+    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל/י להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.');
     
     // נתונים מחושבים
     const [recipients, setRecipients] = useState([]);
@@ -25,9 +25,15 @@ export default function BookReminderPage() {
         success: ''
     });
 
+    const normalizeId = (id) => {
+        if (!id) return null;
+        return String(id).toString();
+    };
+
     useEffect(() => {
         const loadInitialData = async () => {
             try {
+                // טעינת ספרים
                 const booksRes = await fetch('/api/library/list');
                 const booksData = await booksRes.json();
                 if (booksData.success) {
@@ -38,9 +44,11 @@ export default function BookReminderPage() {
                     setBooks(booksWithWork);
                 }
 
+                // טעינת משתמשים
                 const usersRes = await fetch('/api/admin/users');
                 const usersData = await usersRes.json();
                 if (usersData.success && Array.isArray(usersData.users)) {
+                    console.log(`Loaded ${usersData.users.length} users for checking.`);
                     setAllUsers(usersData.users);
                 }
 
@@ -62,27 +70,45 @@ export default function BookReminderPage() {
             setRecipients([]);
 
             try {
+                console.log('Checking recipients for book:', selectedBookPath);
+                
+                // שליפת פרטי הספר
                 const response = await fetch(`/api/book/${encodeURIComponent(selectedBookPath)}`);
                 const data = await response.json();
 
                 if (data.success && data.pages) {
-                    const emails = new Set();
+                    const foundEmails = new Set();
+                    let pagesInProgressCount = 0;
                     
                     data.pages.forEach(page => {
                         if (page.status === 'in-progress') {
+                            pagesInProgressCount++;
                             
-                            const userId = page.claimedById || (page.holder && page.holder._id);
+                            let rawUserId = page.claimedById || page.holder;
+                            
+                            if (rawUserId && typeof rawUserId === 'object' && rawUserId._id) {
+                                rawUserId = rawUserId._id;
+                            }
+
+                            const userId = normalizeId(rawUserId);
 
                             if (userId) {
-                                const userDetails = allUsers.find(u => u._id === userId || u.id === userId);
+                                const userDetails = allUsers.find(u => 
+                                    normalizeId(u._id) === userId || normalizeId(u.id) === userId
+                                );
+
                                 if (userDetails && userDetails.email) {
-                                    emails.add(userDetails.email);
+                                    console.log(`Found match: User ${userDetails.name} (${userDetails.email}) for page ${page.number}`);
+                                    foundEmails.add(userDetails.email);
+                                } else {
+                                    console.warn(`User ID ${userId} found on page ${page.number} but not found in users list (or no email).`);
                                 }
                             }
                         }
                     });
-                    
-                    setRecipients(Array.from(emails));
+
+                    console.log(`Summary: ${pagesInProgressCount} pages in progress, ${foundEmails.size} unique emails found.`);
+                    setRecipients(Array.from(foundEmails));
                 }
             } catch (error) {
                 console.error('Error fetching recipients:', error);
@@ -96,7 +122,6 @@ export default function BookReminderPage() {
         }
     }, [selectedBookPath, allUsers]);
 
-    // 3. יצירת HTML מעוצב
     const generateEmailHtml = (bookName, messageBody) => {
         const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
         const formattedBody = messageBody.replace(/\n/g, '<br/>');
