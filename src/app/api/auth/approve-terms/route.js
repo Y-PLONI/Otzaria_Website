@@ -21,7 +21,7 @@ export async function POST(request) {
     await connectDB();
 
     const updatedUser = await User.findOneAndUpdate(
-      { email: session.user.email }, 
+      { email: session.user.email },
       { 
         $set: { acceptReminders: true } 
       },
