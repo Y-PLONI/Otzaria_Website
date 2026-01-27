@@ -35,7 +35,7 @@ export default function ApproveTermsPage() {
 
       await update({ acceptReminders: true })
 
-      router.refresh() 
+      router.refresh()
       router.push('/library/dashboard')
       
     } catch (err) {
