@@ -75,9 +75,10 @@ export default function BookReminderPage() {
 
                             if (userId) {
                                 const userDetails = allUsers.find(u => u._id === userId || u.id === userId);
-                                if (userDetails && userDetails.email) {
+                                if (userDetails && userDetails.email && userDetails.acceptReminders) {
                                     emails.add(userDetails.email);
                                 }
+
                             }
                         }
                     });
