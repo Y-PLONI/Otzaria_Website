@@ -149,8 +149,6 @@ export default function EditPage() {
     }
   }, [status, bookPath])
 
-  // הערה: מחקתי כאן את ה-useEffect שהיה קודם ושפתח את החלונית מיד.
-
   const toggleFullScreen = async () => {
     try {
       if (!document.fullscreenElement) {
@@ -874,3 +872,4 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
     </div>
   )
 }
+
