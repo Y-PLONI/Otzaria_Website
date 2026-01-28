@@ -42,16 +42,8 @@ export async function POST(request) {
         }, { status: 429 });
     }
 
-    user.lastResetRequest = NOW;
-    user.dailyResetRequestsCount += 1;
-
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpires = Date.now() + ONE_HOUR;
-
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = resetTokenExpires;
-    
-    await user.save();
 
     const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
@@ -83,9 +75,9 @@ export async function POST(request) {
 
     await transporter.sendMail(message);
 
-    return NextResponse.json({ success: true, message: 'אם המייל קיים, נשלחה הודעה.' });
-  } catch (error) {
-    console.error('Forgot Password Error:', error);
-    return NextResponse.json({ error: 'שגיאה בשרת' }, { status: 500 });
-  }
-}
+    user.lastResetRequest = NOW;
+    user.dailyResetRequestsCount += 1;
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = resetTokenExpires;
+    
+    await user.save();
