@@ -11,19 +11,11 @@ export async function GET(request) {
         if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         
         await connectDB();
-        
-        // אם אדמין - רואה הכל (או הודעות שנשלחו אליו/למנהלים).
-        // אם משתמש - רואה רק את שלו.
-        
+                
         let query = {};
         
-        if (session.user.role === 'admin') {
-            // אדמין רואה את כל ההודעות שנשלחו למערכת (recipient: null) או אליו ספציפית
-            // אפשר גם לאפשר לאדמין לראות הכל: query = {}
-             query = {}; 
-        } else {
-            // משתמש רגיל רואה הודעות ששלח או שנשלחו אליו
-            query = { 
+        {
+           query = { 
                 $or: [
                     { sender: session.user._id },
                     { recipient: session.user._id }
