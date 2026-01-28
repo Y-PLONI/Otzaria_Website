@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect } from 'react'
 
 export default function ImagePanel({
   thumbnailUrl,
@@ -14,52 +14,10 @@ export default function ImagePanel({
   layoutOrientation,
   imagePanelWidth,
   isResizing,
-  handleResizeStart,
-  rotation = 0,
-  setRotation
+  handleResizeStart
 }) {
   const imageContainerRef = useRef(null)
   const autoScrollRef = useRef(null)
-  
-  const contentRef = useRef(null)
-  const [isRotating, setIsRotating] = useState(false)
-
-  useEffect(() => {
-    if (!isRotating) return
-
-    const handleRotateMove = (e) => {
-      if (!contentRef.current) return
-      
-      const rect = contentRef.current.getBoundingClientRect()
-      const centerX = rect.left + rect.width / 2
-      const centerY = rect.top + rect.height / 2
-      
-      const radians = Math.atan2(e.clientY - centerY, e.clientX - centerX)
-      const degrees = radians * (180 / Math.PI)
-      
-      setRotation(degrees + 90)
-    }
-
-    const handleRotateUp = () => {
-      setIsRotating(false)
-      document.body.style.cursor = 'default'
-    }
-
-    document.addEventListener('mousemove', handleRotateMove)
-    document.addEventListener('mouseup', handleRotateUp)
-
-    return () => {
-      document.removeEventListener('mousemove', handleRotateMove)
-      document.removeEventListener('mouseup', handleRotateUp)
-    }
-  }, [isRotating, setRotation])
-
-  const handleRotationStart = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsRotating(true)
-    document.body.style.cursor = 'grabbing'
-  }
 
   const getImageCoordinates = (e, img) => {
     const container = img.parentElement
@@ -75,8 +33,7 @@ export default function ImagePanel({
   }
 
   const handleMouseDown = (e) => {
-    if (isRotating || !isSelectionMode || e.target.classList.contains('selection-overlay') || e.target.closest('.rotation-handle')) return
-    
+    if (!isSelectionMode || e.target.classList.contains('selection-overlay')) return
     e.preventDefault()
     e.stopPropagation()
     const img = e.currentTarget.querySelector('img')
@@ -90,7 +47,7 @@ export default function ImagePanel({
   }
 
   const handleMouseMove = (e) => {
-    if (isRotating || !isSelectionMode || !selectionStart) return
+    if (!isSelectionMode || !selectionStart) return
     e.preventDefault()
     e.stopPropagation()
     const img = e.currentTarget.querySelector('img')
@@ -125,7 +82,7 @@ export default function ImagePanel({
       clearInterval(autoScrollRef.current)
       autoScrollRef.current = null
     }
-    if (isRotating || !isSelectionMode || !selectionStart || !selectionEnd) return
+    if (!isSelectionMode || !selectionStart || !selectionEnd) return
     e.preventDefault()
     e.stopPropagation()
 
@@ -141,6 +98,7 @@ export default function ImagePanel({
     if (displayWidth < 20 || displayHeight < 20) {
       setSelectionStart(null)
       setSelectionEnd(null)
+      alert('⚠️ האזור קטן מדי. אנא בחר אזור גדול יותר')
       return
     }
 
@@ -167,7 +125,7 @@ export default function ImagePanel({
     <>
       <div
         ref={imageContainerRef}
-        className="overflow-auto p-4 flex items-center justify-center bg-gray-50/50 relative"
+        className="overflow-auto p-4"
         style={{
           width: layoutOrientation === 'horizontal' ? '100%' : `${imagePanelWidth}%`,
           height: layoutOrientation === 'horizontal' ? `${imagePanelWidth}%` : 'auto',
@@ -176,93 +134,60 @@ export default function ImagePanel({
         onWheel={(e) => e.stopPropagation()}
       >
         {thumbnailUrl ? (
-          <div 
-            className="relative"
-            style={{ 
-              transform: `scale(${imageZoom / 100})`,
-              transformOrigin: 'center center'
-            }}
+          <div
+            className="inline-block relative"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            style={{ cursor: isSelectionMode ? 'crosshair' : 'default' }}
           >
-            <div
-              ref={contentRef}
-              className="inline-block relative transition-transform duration-75 ease-linear group"
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              style={{ 
-                transform: `rotate(${rotation}deg)`,
-                cursor: isSelectionMode ? 'crosshair' : 'default',
-                transformOrigin: 'center center'
+            <img
+              src={thumbnailUrl}
+              alt={`עמוד ${pageNumber}`}
+              className="rounded-lg shadow-lg transition-all duration-200 select-none"
+              style={{
+                transform: `scale(${imageZoom / 100})`,
+                transformOrigin: 'top left',
+                maxWidth: 'none',
+                pointerEvents: 'none'
               }}
-            >
-              {/* ידית סיבוב */}
-              <div 
-                className="rotation-handle absolute -top-12 left-1/2 -translate-x-1/2 w-8 h-8 bg-white border-2 border-blue-500 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing z-[60] shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-                onMouseDown={handleRotationStart}
-                title="גרור לסיבוב התמונה"
-                style={{ transform: `scale(${100 / imageZoom})` }}
-              >
-                 <span className="material-symbols-outlined text-blue-600 text-sm">sync</span>
-                 <div className="absolute top-7 left-1/2 -translate-x-1/2 w-0.5 h-5 bg-blue-500 pointer-events-none"></div>
-                 
-                 {isRotating && (
-                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                     {Math.round(rotation)}°
-                   </div>
-                 )}
-              </div>
-
-              <img
-                src={thumbnailUrl}
-                alt={`עמוד ${pageNumber}`}
-                className="rounded-lg shadow-lg select-none"
+              onDragStart={(e) => e.preventDefault()}
+            />
+            {isSelectionMode && selectionStart && selectionEnd && (
+              <div
+                className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none selection-overlay"
                 style={{
-                  maxWidth: 'none',
-                  pointerEvents: 'none'
+                  left: `${Math.min(selectionStart.displayX, selectionEnd.displayX)}px`,
+                  top: `${Math.min(selectionStart.displayY, selectionEnd.displayY)}px`,
+                  width: `${Math.abs(selectionStart.displayX - selectionEnd.displayX)}px`,
+                  height: `${Math.abs(selectionStart.displayY - selectionEnd.displayY)}px`
                 }}
-                onDragStart={(e) => e.preventDefault()}
               />
-              
-              {isSelectionMode && selectionStart && selectionEnd && (
-                <div
-                  className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none selection-overlay"
-                  style={{
-                    left: `${Math.min(selectionStart.displayX, selectionEnd.displayX)}px`,
-                    top: `${Math.min(selectionStart.displayY, selectionEnd.displayY)}px`,
-                    width: `${Math.abs(selectionStart.displayX - selectionEnd.displayX)}px`,
-                    height: `${Math.abs(selectionStart.displayY - selectionEnd.displayY)}px`
-                  }}
-                />
-              )}
-              {selectionRect && (
-                <div
-                  className="absolute border-4 border-green-500 bg-green-500/10 pointer-events-none animate-pulse selection-overlay"
-                  style={{
-                    left: `${selectionRect.x}px`,
-                    top: `${selectionRect.y}px`,
-                    width: `${selectionRect.width}px`,
-                    height: `${selectionRect.height}px`
-                  }}
-                >
-                  <div 
-                    className="absolute -top-8 right-0 bg-green-500 text-white px-2 py-1 rounded text-xs font-bold whitespace-nowrap"
-                    style={{ transform: `scale(${100 / imageZoom})`, transformOrigin: 'bottom right' }}
-                  >
-                    ✓ אזור נבחר
-                  </div>
+            )}
+            {selectionRect && (
+              <div
+                className="absolute border-4 border-green-500 bg-green-500/10 pointer-events-none animate-pulse selection-overlay"
+                style={{
+                  left: `${selectionRect.x * (imageZoom / 100)}px`,
+                  top: `${selectionRect.y * (imageZoom / 100)}px`,
+                  width: `${selectionRect.width * (imageZoom / 100)}px`,
+                  height: `${selectionRect.height * (imageZoom / 100)}px`
+                }}
+              >
+                <div className="absolute -top-8 right-0 bg-green-500 text-white px-2 py-1 rounded text-xs font-bold whitespace-nowrap">
+                  ✓ אזור נבחר - לחץ זהה אזור
                 </div>
-              )}
-            </div>
-            
-            {isSelectionMode && !selectionRect && !selectionStart && !isRotating && (
-              <div className="absolute top-4 left-4 bg-blue-600/90 backdrop-blur text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg flex items-center gap-2 animate-pulse pointer-events-none z-50">
-                <span className="material-symbols-outlined text-lg">crop_free</span>
-                <span>סמן אזור לזיהוי</span>
+              </div>
+            )}
+            {isSelectionMode && !selectionRect && !selectionStart && (
+              <div className="absolute top-2 left-2 bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-lg flex items-center gap-2 animate-pulse">
+                <span className="material-symbols-outlined text-base">crop_free</span>
+                <span>גרור לבחירת אזור</span>
               </div>
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-center min-h-full bg-surface rounded-lg w-full">
+          <div className="flex items-center justify-center min-h-full bg-surface rounded-lg">
             <div className="text-center">
               <span className="material-symbols-outlined text-9xl text-on-surface/20 block mb-4">description</span>
               <p className="text-on-surface/60">אין תמונה זמינה</p>
@@ -278,16 +203,15 @@ export default function ImagePanel({
           width: layoutOrientation === 'horizontal' ? '100%' : '8px',
           height: layoutOrientation === 'horizontal' ? '8px' : 'auto',
           backgroundColor: isResizing ? 'rgba(107, 93, 79, 0.2)' : 'transparent',
-          flexShrink: 0,
-          zIndex: 50
+          flexShrink: 0
         }}
         onMouseDown={handleResizeStart}
       >
         <div
           className="absolute bg-surface-variant rounded-full"
           style={{
-            width: layoutOrientation === 'horizontal' ? '32px' : '4px',
-            height: layoutOrientation === 'horizontal' ? '4px' : '32px'
+            width: layoutOrientation === 'horizontal' ? '12px' : '1px',
+            height: layoutOrientation === 'horizontal' ? '1px' : '12px'
           }}
         ></div>
       </div>
