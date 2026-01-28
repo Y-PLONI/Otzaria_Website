@@ -38,6 +38,7 @@ export default function BookReminderPage() {
                 const booksData = await booksRes.json();
                 if (booksData.success) {
                     const booksWithWork = booksData.books.filter(book => 
+                        !book.isHidden &&
                         (book.inProgressPages && book.inProgressPages > 0) || 
                         (book.completedPages < book.totalPages)
                     );
