@@ -41,6 +41,7 @@ export default function EditPage() {
    
   // Layout State
   const [imageZoom, setImageZoom] = useState(100)
+  const [rotation, setRotation] = useState(0)
   const [layoutOrientation, setLayoutOrientation] = useState('vertical')
   const [imagePanelWidth, setImagePanelWidth] = useState(50)
   const [isResizing, setIsResizing] = useState(false)
@@ -118,7 +119,6 @@ export default function EditPage() {
     if (savedSwap) setSwapPanels(savedSwap === 'true')
 
     if (status === 'authenticated') {
-        // טעינת חיפושים שמורים
         fetch('/api/user/saved-searches')
             .then(res => res.json())
             .then(data => {
@@ -226,21 +226,15 @@ export default function EditPage() {
     }
   }
 
-  // --- Server Persistence Logic ---
-
   const saveSearchesToServer = async (updatedList) => {
-
       setSavedSearches(updatedList); 
-      
       try {
           const res = await fetch('/api/user/saved-searches', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ savedSearches: updatedList })
           });
-          
           if (!res.ok) throw new Error('Failed to save');
-          
       } catch (err) {
           console.error('Failed to save searches to server', err);
           alert('שגיאה בשמירת הנתונים בשרת. הנתונים נשמרו מקומית בלבד עד לריענון.');
@@ -575,23 +569,22 @@ export default function EditPage() {
   const insertTag = (tag) => {
     let activeEl = document.activeElement;
     if (!activeEl || activeEl.tagName !== 'TEXTAREA') {
-      if (activeTextarea === 'left') activeEl = document.querySelector('textarea[data-column="left"]');
-      else if (activeTextarea === 'right') activeEl = document.querySelector('textarea[data-column="right"]');
-      else activeEl = document.querySelector('.editor-container textarea');
+        if (activeTextarea === 'left') activeEl = document.querySelector('textarea[data-column="left"]');
+        else if (activeTextarea === 'right') activeEl = document.querySelector('textarea[data-column="right"]');
+        else activeEl = document.querySelector('.editor-container textarea');
     }
-  
     if (!activeEl || activeEl.tagName !== 'TEXTAREA') return;
-
+    
     const start = activeEl.selectionStart;
     const end = activeEl.selectionEnd;
     const selected = activeEl.value.substring(start, end);
-  
-    let insertion = `<${tag}>${selected}</${tag}>`;
-    if (['h1', 'h2', 'h3'].includes(tag)) insertion = `\n<${tag}>${selected}</${tag}>\n`;
-
+    
+    let insertion = `<${tag}>${selected}</${tag}>`
+    if (['h1', 'h2', 'h3'].includes(tag)) insertion = `\n<${tag}>${selected}</${tag}>\n`
+    
     activeEl.focus();
     const success = document.execCommand('insertText', false, insertion);
-  
+    
     if (!success) {
       const text = activeEl.value;
       const before = text.substring(0, start);
@@ -602,17 +595,22 @@ export default function EditPage() {
       if (col === 'right') handleColumnChange('right', newText);
       else if (col === 'left') handleColumnChange('left', newText);
       else {
-        setContent(newText);
-        handleAutoSaveWrapper(newText);
+          setContent(newText);
+          handleAutoSaveWrapper(newText);
       }
+      
+      setTimeout(() => {
+        const newCursorPos = start + insertion.length;
+        activeEl.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
     }
-  };
+  }
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       const isModKey = e.ctrlKey || e.metaKey;
       if (!isModKey) return;
-  
+
       switch (e.code) {
         case 'KeyB':
           e.preventDefault();
@@ -791,6 +789,7 @@ export default function EditPage() {
               setSelectionRect={setSelectionRect}
               layoutOrientation={layoutOrientation} imagePanelWidth={imagePanelWidth}
               isResizing={isResizing} handleResizeStart={handleResizeStart}
+              rotation={rotation} setRotation={setRotation}
             />
             <TextEditor 
               ref={textEditorContainerRef}
@@ -920,5 +919,3 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
     </div>
   )
 }
-
-
