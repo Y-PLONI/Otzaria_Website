@@ -6,6 +6,11 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   points: { type: Number, default: 0 },
+  acceptReminders: { type: Boolean, default: false },
+  resetPasswordToken: { type: String },
+  resetPasswordExpires: { type: Date },
+  lastResetRequest: { type: Date },
+  dailyResetRequestsCount: { type: Number, default: 0 },
   
   savedSearches: [{
     id: { type: String },
@@ -21,3 +26,5 @@ const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
 
 export default User;
+
+

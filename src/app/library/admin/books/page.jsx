@@ -12,7 +12,7 @@ export default function AdminBooksPage() {
   const [showAddBook, setShowAddBook] = useState(false)
   const [editingBookInfo, setEditingBookInfo] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeTab, setActiveTab] = useState('all') // הוספתי את זה כי זה היה חסר
+  const [activeTab, setActiveTab] = useState('all')
 
   const [renamingBook, setRenamingBook] = useState(null)
   const [newName, setNewName] = useState('')
@@ -22,6 +22,14 @@ export default function AdminBooksPage() {
   const [mergedBookName, setMergedBookName] = useState('')
   const [isMergedHidden, setIsMergedHidden] = useState(false)
   const [isMerging, setIsMerging] = useState(false)
+
+  const [showNotifyDialog, setShowNotifyDialog] = useState(false)
+  const [bookToToggle, setBookToToggle] = useState(null)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+
+  const [showSubscribersModal, setShowSubscribersModal] = useState(false)
+  const [subscribersList, setSubscribersList] = useState([])
+  const [isLoadingSubscribers, setIsLoadingSubscribers] = useState(false)
 
   const loadBooks = async () => {
     try {
@@ -41,6 +49,26 @@ export default function AdminBooksPage() {
   useEffect(() => {
     loadBooks()
   }, [])
+
+  const handleShowSubscribers = async () => {
+    setShowSubscribersModal(true);
+    setIsLoadingSubscribers(true);
+    try {
+        const response = await fetch('/api/admin/mailing-list');
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.subscribers)) {
+            setSubscribersList(data.subscribers);
+        } else {
+            setSubscribersList([]);
+        }
+    } catch (error) {
+        console.error('Error fetching subscribers:', error);
+        alert('שגיאה בטעינת הרשימה');
+    } finally {
+        setIsLoadingSubscribers(false);
+    }
+  };
 
   const handleDeleteBook = async (bookId) => {
     if (!confirm('האם אתה בטוח שברצונך למחוק את הספר? כל העמודים והמידע יימחקו לצמיתות!')) return
@@ -63,26 +91,44 @@ export default function AdminBooksPage() {
     }
   }
 
-  const toggleVisibility = async (bookId, currentHiddenStatus) => {
+  const handleVisibilityClick = (book) => {
+    if (book.isHidden) {
+      setBookToToggle(book)
+      setShowNotifyDialog(true)
+    } else {
+      updateBookStatus(book.id, true, false) 
+    }
+  }
+
+  const updateBookStatus = async (bookId, newIsHiddenStatus, sendNotification) => {
+    setIsUpdatingStatus(true)
     try {
         const response = await fetch('/api/admin/books/update', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                bookId: bookId, 
-                isHidden: !currentHiddenStatus 
+                id: bookId,
+                bookId: bookId,
+                isHidden: newIsHiddenStatus,
+                sendNotification: sendNotification
             })
         });
         
         if (response.ok) {
             setBooks(prev => prev.map(b => 
-                b.id === bookId ? { ...b, isHidden: !currentHiddenStatus } : b
+                b.id === bookId ? { ...b, isHidden: newIsHiddenStatus } : b
             ));
         } else {
-            alert('שגיאה בעדכון הסטטוס');
+            const data = await response.json();
+            alert(data.error || 'שגיאה בעדכון הסטטוס');
         }
     } catch (e) {
+        console.error(e)
         alert('תקלה בתקשורת');
+    } finally {
+        setIsUpdatingStatus(false)
+        setShowNotifyDialog(false)
+        setBookToToggle(null)
     }
   };
 
@@ -256,6 +302,17 @@ export default function AdminBooksPage() {
             
             <div className="flex gap-3 w-full md:w-auto">
                 <button
+                    onClick={handleShowSubscribers}
+                    className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-all shadow-md w-full md:w-auto justify-center text-sm"
+                >
+                    <span className="material-symbols-outlined">notifications_active</span>
+                    <div className="flex flex-col items-start leading-tight">
+                        <span className="font-bold">רשומים להתראות</span>
+                        <span className="text-[10px] opacity-90">ספרים חדשים</span>
+                    </div>
+                </button>
+
+                <button
                     onClick={() => setShowMergeDialog(true)}
                     className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all shadow-md w-full md:w-auto justify-center"
                 >
@@ -408,7 +465,7 @@ export default function AdminBooksPage() {
 
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => toggleVisibility(book.id, isHidden)}
+                                    onClick={() => handleVisibilityClick(book)}
                                     className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                                         isHidden 
                                         ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' 
@@ -489,6 +546,57 @@ export default function AdminBooksPage() {
                                 disabled={!newName.trim() || newName === renamingBook.name}
                             >
                                 שמור שינויים
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {showNotifyDialog && bookToToggle && (
+             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">
+                <div 
+                    className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative" 
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                        <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                             <span className="material-symbols-outlined text-primary">campaign</span>
+                             חשיפת ספר לקהל
+                        </h3>
+                        <button onClick={() => setShowNotifyDialog(false)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+                            <span className="material-symbols-outlined text-xl">close</span>
+                        </button>
+                    </div>
+                    
+                    <div className="p-6 space-y-4">
+                        <p className="text-gray-700 text-base">
+                            הספר <strong>"{bookToToggle.name}"</strong> יהפוך כעת לגלוי לכל המשתמשים.
+                        </p>
+                        <p className="font-bold text-gray-900 text-base">
+                            האם ברצונך לשלוח עדכון במייל למנויים על ספר זה?
+                        </p>
+
+                        <div className="flex flex-col gap-3 mt-6">
+                            <button
+                                onClick={() => updateBookStatus(bookToToggle.id, false, true)}
+                                disabled={isUpdatingStatus}
+                                className="w-full bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center gap-2 font-bold shadow-md transition-all hover:scale-[1.02]"
+                            >
+                                {isUpdatingStatus ? 'מעדכן ושולח...' : (
+                                    <>
+                                        <span className="material-symbols-outlined">send</span>
+                                        כן, חשוף ושלח מייל
+                                    </>
+                                )}
+                            </button>
+                            
+                            <button
+                                onClick={() => updateBookStatus(bookToToggle.id, false, false)}
+                                disabled={isUpdatingStatus}
+                                className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200 border border-gray-300 font-medium transition-all"
+                            >
+                                לא, רק חשוף (ללא מייל)
                             </button>
                         </div>
                     </div>
@@ -624,8 +732,73 @@ export default function AdminBooksPage() {
                 </div>
             </div>
         )}
+
+        {showSubscribersModal && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">
+                <div 
+                    className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[80vh]" 
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div className="p-4 border-b bg-teal-50 flex justify-between items-center shrink-0">
+                        <div className="flex items-center gap-2">
+                             <div className="bg-teal-100 p-2 rounded-full text-teal-700">
+                                <span className="material-symbols-outlined">group</span>
+                             </div>
+                             <div>
+                                <h3 className="font-bold text-lg text-gray-800">רשומים להתראות</h3>
+                                <p className="text-xs text-teal-700 font-medium">עדכונים על ספרים חדשים</p>
+                             </div>
+                        </div>
+                        <button onClick={() => setShowSubscribersModal(false)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+                            <span className="material-symbols-outlined text-xl">close</span>
+                        </button>
+                    </div>
+                    
+                    <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                        <span className="text-gray-600 text-sm">סך הכל רשומים:</span>
+                        <span className="bg-teal-600 text-white px-3 py-1 rounded-full font-bold text-sm">
+                            {isLoadingSubscribers ? '...' : subscribersList.length}
+                        </span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                        {isLoadingSubscribers ? (
+                            <div className="flex justify-center py-8 text-teal-600">
+                                <span className="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
+                            </div>
+                        ) : subscribersList.length === 0 ? (
+                            <div className="text-center py-8 text-gray-400">
+                                <span className="material-symbols-outlined text-4xl mb-2 opacity-30">unsubscribe</span>
+                                <p>אין רשומים ברשימה זו עדיין.</p>
+                            </div>
+                        ) : (
+                            <ul className="space-y-2">
+                                {subscribersList.map((subscriber, index) => (
+                                    <li key={subscriber.email} className="flex items-center justify-between gap-3 p-3 bg-white border border-gray-100 rounded-lg hover:border-teal-200 hover:shadow-sm transition-all">
+                                        <div className="flex items-center gap-3 overflow-hidden">
+                                            <span className="text-gray-400 text-xs w-6">{index + 1}.</span>
+                                            <span className="material-symbols-outlined text-gray-400 text-sm">mail</span>
+                                            <span className="text-gray-700 font-mono text-sm truncate select-all" title={subscriber.email}>{subscriber.email}</span>
+                                        </div>
+                                        <span className="text-gray-600 text-sm truncate">{subscriber.name}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                    
+                    <div className="p-4 border-t bg-gray-50 text-center">
+                        <button 
+                            onClick={() => setShowSubscribersModal(false)}
+                            className="w-full py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium text-sm"
+                        >
+                            סגור
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </>
   )
-
 }
 

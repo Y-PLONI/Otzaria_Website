@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react' // 1. הוספת useRef
+import { useState, useRef } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -8,7 +8,7 @@ import Image from 'next/image'
 
 export default function LoginPage() {
   const router = useRouter()
-  const passwordRef = useRef(null) // 2. יצירת רפרנס לשדה הסיסמה
+  const passwordRef = useRef(null)
 
   const [formData, setFormData] = useState({
     identifier: '',
@@ -17,11 +17,10 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // פונקציה למעבר שדה בלחיצה על אנטר
   const handleUsernameKeyDown = (e) => {
     if (e.key === 'Enter') {
-      e.preventDefault() // מונע שליחה של הטופס
-      passwordRef.current?.focus() // מעביר את הסמן לסיסמה
+      e.preventDefault()
+      e.preventDefault()
     }
   }
 
@@ -42,7 +41,6 @@ export default function LoginPage() {
       } else {
         router.refresh()
         router.push('/library/dashboard')
-        // router.refresh() // התיקון הקודם: שורה זו בוטלה כדי למנוע לחיצה כפולה
       }
     } catch {
       setError('שגיאה בהתחברות')
@@ -88,8 +86,8 @@ export default function LoginPage() {
                 <input
                   type="text"
                   required
-                  autoFocus // 3. פוקוס אוטומטי בטעינת הדף
-                  onKeyDown={handleUsernameKeyDown} // 4. האזנה למקש אנטר
+                  autoFocus
+                  onKeyDown={handleUsernameKeyDown}
                   value={formData.identifier}
                   onChange={(e) => setFormData({ ...formData, identifier: e.target.value })}
                   className="w-full pr-12 pl-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-on-surface"
@@ -99,9 +97,17 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-on-surface mb-2">
-                סיסמה
-              </label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium text-on-surface">
+                  סיסמה
+                </label>
+                <Link 
+                  href="/library/auth/forgot-password" 
+                  className="text-xs text-primary hover:text-accent font-medium transition-colors"
+                >
+                  שכחת סיסמה?
+                </Link>
+              </div>
               <div className="relative">
                 <span className="material-symbols-outlined absolute right-3 top-3 text-on-surface/50">
                   lock
@@ -109,7 +115,7 @@ export default function LoginPage() {
                 <input
                   type="password"
                   required
-                  ref={passwordRef} // 5. חיבור הרפרנס לשדה הסיסמה
+                  ref={passwordRef}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="w-full pr-12 pl-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-on-surface"
