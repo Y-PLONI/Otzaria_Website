@@ -3,7 +3,7 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function ResetPasswordPage({ params }) {
-  const { token } = use(params);
+  const { token } = params;
   const router = useRouter();
   
   // שדות לטופס
