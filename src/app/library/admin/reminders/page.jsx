@@ -12,7 +12,7 @@ export default function BookReminderPage() {
     
     // בחירות המשתמש
     const [selectedBookPath, setSelectedBookPath] = useState('');
-    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.');
+    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל/י להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.');
     
     // נתונים מחושבים
     const [recipients, setRecipients] = useState([]);
@@ -72,11 +72,17 @@ export default function BookReminderPage() {
             try {
                 console.log('Checking recipients for book:', selectedBookPath);
                 
-                // שליפת פרטי הספר
                 const response = await fetch(`/api/book/${encodeURIComponent(selectedBookPath)}`);
                 const data = await response.json();
 
                 if (data.success && data.pages) {
+                    
+                    const userMap = new Map();
+                    allUsers.forEach(u => {
+                        if (u._id) userMap.set(normalizeId(u._id), u);
+                        if (u.id) userMap.set(normalizeId(u.id), u);
+                    });
+
                     const foundEmails = new Set();
                     let pagesInProgressCount = 0;
                     
@@ -93,21 +99,17 @@ export default function BookReminderPage() {
                             const userId = normalizeId(rawUserId);
 
                             if (userId) {
-                                const userDetails = allUsers.find(u => 
-                                    normalizeId(u._id) === userId || normalizeId(u.id) === userId
-                                );
+                                const userDetails = userMap.get(userId);
 
-                                if (userDetails && userDetails.email  && userDetails.acceptReminders ) {
+                                if (userDetails && userDetails.email) {
                                     console.log(`Found match: User ${userDetails.name} (${userDetails.email})`);
                                     foundEmails.add(userDetails.email);
                                 } else {
+                                    // לוגים לדיבוג
                                     if (!userDetails) {
-                                        console.warn(`User ID ${userId} found on page but NOT found in users list.`);
-                                    } else if (!userDetails.email) {
-                                        console.warn(`User ${userDetails.name} found but has NO email.`);
+                                        console.warn(`User ID ${userId} found on page but NOT in users list.`);
                                     }
                                 }
-
                             }
                         }
                     });
@@ -127,6 +129,7 @@ export default function BookReminderPage() {
         }
     }, [selectedBookPath, allUsers]);
 
+    // 3. יצירת HTML (ללא שינוי)
     const generateEmailHtml = (bookName, messageBody) => {
         const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
         const formattedBody = messageBody.replace(/\n/g, '<br/>');
@@ -200,7 +203,7 @@ export default function BookReminderPage() {
         <div className="max-w-3xl mx-auto p-8 bg-white shadow-xl rounded-2xl mt-10">
             <h1 className="text-3xl font-bold mb-2 text-gray-800 flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary text-4xl">forward_to_inbox</span>
-                שליחת תזכורות למתנדבים
+                שליחת תזכורות לעורכים
             </h1>
             <p className="text-gray-500 mb-8">
                 המערכת תאתר אוטומטית את המשתמשים שעובדים כרגע על הספר הנבחר ותשלח להם את ההודעה.
