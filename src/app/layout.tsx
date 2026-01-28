@@ -4,6 +4,7 @@ import "./globals.css"; // <--- שורה זו קריטית! וודא שהיא ק
 import SessionProvider from "@/components/SessionProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import VersionNotice from "@/components/VersionNotice";
+import ReminderGuard from '@/components/ReminderGuard';
 
 const frankRuehl = localFont({
   src: "./fonts/FrankRuehlCLM-Medium.ttf",
