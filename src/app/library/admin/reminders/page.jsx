@@ -8,11 +8,11 @@ export default function BookReminderPage() {
     
     // רשימות נתונים
     const [books, setBooks] = useState([]);
-    const [allUsers, setAllUsers] = useState([]);
+    const [allUsers, setAllUsers] = useState([]); 
     
     // בחירות המשתמש
     const [selectedBookPath, setSelectedBookPath] = useState('');
-    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.');
+    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל/י להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.');
     
     // נתונים מחושבים
     const [recipients, setRecipients] = useState([]);
@@ -25,9 +25,15 @@ export default function BookReminderPage() {
         success: ''
     });
 
+    const normalizeId = (id) => {
+        if (!id) return null;
+        return String(id).toString();
+    };
+
     useEffect(() => {
         const loadInitialData = async () => {
             try {
+                // טעינת ספרים
                 const booksRes = await fetch('/api/library/list');
                 const booksData = await booksRes.json();
                 if (booksData.success) {
@@ -38,9 +44,11 @@ export default function BookReminderPage() {
                     setBooks(booksWithWork);
                 }
 
+                // טעינת משתמשים
                 const usersRes = await fetch('/api/admin/users');
                 const usersData = await usersRes.json();
                 if (usersData.success && Array.isArray(usersData.users)) {
+                    console.log(`Loaded ${usersData.users.length} users for checking.`);
                     setAllUsers(usersData.users);
                 }
 
@@ -62,28 +70,52 @@ export default function BookReminderPage() {
             setRecipients([]);
 
             try {
+                console.log('Checking recipients for book:', selectedBookPath);
+                
                 const response = await fetch(`/api/book/${encodeURIComponent(selectedBookPath)}`);
                 const data = await response.json();
 
                 if (data.success && data.pages) {
-                    const emails = new Set();
+                    
+                    const userMap = new Map();
+                    allUsers.forEach(u => {
+                        if (u._id) userMap.set(normalizeId(u._id), u);
+                        if (u.id) userMap.set(normalizeId(u.id), u);
+                    });
+
+                    const foundEmails = new Set();
+                    let pagesInProgressCount = 0;
                     
                     data.pages.forEach(page => {
                         if (page.status === 'in-progress') {
+                            pagesInProgressCount++;
                             
-                            const userId = page.claimedById || (page.holder && page.holder._id);
+                            let rawUserId = page.claimedById || page.holder;
+                            
+                            if (rawUserId && typeof rawUserId === 'object' && rawUserId._id) {
+                                rawUserId = rawUserId._id;
+                            }
+
+                            const userId = normalizeId(rawUserId);
 
                             if (userId) {
-                                const userDetails = allUsers.find(u => u._id === userId || u.id === userId);
-                                if (userDetails && userDetails.email && userDetails.acceptReminders) {
-                                    emails.add(userDetails.email);
-                                }
+                                const userDetails = userMap.get(userId);
 
+                                if (userDetails && userDetails.email && userDetails.acceptReminders) {
+                                    console.log(`Found match: User ${userDetails.name} (${userDetails.email})`);
+                                    foundEmails.add(userDetails.email);
+                                }else {
+                                    // לוגים לדיבוג
+                                    if (!userDetails) {
+                                        console.warn(`User ID ${userId} found on page but NOT in users list.`);
+                                    }
+                                }
                             }
                         }
                     });
-                    
-                    setRecipients(Array.from(emails));
+
+                    console.log(`Summary: ${pagesInProgressCount} pages in progress, ${foundEmails.size} unique emails found.`);
+                    setRecipients(Array.from(foundEmails));
                 }
             } catch (error) {
                 console.error('Error fetching recipients:', error);
@@ -97,7 +129,7 @@ export default function BookReminderPage() {
         }
     }, [selectedBookPath, allUsers]);
 
-    // 3. יצירת HTML מעוצב
+    // 3. יצירת HTML (ללא שינוי)
     const generateEmailHtml = (bookName, messageBody) => {
         const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
         const formattedBody = messageBody.replace(/\n/g, '<br/>');
@@ -171,7 +203,7 @@ export default function BookReminderPage() {
         <div className="max-w-3xl mx-auto p-8 bg-white shadow-xl rounded-2xl mt-10">
             <h1 className="text-3xl font-bold mb-2 text-gray-800 flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary text-4xl">forward_to_inbox</span>
-                שליחת תזכורות למתנדבים
+                שליחת תזכורות לעורכים
             </h1>
             <p className="text-gray-500 mb-8">
                 המערכת תאתר אוטומטית את המשתמשים שעובדים כרגע על הספר הנבחר ותשלח להם את ההודעה.

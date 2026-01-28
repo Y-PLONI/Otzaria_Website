@@ -1,0 +1,83 @@
+import { NextResponse } from 'next/server';
+import crypto from 'crypto';
+import connectDB from '@/lib/db';
+import User from '@/models/User';
+import nodemailer from 'nodemailer';
+
+export async function POST(request) {
+  try {
+    const { email } = await request.json();
+    await connectDB();
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    
+    if (!user) {
+      return NextResponse.json({ success: true, message: 'אם המייל קיים, נשלחה הודעה.' });
+    }
+
+    const NOW = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+    
+    if (user.lastResetRequest) {
+        const timeSinceLastRequest = NOW - new Date(user.lastResetRequest).getTime();
+        if (timeSinceLastRequest < ONE_HOUR) {
+            return NextResponse.json({ 
+                success: false, 
+                message: 'ניתן לבקש איפוס סיסמה רק פעם אחת בשעה. אנא בדוק את תיבת המייל שלך.' 
+            }, { status: 429 });
+        }
+    }
+
+    const lastRequestDate = user.lastResetRequest ? new Date(user.lastResetRequest) : new Date(0);
+    const isSameDay = lastRequestDate.toDateString() === new Date(NOW).toDateString();
+
+    if (!isSameDay) {
+        user.dailyResetRequestsCount = 0;
+    }
+
+    if (user.dailyResetRequestsCount >= 3) {
+        return NextResponse.json({ 
+            success: false, 
+            message: 'הגעת למגבלת הבקשות היומית. נסה שוב מחר.' 
+        }, { status: 429 });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = Date.now() + ONE_HOUR;
+
+    const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+        },
+    });
+
+    const resetUrl = `${process.env.NEXTAUTH_URL}/library/auth/reset-password/${resetToken}`;
+
+    const message = {
+        from: `"Otzaria Support" <${process.env.SMTP_FROM}>`,
+        to: user.email,
+        subject: 'איפוס סיסמה - ספריית אוצריא',
+        html: `
+            <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
+                <h2>בקשה לאיפוס סיסמה</h2>
+                <p>קיבלנו בקשה לאפס את הסיסמה לחשבון שלך.</p>
+                <p>לחץ על הכפתור למטה כדי ליצור סיסמה חדשה:</p>
+                <a href="${resetUrl}" style="background-color: #d4a373; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0;">איפוס סיסמה</a>
+                <p>הקישור תקף לשעה אחת בלבד.</p>
+                <p>אם לא ביקשת זאת, אתה יכול להתעלם מהודעה זו.</p>
+            </div>
+        `
+    };
+
+    await transporter.sendMail(message);
+
+    user.lastResetRequest = NOW;
+    user.dailyResetRequestsCount += 1;
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = resetTokenExpires;
+    
+    await user.save();

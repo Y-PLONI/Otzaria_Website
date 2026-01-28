@@ -11,7 +11,7 @@ export default function Home() {
   const [linuxModalOpen, setLinuxModalOpen] = useState(false)
   const [androidModalOpen, setAndroidModalOpen] = useState(false)
   const [macModalOpen, setMacModalOpen] = useState(false)
-  const [iosModalOpen, setIosModalOpen] = useState(false) // הוספת State ל-iOS
+  const [iosModalOpen, setIosModalOpen] = useState(false)
   
   const [stableDownloads, setStableDownloads] = useState<any>(null)
   const [devDownloads, setDevDownloads] = useState<any>(null)
@@ -121,7 +121,7 @@ export default function Home() {
             </div>
         </section>
 
-        {/* Download Section */}
+        {/* Download Section (Software) */}
         <section id="download" className="py-20 px-4">
             <div className="container mx-auto max-w-6xl">
                 <h2 className="text-4xl font-bold text-center mb-4 font-frank">הורדת התוכנה</h2>
@@ -149,7 +149,7 @@ export default function Home() {
                         <p className="text-sm text-gray-500">Google Play / APK</p>
                     </button>
 
-                    {/* iOS - כפתור חדש */}
+                    {/* iOS */}
                     <button onClick={() => setIosModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
                         <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">phone_iphone</span>
                         <h3 className="text-xl font-bold mb-1">iOS</h3>
@@ -162,6 +162,29 @@ export default function Home() {
                         <h3 className="text-xl font-bold mb-1">macOS</h3>
                         <p className="text-sm text-gray-500">Intel / Apple Silicon</p>
                     </button>
+                </div>
+            </div>
+        </section>
+
+        {/* Library Content Download Section - NEW ADDITION */}
+        <section className="py-16 px-4 bg-gray-50 border-t border-gray-100">
+             <div className="container mx-auto max-w-6xl text-center">
+                <h2 className="text-3xl font-bold mb-8 font-frank">הורדת הספרייה (תוכן)</h2>
+                <div className="flex justify-center">
+                    <a 
+                        href="https://github.com/Otzaria/otzaria-library/releases/latest/download/otzaria_latest.zip"
+                        className="flex flex-col items-center p-8 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group max-w-md w-full"
+                    >
+                        <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">
+                            library_add
+                        </span>
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800">הורדת המאגר המלא</h3>
+                        <p className="text-gray-500 mb-6">קובץ ZIP המכיל את ספריית הספרים המעודכנת</p>
+                        <span className="inline-flex items-center gap-2 px-6 py-2 bg-primary/10 text-primary rounded-full font-medium group-hover:bg-primary group-hover:text-white transition-colors">
+                            <span className="material-symbols-outlined text-sm">download</span>
+                            לחץ להורדה ישירה
+                        </span>
+                    </a>
                 </div>
             </div>
         </section>
@@ -214,7 +237,6 @@ export default function Home() {
         stableVersion={stableDownloads?.version}
         devVersion={devDownloads?.version}
       />
-      {/* iOS Modal */}
       <DownloadModal
         isOpen={iosModalOpen}
         onClose={() => setIosModalOpen(false)}
@@ -223,7 +245,6 @@ export default function Home() {
           appStore: 'https://apps.apple.com/us/app/otzaria/id6738098031'
         }}
         devLinks={{
-          // בדרך כלל iOS dev זה דרך TestFlight, אבל נשים קישור לחנות אם אין אחר
           appStore: 'https://apps.apple.com/us/app/otzaria/id6738098031'
         }}
         stableVersion={stableDownloads?.version}
@@ -242,7 +263,7 @@ export default function Home() {
   );
 }
 
-// Download Modal Component - UPDATED STRUCTURE
+// Download Modal Component
 function DownloadModal({ isOpen, onClose, platform, stableLinks, devLinks, stableVersion, devVersion }: any) {
   if (!isOpen) return null
 

@@ -2,14 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
-import mongoose from 'mongoose';
-
-const MailingListSchema = new mongoose.Schema({
-  listName: { type: String, required: true, unique: true },
-  emails: [{ type: String }]
-});
-
-const MailingList = mongoose.models.MailingList || mongoose.model('MailingList', MailingListSchema);
+import MailingList from '@/models/MailingList';
 
 const LIST_NAME = 'new_books_subscribers';
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { signIn, getSession } from 'next-auth/react'
+import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -39,14 +39,8 @@ export default function LoginPage() {
       if (result?.error) {
         setError(result.error)
       } else {
-        const session = await getSession()
-
-        if (!session?.user?.acceptReminders) {
-          router.push('/library/auth/approve-terms')
-        } else {
-          router.refresh()
-          router.push('/library/dashboard')
-        }
+        router.refresh()
+        router.push('/library/dashboard')
       }
     } catch {
       setError('שגיאה בהתחברות')
@@ -103,9 +97,17 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-on-surface mb-2">
-                סיסמה
-              </label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium text-on-surface">
+                  סיסמה
+                </label>
+                <Link 
+                  href="/library/auth/forgot-password" 
+                  className="text-xs text-primary hover:text-accent font-medium transition-colors"
+                >
+                  שכחת סיסמה?
+                </Link>
+              </div>
               <div className="relative">
                 <span className="material-symbols-outlined absolute right-3 top-3 text-on-surface/50">
                   lock
