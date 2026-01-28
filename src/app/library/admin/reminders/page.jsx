@@ -6,20 +6,16 @@ import { useSession } from 'next-auth/react';
 export default function BookReminderPage() {
     const { data: session } = useSession();
     
-    // רשימות נתונים
     const [books, setBooks] = useState([]);
     const [allUsers, setAllUsers] = useState([]); 
     const [history, setHistory] = useState([]);
     
-    // בחירות המשתמש
     const [selectedBookPath, setSelectedBookPath] = useState('');
     const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.');
     
-    // נתונים מחושבים
     const [recipients, setRecipients] = useState([]);
     const [isCheckingRecipients, setIsCheckingRecipients] = useState(false);
     
-    // סטטוס כללי
     const [status, setStatus] = useState({
         loading: false,
         error: '',
@@ -48,12 +44,10 @@ export default function BookReminderPage() {
         return `לפני ${days === 1 ? 'יום אחד' : days + ' ימים'}`;
     };
 
-    // פונקציה חדשה למחיקת היסטוריה
     const handleDeleteHistory = async (id) => {
         if (!confirm('האם אתה בטוח שברצונך למחוק רשומה זו מההיסטוריה?')) return;
 
         try {
-            // עדכון אופטימיסטי ב-UI
             setHistory(prev => prev.filter(item => item.id !== id));
 
             const res = await fetch(`/api/admin/history?id=${id}`, {
@@ -62,7 +56,6 @@ export default function BookReminderPage() {
             
             const data = await res.json();
             if (!data.success) {
-                // אם נכשל, החזר את הפריט (או רענן את העמוד)
                 console.error('Failed to delete history item');
             }
         } catch (error) {
@@ -73,9 +66,8 @@ export default function BookReminderPage() {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                // טעינת ספרים
                 const booksRes = await fetch('/api/library/list');
-                const booksData = await booksRes.json(); // כאן הייתה הבעיה הפוטנציאלית, וודא ש-endpoint זה תקין
+                const booksData = await booksRes.json();
                 if (booksData.success) {
                     const booksWithWork = booksData.books.filter(book => 
                         !book.isHidden &&
@@ -87,17 +79,14 @@ export default function BookReminderPage() {
                     setBooks(booksWithWork);
                 }
 
-                // טעינת משתמשים
                 const usersRes = await fetch('/api/admin/users');
                 const usersData = await usersRes.json();
                 if (usersData.success && Array.isArray(usersData.users)) {
                     setAllUsers(usersData.users);
                 }
 
-                // טעינת היסטוריה
                 try {
                     const historyRes = await fetch('/api/admin/history');
-                    // בדיקה שהתשובה תקינה לפני המרה ל-JSON
                     if (historyRes.ok) {
                         const historyText = await historyRes.text();
                         if (historyText) {
@@ -226,7 +215,6 @@ export default function BookReminderPage() {
                 }),
             });
 
-            // בדיקה מחמירה יותר לתשובה
             const textResponse = await response.text();
             let result;
             try {
@@ -240,9 +228,8 @@ export default function BookReminderPage() {
                 throw new Error(result.error || 'שגיאה בשליחה');
             }
 
-            // עדכון היסטוריה מקומי
             const newHistoryItem = {
-                id: Date.now().toString(), // זמני
+                id: Date.now().toString(),
                 adminName: session?.user?.name || 'אדמין',
                 bookName: selectedBook.name,
                 timestamp: new Date().toISOString()
@@ -392,7 +379,6 @@ export default function BookReminderPage() {
                                         </div>
                                     </div>
                                     
-                                    {/* כפתור מחיקה - מוצג רק בעת מעבר עכבר (group-hover) */}
                                     <button 
                                         onClick={() => handleDeleteHistory(item.id)}
                                         className="text-gray-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50 opacity-0 group-hover:opacity-100"

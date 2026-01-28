@@ -3,8 +3,8 @@ import nodemailer from 'nodemailer';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { encryptToken } from '@/app/api/user/unsubscribe/route';
-import dbConnect from '@/lib/db'; // <-- חדש: חיבור ל-DB
-import ReminderHistory from '@/lib/models/reminderHistory'; // <-- חדש: המודל שיצרנו
+import dbConnect from '@/lib/db';
+import ReminderHistory from '@/lib/models/reminderHistory';
 
 export async function POST(request) {
     try {
@@ -14,10 +14,8 @@ export async function POST(request) {
         }
 
         const body = await request.json();
-        // <-- חדש: הוספנו את bookName ואת bookPath לרשימת השדות שאנחנו מוציאים מה-body
         const { to, subject, text, html, bcc, cc, bookName, bookPath } = body;
 
-        // ולידציה
         if ((!to && !bcc) || !subject) {
             return NextResponse.json({ error: 'Missing recipients or subject' }, { status: 400 });
         }
@@ -33,7 +31,6 @@ export async function POST(request) {
             tls: { rejectUnauthorized: false }
         });
 
-        // איחוד כל הנמענים לרשימה אחת שטוחה
         const allRecipients = new Set();
         if (to) (Array.isArray(to) ? to : [to]).forEach(e => allRecipients.add(e.trim()));
         if (bcc) (Array.isArray(bcc) ? bcc : [bcc]).forEach(e => allRecipients.add(e.trim()));
@@ -41,7 +38,6 @@ export async function POST(request) {
 
         const recipientsArray = Array.from(allRecipients);
 
-        // שליחה פרטנית
         const sendResults = await Promise.allSettled(recipientsArray.map(async (email) => {
             const secureToken = encryptToken(email);
             const unsubUrl = `${process.env.NEXTAUTH_URL}/api/user/unsubscribe?t=${secureToken}`;
@@ -72,26 +68,23 @@ export async function POST(request) {
 
         console.log(`Email process finished. Success: ${successful}, Failed: ${failed}`);
 
-        // <-- חדש: שמירת ההיסטוריה ב-DB אם היו שליחות מוצלחות וקיבלנו פרטי ספר
         if (successful > 0 && bookName) {
             try {
                 await dbConnect();
                 await ReminderHistory.create({
-                    adminName: session.user.name || 'Admin', // שם המנהל השולח
+                    adminName: session.user.name || 'Admin',
                     adminEmail: session.user.email,
                     bookName: bookName,
                     bookPath: bookPath || '',
-                    recipientCount: successful, // שומרים רק כמה נשלחו בהצלחה
+                    recipientCount: successful,
                     timestamp: new Date()
                 });
                 console.log('History saved successfully');
             } catch (historyError) {
                 console.error('Failed to save history log:', historyError);
-                // לא עוצרים את הריצה כי המיילים כבר נשלחו
             }
         }
 
-        // אם הכל נכשל
         if (successful === 0 && recipientsArray.length > 0) {
             return NextResponse.json({ 
                 success: false, 

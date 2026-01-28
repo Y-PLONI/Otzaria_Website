@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // וודא שהנתיב נכון לפרויקט שלך
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/db';
 import ReminderHistory from '@/lib/models/reminderHistory';
 
-// שליפת ההיסטוריה
 export async function GET(req) {
   try {
     const session = await getServerSession(authOptions);
@@ -19,7 +18,6 @@ export async function GET(req) {
       .limit(50)
       .lean();
 
-    // המרה בטוחה של הנתונים
     const formattedHistory = history.map(item => ({
       id: item._id.toString(),
       adminName: item.adminName || 'Unknown',
@@ -32,12 +30,10 @@ export async function GET(req) {
 
   } catch (error) {
     console.error('Error fetching history:', error);
-    // חשוב: החזרת JSON גם במקרה שגיאה כדי למנוע את השגיאה שקיבלת
     return NextResponse.json({ success: false, error: 'Failed to fetch history' }, { status: 500 });
   }
 }
 
-// שמירת רשומה חדשה (אם תרצה לקרוא לזה ידנית)
 export async function POST(req) {
   try {
     const session = await getServerSession(authOptions);
@@ -45,7 +41,6 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    // הוספת בדיקה שהבקשה לא ריקה
     const text = await req.text();
     if (!text) return NextResponse.json({ success: false, error: 'Empty body' }, { status: 400 });
     
@@ -71,11 +66,10 @@ export async function POST(req) {
   }
 }
 
-// --> חדש: מחיקת רשומה מההיסטוריה
 export async function DELETE(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user?.role !== 'admin') { // הגבלת מחיקה לאדמין בלבד
+    if (!session || session.user?.role !== 'admin') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
     }
 

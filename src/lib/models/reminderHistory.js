@@ -6,7 +6,7 @@ const ReminderHistorySchema = new mongoose.Schema({
     required: true
   },
   adminEmail: {
-    type: String, // אופציונלי - טוב לזיהוי חד ערכי
+    type: String,
   },
   bookName: {
     type: String,
@@ -26,5 +26,4 @@ const ReminderHistorySchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// מניעת יצירה כפולה של המודל אם הוא כבר קיים בזיכרון
 export default mongoose.models.ReminderHistory || mongoose.model('ReminderHistory', ReminderHistorySchema);
