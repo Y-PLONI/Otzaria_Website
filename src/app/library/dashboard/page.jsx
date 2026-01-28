@@ -66,7 +66,7 @@ export default function DashboardPage() {
 
   const loadMyMessages = async () => {
     try {
-      const response = await fetch('/api/messages')
+      const response = await fetch('/api/messages', { cache: 'no-store' })
       const result = await response.json()
       
       if (result.success) {
@@ -219,6 +219,43 @@ export default function DashboardPage() {
     }
   }
 
+  const markMessagesAsRead = async (messages) => {
+      const unreadMessagesIds = messages
+          .filter(m => !m.isRead) 
+          .map(m => m.id);
+
+      if (unreadMessagesIds.length === 0) return;
+
+      try {
+          await fetch('/api/messages', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messageIds: unreadMessagesIds })
+          });
+        
+          setMyMessages(prev => prev.map(msg => 
+              unreadMessagesIds.includes(msg.id) ? { ...msg, isRead: true } : msg
+          ));
+        
+      } catch (error) {
+          console.error('Failed to mark messages as read:', error);
+      }
+  };
+
+  useEffect(() => {
+      if (showMyMessages && myMessages.length > 0) {
+          markMessagesAsRead(myMessages);
+      }
+  }, [showMyMessages, myMessages]);
+
+  const unreadCount = myMessages.filter(m => {
+      const amISender = m.sender._id === session?.user?.id || m.sender === session?.user?.id;
+      if (amISender) {
+          return m.status === 'replied' && !m.isRead;
+      }
+      return !m.isRead;
+  }).length;
+
   const getReplySenderDisplayName = (reply) => {
     const currentUserId = session?.user?._id || session?.user?.id
     const replySenderId = reply?.sender
@@ -353,9 +390,10 @@ export default function DashboardPage() {
               >
                 <span className="material-symbols-outlined text-4xl text-primary">inbox</span>
                 <span className="font-medium text-on-surface">ההודעות שלי</span>
-                {myMessages.filter(m => m.status === 'replied' && m.senderId === session?.user?.id).length > 0 && (
-                  <span className="absolute top-2 left-2 bg-red-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                    {myMessages.filter(m => m.status === 'replied' && m.senderId === session?.user?.id).length}
+  
+                {unreadCount > 0 && (
+                  <span className="absolute top-2 left-2 bg-red-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
+                    {unreadCount}
                   </span>
                 )}
               </button>

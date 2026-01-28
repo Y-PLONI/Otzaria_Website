@@ -3,8 +3,9 @@ import connectDB from '@/lib/db';
 import Message from '@/models/Message';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import mongoose from 'mongoose';
+export const dynamic = 'force-dynamic';
 
-// קבלת הודעות שלי
 export async function GET(request) {
     try {
         const session = await getServerSession(authOptions);
@@ -12,20 +13,15 @@ export async function GET(request) {
         
         await connectDB();
         
-        // חילוץ פרמטרים מה-URL
         const { searchParams } = new URL(request.url);
-        const showAll = searchParams.get('allMessages'); // בדיקה אם נשלח ?allMessages=true
+        const showAll = searchParams.get('allMessages'); 
 
         let query = {};
         
-        // הלוגיקה החדשה:
-        // אדמין רואה הכל רק אם ביקש זאת במפורש (שלח allMessages=true).
-        // אחרת (אם הוא משתמש רגיל, או אדמין שלא שלח את הפרמטר) - רואה רק את שלו.
         
         if (session.user.role === 'admin' && showAll === 'true') {
              query = {}; 
         } else {
-            // משתמש רגיל (או אדמין במצב רגיל) רואה הודעות ששלח או שנשלחו אליו
             query = { 
                 $or: [
                     { sender: session.user._id },
@@ -39,12 +35,12 @@ export async function GET(request) {
             .populate('replies.sender', 'name email role')
             .sort({ createdAt: -1 });
 
-        // המרה לפורמט נוח לקריאה בקלאיינט
         const formattedMessages = messages.map(msg => ({
             id: msg._id,
             subject: msg.subject,
             content: msg.content,
             sender: msg.sender,
+            isRead: msg.isRead,
             senderName: msg.sender?.name || 'משתמש לא ידוע',
             senderEmail: msg.sender?.email,
             status: msg.replies?.length > 0 ? 'replied' : (msg.isRead ? 'read' : 'unread'),
@@ -67,7 +63,6 @@ export async function GET(request) {
     }
 }
 
-// שליחת הודעה (ללא שינוי)
 export async function POST(request) {
     try {
         const session = await getServerSession(authOptions);
@@ -78,7 +73,7 @@ export async function POST(request) {
 
         await Message.create({
             sender: session.user._id,
-            recipient: recipientId || null, // null = למנהלים
+            recipient: recipientId || null,
             subject,
             content,
             isRead: false
@@ -87,6 +82,40 @@ export async function POST(request) {
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error sending message:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
+export async function PUT(request) {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        const { messageIds } = await request.json();
+        
+        console.log('--- DEBUG: PUT /api/messages ---');
+        console.log('1. Raw IDs received:', messageIds);
+
+        if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+            console.log('2. No IDs to update');
+            return NextResponse.json({ success: true }); 
+        }
+
+        await connectDB();
+
+        const objectIds = messageIds.map(id => new mongoose.Types.ObjectId(id));
+
+        const result = await Message.updateMany(
+            { _id: { $in: objectIds } },
+            { $set: { isRead: true } }
+        );
+
+        return NextResponse.json({ 
+            success: true, 
+            debug: { matched: result.matchedCount, modified: result.modifiedCount } 
+        });
+
+    } catch (error) {
+        console.error('Error updating messages:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
