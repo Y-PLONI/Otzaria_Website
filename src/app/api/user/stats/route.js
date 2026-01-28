@@ -23,7 +23,33 @@ export async function GET() {
 
     // 2. סטטיסטיקות
     const stats = await Page.aggregate([
+      // שלב א': מביאים את הדפים של המשתמש
       { $match: { claimedBy: user._id } },
+      
+      // שלב ב': מביאים את פרטי הספר כדי לבדוק אם הוא מוסתר
+      {
+        $lookup: {
+          from: 'books',        // שם הקולקציה בדאטהבייס (ברירת המחדל של Mongoose ל-Book)
+          localField: 'book',   // השדה במודל Page
+          foreignField: '_id',  // השדה במודל Book
+          as: 'bookData'
+        }
+      },
+      { $unwind: '$bookData' }, // הופכים את המערך לאובייקט (ומסננים דפים ללא ספר תקין)
+
+      // שלב ג': הסינון המבוקש לסטטיסטיקות
+      // "שלא יתחשבנו אם הם לא הושלמו וגם מוסתרים"
+      // כלומר: משאירים את הדף אם: (הספר לא מוסתר) או (הדף הושלם)
+      {
+        $match: {
+          $or: [
+            { 'bookData.isHidden': { $ne: true } }, // תנאי 1: הספר גלוי
+            { status: 'completed' }                 // תנאי 2: הדף הושלם (גם אם הספר מוסתר - הוא ייספר)
+          ]
+        }
+      },
+
+      // שלב ד': הקיבוץ והספירה (כמו שהיה קודם)
       {
         $group: {
           _id: null,
@@ -36,27 +62,31 @@ export async function GET() {
 
     const userStats = stats[0] || { totalMyPages: 0, completed: 0, inProgress: 0 };
 
-    // 3. פעילות אחרונה
+    // 3. פעילות אחרונה (כולל הסינון הקודם: הסתרת ספרים מוסתרים לחלוטין מהפיד)
     const recentActivityRaw = await Page.find({ claimedBy: user._id })
       .sort({ status: -1, updatedAt: -1 }) 
-      .limit(10)
-      .populate('book', 'name slug')
+      .limit(30) // שליפת "באפר"
+      .populate({
+        path: 'book',
+        select: 'name slug isHidden',
+        match: { isHidden: { $ne: true } } // סינון ברמת ה-Populate לפעילות אחרונה
+      })
       .lean();
 
-    // מיפוי הנתונים
-    const recentActivity = recentActivityRaw.map(page => {
-      const bookName = page.book?.name || 'ספר לא ידוע';
-      const bookPath = page.book?.slug || '#';
-
-      return {
-        id: page._id.toString(),
-        bookName: bookName,
-        bookPath: bookPath,
-        pageNumber: page.pageNumber,
-        status: page.status,
-        date: page.updatedAt ? new Date(page.updatedAt).toLocaleDateString('he-IL') : '-'
-      };
-    });
+    // מיפוי הנתונים וסינון (פעילות אחרונה)
+    const recentActivity = recentActivityRaw
+      .filter(page => page.book) // מסננים דפים שהספר שלהם מוסתר (חזר כ-null בגלל ה-match)
+      .slice(0, 10)
+      .map(page => {
+        return {
+          id: page._id.toString(),
+          bookName: page.book.name,
+          bookPath: page.book.slug || '#',
+          pageNumber: page.pageNumber,
+          status: page.status,
+          date: page.updatedAt ? new Date(page.updatedAt).toLocaleDateString('he-IL') : '-'
+        };
+      });
 
     return NextResponse.json({
       success: true,
