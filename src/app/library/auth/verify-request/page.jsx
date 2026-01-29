@@ -15,10 +15,10 @@ export default function VerifyRequestPage() {
     }, [session, router]);
 
     useEffect(() => {
-        if (session && !session.user.emailVerified) {
+        if (session && !session.user.isVerified) {
             const interval = setInterval(async () => {
                 const newSession = await update();
-                if (session?.user?.isVerified) {
+                if (newSession?.user?.isVerified) {
                     router.push('/library/dashboard');
                 }
             }, 5000); 
