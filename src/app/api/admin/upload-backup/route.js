@@ -4,13 +4,6 @@ import path from 'path';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 
-// מבטל את מגבלת הגודל המובנית של Next.js לנתיב הזה ספציפית
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 export async function POST(request) {
   try {
     // 1. קבלת שם הקובץ מה-Query String

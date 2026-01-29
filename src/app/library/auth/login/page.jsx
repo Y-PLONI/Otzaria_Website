@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Suspense } from 'react' // הווסף Suspense
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 
-export default function LoginPage() {
+// 1. צור רכיב פנימי שמכיל את הלוגיקה שמשתמשת ב-useSearchParams
+function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const passwordRef = useRef(null)
@@ -63,10 +64,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
-      <div className="w-full max-w-md">
+    <div className="w-full max-w-md">
         <div className="glass-strong rounded-2xl p-8 shadow-2xl">
-          {/* Logo */}
           <div className="flex justify-center mb-6">
             <Link href="/library">
               <Image src="/logo.png" alt="לוגו אוצריא" width={80} height={80} />
@@ -173,6 +172,20 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+  )
+}
+
+// 2. רכיב ה-Page הראשי שעוטף ב-Suspense
+export default function LoginPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
+      <Suspense fallback={
+        <div className="flex items-center justify-center">
+          <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+        </div>
+      }>
+        <LoginContent />
+      </Suspense>
     </div>
   )
 }
