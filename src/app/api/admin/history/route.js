@@ -62,7 +62,7 @@ export async function POST(req) {
 
   } catch (error) {
     console.error('Error saving history:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to save history log' }, { status: 500 });
   }
 }
 
