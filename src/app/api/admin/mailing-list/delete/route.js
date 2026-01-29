@@ -13,6 +13,9 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    if (session.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
+    }
 
     const { email } = await request.json();
 
@@ -26,10 +29,6 @@ export async function DELETE(request) {
       { listName: LIST_NAME },
       { $pull: { emails: email } }
     );
-
-    if (result.modifiedCount === 0) {
-        console.log('Note: Email was not found in the list or list does not exist');
-    }
 
     return NextResponse.json({ success: true });
 

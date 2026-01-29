@@ -3,6 +3,7 @@ import connectDB from '@/lib/db';
 import Message from '@/models/Message';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import mongoose from 'mongoose';
 
 export async function POST(request) {
     try {
@@ -29,6 +30,8 @@ export async function POST(request) {
             if (!isParticipant) return NextResponse.json({ error: 'אין גישה' }, { status: 403 });
         }
 
+        const userObjectId = new mongoose.Types.ObjectId(userId);
+
         await Message.findByIdAndUpdate(messageId, {
             $push: {
                 replies: {
@@ -38,7 +41,10 @@ export async function POST(request) {
                 }
             },
             // כל תגובה חדשה הופכת את השרשור ל"לא נקרא" עבור הצד השני
-            isRead: false
+            $set: {
+                readBy: [userObjectId], 
+                isRead: false
+            }
         });
 
         return NextResponse.json({ success: true });

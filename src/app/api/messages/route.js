@@ -4,6 +4,7 @@ import Message from '@/models/Message';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
@@ -17,7 +18,6 @@ export async function GET(request) {
         const showAll = searchParams.get('allMessages'); 
 
         let query = {};
-        
         
         if (session.user.role === 'admin' && showAll === 'true') {
              query = {}; 
@@ -33,20 +33,22 @@ export async function GET(request) {
         const messages = await Message.find(query)
             .populate('sender', 'name email role')
             .populate('replies.sender', 'name email role')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
 
         const formattedMessages = messages.map(msg => ({
-            id: msg._id,
+            id: msg._id.toString(), 
             subject: msg.subject,
             content: msg.content,
             sender: msg.sender,
             isRead: msg.isRead,
+            readBy: (msg.readBy || []).map(id => id.toString()),
             senderName: msg.sender?.name || 'משתמש לא ידוע',
             senderEmail: msg.sender?.email,
             status: msg.replies?.length > 0 ? 'replied' : (msg.isRead ? 'read' : 'unread'),
             createdAt: msg.createdAt,
             replies: (msg.replies || []).map(r => ({
-                id: r._id,
+                id: r._id.toString(),
                 sender: r.sender?._id || r.sender,
                 senderName: r.sender?.name,
                 senderEmail: r.sender?.email,
@@ -76,7 +78,8 @@ export async function POST(request) {
             recipient: recipientId || null,
             subject,
             content,
-            isRead: false
+            isRead: false,
+            readBy: []
         });
 
         return NextResponse.json({ success: true });
@@ -85,29 +88,56 @@ export async function POST(request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
 export async function PUT(request) {
+    console.log('🔄 PUT Request Started');
+    
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!session) {
+            console.log('❌ Unauthorized PUT request');
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
         const { messageIds } = await request.json();
-        
-        console.log('--- DEBUG: PUT /api/messages ---');
-        console.log('1. Raw IDs received:', messageIds);
+        const userIdString = session.user._id || session.user.id;
+
+        console.log('👤 User attempting update:', userIdString);
+        console.log('📩 Messages IDs to update:', messageIds);
 
         if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
-            console.log('2. No IDs to update');
+            console.log('⚠️ No IDs provided');
             return NextResponse.json({ success: true }); 
         }
 
         await connectDB();
 
-        const objectIds = messageIds.map(id => new mongoose.Types.ObjectId(id));
+        let userObjectId;
+        let messageObjectIds = [];
+
+        try {
+            userObjectId = new mongoose.Types.ObjectId(userIdString);
+            
+            messageObjectIds = messageIds.map(id => new mongoose.Types.ObjectId(id));
+        } catch (e) {
+            console.error('❌ Conversion Error:', e);
+            return NextResponse.json({ error: 'Invalid ID format' }, { status: 400 });
+        }
+
+        console.log(`🛠️ Executing DB Update...`);
+        console.log(`   Query IDs:`, messageObjectIds);
+        console.log(`   Adding User:`, userObjectId);
 
         const result = await Message.updateMany(
-            { _id: { $in: objectIds } },
-            { $set: { isRead: true } }
+            { _id: { $in: messageObjectIds } },
+            { 
+                $addToSet: { readBy: userObjectId }
+            }
         );
+
+        if (result.matchedCount === 0) {
+            console.error('⚠️ CRITICAL: No messages matched the IDs provided!');
+        }
 
         return NextResponse.json({ 
             success: true, 
@@ -115,7 +145,7 @@ export async function PUT(request) {
         });
 
     } catch (error) {
-        console.error('Error updating messages:', error);
+        console.error('❌ FATAL ERROR in PUT:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

@@ -219,9 +219,20 @@ export default function DashboardPage() {
     }
   }
 
+  // --- Helper function to check if specific user read the message ---
+  const isReadByUser = (message) => {
+    const userId = session?.user?._id || session?.user?.id;
+    
+    if (message.readBy && Array.isArray(message.readBy)) {
+        return message.readBy.includes(userId);
+    }
+    
+    return message.isRead;
+  };
+
   const markMessagesAsRead = async (messages) => {
       const unreadMessagesIds = messages
-          .filter(m => !m.isRead) 
+          .filter(m => !isReadByUser(m)) // סינון לפי המשתמש הספציפי
           .map(m => m.id);
 
       if (unreadMessagesIds.length === 0) return;
@@ -233,13 +244,15 @@ export default function DashboardPage() {
               body: JSON.stringify({ messageIds: unreadMessagesIds })
           });
         
-          setMyMessages(prev => prev.map(msg => 
-              unreadMessagesIds.includes(msg.id) ? { ...msg, isRead: true } : msg
-          ));
         
       } catch (error) {
           console.error('Failed to mark messages as read:', error);
       }
+  };
+
+  const handleCloseMessages = () => {
+    setShowMyMessages(false);
+    loadMyMessages();
   };
 
   useEffect(() => {
@@ -251,9 +264,9 @@ export default function DashboardPage() {
   const unreadCount = myMessages.filter(m => {
       const amISender = m.sender._id === session?.user?.id || m.sender === session?.user?.id;
       if (amISender) {
-          return m.status === 'replied' && !m.isRead;
+          return m.status === 'replied' && !isReadByUser(m);
       }
-      return !m.isRead;
+      return !isReadByUser(m);
   }).length;
 
   const getReplySenderDisplayName = (reply) => {
@@ -484,7 +497,7 @@ export default function DashboardPage() {
       {showMyMessages && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={() => setShowMyMessages(false)}
+          onClick={handleCloseMessages}
         >
           <div
             className="flex flex-col bg-white glass-strong rounded-2xl w-full max-w-4xl shadow-2xl max-h-[90vh] animate-in zoom-in-95 duration-200"
@@ -497,7 +510,7 @@ export default function DashboardPage() {
                 ההודעות שלי
               </h3>
               <button
-                onClick={() => setShowMyMessages(false)}
+                onClick={handleCloseMessages}
                 className="p-2 hover:bg-surface-variant rounded-full transition-colors"
               >
                 <span className="material-symbols-outlined text-2xl block text-on-surface">close</span>
@@ -515,109 +528,124 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {myMessages.map(message => (
-                    <div key={message.id} className="glass p-6 rounded-lg border border-surface-variant">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h4 className="text-xl font-bold text-on-surface mb-1">{message.subject}</h4>
-                          <p className="text-sm text-on-surface/60">
-                            {new Date(message.createdAt).toLocaleDateString('he-IL', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          message.status === 'replied' 
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {message.status === 'replied' ? 'נענה' : 'נשלח'}
-                        </span>
-                      </div>
-                      
-                      <p className="text-on-surface whitespace-pre-wrap mb-4">{message.content}</p>
-
-                      {message.replies && message.replies.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-surface-variant">
-                          <h5 className="font-bold text-on-surface mb-3 flex items-center gap-2">
-                            <span className="material-symbols-outlined text-green-600">reply</span>
-                            תגובות בשרשור:
-                          </h5>
-                          <div className="space-y-3">
-                            {message.replies.map((reply, idx) => (
-                              <div
-                                key={reply?.id || idx}
-                                className={`${reply?.senderRole === 'admin' ? 'bg-green-50 border border-green-100' : 'bg-surface border border-surface-variant'} p-4 rounded-lg`}
-                              >
-                                <p className="text-sm text-on-surface/60 mb-2">
-                                  <span className="font-medium text-primary">{getReplySenderDisplayName(reply)}</span>
-                                  <span className="mx-2">•</span>
-                                  {new Date(reply.createdAt).toLocaleDateString('he-IL', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </p>
-                                <p className="text-on-surface whitespace-pre-wrap">{reply.content}</p>
-                              </div>
-                            ))}
+                  {myMessages.map(message => {
+                    const isUnread = !isReadByUser(message);
+                    return (
+                      <div 
+                        key={message.id} 
+                        className={`glass p-6 rounded-lg border transition-colors duration-300 ${
+                          isUnread 
+                            ? 'bg-red-50 border-red-200 shadow-sm' // עיצוב להודעות שלא נקראו
+                            : 'border-surface-variant'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h4 className="text-xl font-bold text-on-surface mb-1 flex items-center gap-2">
+                                {message.subject}
+                                {isUnread && (
+                                    <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                )}
+                            </h4>
+                            <p className="text-sm text-on-surface/60">
+                              {new Date(message.createdAt).toLocaleDateString('he-IL', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
                           </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                            message.status === 'replied' 
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {message.status === 'replied' ? 'נענה' : 'נשלח'}
+                          </span>
                         </div>
-                      )}
+                        
+                        <p className="text-on-surface whitespace-pre-wrap mb-4">{message.content}</p>
 
-                      <div className="mt-4">
-                        {replyingToMessageId === message.id ? (
-                          <div className="animate-in fade-in slide-in-from-top-2">
-                            <textarea
-                              className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface shadow-inner"
-                              placeholder="כתוב תגובה..."
-                              rows="4"
-                              value={replyText}
-                              onChange={(e) => setReplyText(e.target.value)}
-                              disabled={sendingReply}
-                              autoFocus
-                            />
-                            <div className="flex gap-3 mt-3 justify-end">
-                              <button
-                                onClick={() => {
-                                  setReplyingToMessageId(null)
-                                  setReplyText('')
-                                }}
-                                disabled={sendingReply}
-                                className="px-6 py-2 glass rounded-lg hover:bg-surface-variant transition-colors disabled:opacity-50 text-sm"
-                              >
-                                ביטול
-                              </button>
-                              <button
-                                onClick={() => handleSendReply(message.id)}
-                                disabled={sendingReply}
-                                className="flex items-center justify-center gap-2 px-6 py-2 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold shadow-sm"
-                              >
-                                <span className="material-symbols-outlined text-sm">send</span>
-                                <span>{sendingReply ? 'שולח...' : 'שלח תגובה'}</span>
-                              </button>
+                        {message.replies && message.replies.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-surface-variant">
+                            <h5 className="font-bold text-on-surface mb-3 flex items-center gap-2">
+                              <span className="material-symbols-outlined text-green-600">reply</span>
+                              תגובות בשרשור:
+                            </h5>
+                            <div className="space-y-3">
+                              {message.replies.map((reply, idx) => (
+                                <div
+                                  key={reply?.id || idx}
+                                  className={`${reply?.senderRole === 'admin' ? 'bg-green-50 border border-green-100' : 'bg-surface border border-surface-variant'} p-4 rounded-lg`}
+                                >
+                                  <p className="text-sm text-on-surface/60 mb-2">
+                                    <span className="font-medium text-primary">{getReplySenderDisplayName(reply)}</span>
+                                    <span className="mx-2">•</span>
+                                    {new Date(reply.createdAt).toLocaleDateString('he-IL', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </p>
+                                  <p className="text-on-surface whitespace-pre-wrap">{reply.content}</p>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setReplyingToMessageId(message.id)
-                              setReplyText('')
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 glass rounded-lg hover:bg-surface-variant transition-colors text-sm font-medium border border-surface-variant"
-                          >
-                            <span className="material-symbols-outlined text-lg">reply</span>
-                            <span>השב</span>
-                          </button>
                         )}
+
+                        <div className="mt-4">
+                          {replyingToMessageId === message.id ? (
+                            <div className="animate-in fade-in slide-in-from-top-2">
+                              <textarea
+                                className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface shadow-inner"
+                                placeholder="כתוב תגובה..."
+                                rows="4"
+                                value={replyText}
+                                onChange={(e) => setReplyText(e.target.value)}
+                                disabled={sendingReply}
+                                autoFocus
+                              />
+                              <div className="flex gap-3 mt-3 justify-end">
+                                <button
+                                  onClick={() => {
+                                    setReplyingToMessageId(null)
+                                    setReplyText('')
+                                  }}
+                                  disabled={sendingReply}
+                                  className="px-6 py-2 glass rounded-lg hover:bg-surface-variant transition-colors disabled:opacity-50 text-sm"
+                                >
+                                  ביטול
+                                </button>
+                                <button
+                                  onClick={() => handleSendReply(message.id)}
+                                  disabled={sendingReply}
+                                  className="flex items-center justify-center gap-2 px-6 py-2 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold shadow-sm"
+                                >
+                                  <span className="material-symbols-outlined text-sm">send</span>
+                                  <span>{sendingReply ? 'שולח...' : 'שלח תגובה'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setReplyingToMessageId(message.id)
+                                setReplyText('')
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 glass rounded-lg hover:bg-surface-variant transition-colors text-sm font-medium border border-surface-variant"
+                            >
+                              <span className="material-symbols-outlined text-lg">reply</span>
+                              <span>השב</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
