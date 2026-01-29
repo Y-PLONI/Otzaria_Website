@@ -11,7 +11,6 @@ export async function GET(request) {
 
 
         if (!token) {
-            console.log('Error: No token provided');
             return NextResponse.json({ valid: false, message: 'חסר טוקן' }, { status: 400 });
         }
 
@@ -61,7 +60,6 @@ export async function POST(request) {
     user.resetPasswordExpires = undefined;
     await user.save();
 
-    console.log('Success: Password updated for user:', user.email);
     return NextResponse.json({ success: true, message: 'Password updated' });
 
   } catch (error) {
