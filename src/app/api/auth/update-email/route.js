@@ -14,7 +14,8 @@ export async function POST(request) {
 
     const { email: newEmail } = await request.json();
 
-    if (!newEmail || !newEmail.includes('@')) {
+    const emailRegex = /^[^\"s@]+@[^\"s@]+\.[^\"s@]+$/;
+    if (!newEmail || !emailRegex.test(newEmail)) {
       return NextResponse.json({ error: 'כתובת אימייל לא תקינה' }, { status: 400 });
     }
 
