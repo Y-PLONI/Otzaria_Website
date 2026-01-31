@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 
 export default function ImagePanel({
   thumbnailUrl,
@@ -25,6 +25,7 @@ export default function ImagePanel({
   const wrapperRef = useRef(null)
   const imageRef = useRef(null)
   const [isRotating, setIsRotating] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
 
   const [interactionMode, setInteractionMode] = useState(null)
   const [activeHandle, setActiveHandle] = useState(null)
@@ -34,6 +35,58 @@ export default function ImagePanel({
     rectX: 0, rectY: 0, 
     rectW: 0, rectH: 0
   })
+
+  const copySelectedArea = useCallback(async () => {
+    if (!selectionRect || !imageRef.current) return
+    
+    try {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const img = imageRef.current
+      
+      const scale = img.naturalWidth / img.clientWidth
+      
+      canvas.width = selectionRect.width * scale
+      canvas.height = selectionRect.height * scale
+      
+      ctx.translate(-selectionRect.x * scale, -selectionRect.y * scale)
+      
+      const centerX = img.naturalWidth / 2
+      const centerY = img.naturalHeight / 2
+      
+      ctx.translate(centerX, centerY)
+      ctx.rotate((rotation * Math.PI) / 180)
+      ctx.translate(-centerX, -centerY)
+      
+      ctx.drawImage(img, 0, 0)
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        const item = new ClipboardItem({ "image/png": blob })
+        await navigator.clipboard.write([item])
+        
+        setIsCopied(true)
+        setTimeout(() => setIsCopied(false), 2000)
+      })
+    } catch (err) {
+      console.error('Copy failed', err)
+    }
+  }, [selectionRect, rotation])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyC' || e.key === 'c')) {
+        if (selectionRect) {
+          e.preventDefault()
+          e.stopPropagation()
+          copySelectedArea()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectionRect, copySelectedArea])
 
   useEffect(() => {
     if (!isRotating) return
@@ -85,7 +138,7 @@ export default function ImagePanel({
     const coords = getWrapperCoordinates(e)
     setSelectionStart(coords)
     setSelectionEnd(coords)
-    setSelectionRect(null) // איפוס בחירה קיימת
+    setSelectionRect(null) 
     setInteractionMode('create')
   }
 
@@ -158,7 +211,6 @@ export default function ImagePanel({
         let newW = start.rectW
         let newH = start.rectH
 
-        // חישוב לפי הידית הנבחרת
         if (activeHandle.includes('w')) {
             newW = start.rectW - deltaX
             newX = start.rectX + deltaX
@@ -272,7 +324,7 @@ export default function ImagePanel({
               onMouseLeave={handleMouseUp} 
               style={{ 
                 transform: `scale(${imageZoom / 100})`,
-                cursor: interactionMode === 'create' ? 'crosshair' : 'default',
+                cursor: isSelectionMode ? 'crosshair' : 'default',
                 transformOrigin: 'center center',
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
@@ -339,7 +391,6 @@ export default function ImagePanel({
                   }}
                   onMouseDown={handleMouseDownMove}
                 >
-                  {/* ידיות שינוי גודל (Resize Handles) */}
                   <ResizeHandle cursor="nw-resize" position="-top-1.5 -left-1.5" handle="nw" />
                   <ResizeHandle cursor="n-resize" position="-top-1.5 left-1/2 -translate-x-1/2" handle="n" />
                   <ResizeHandle cursor="ne-resize" position="-top-1.5 -right-1.5" handle="ne" />
@@ -348,6 +399,18 @@ export default function ImagePanel({
                   <ResizeHandle cursor="s-resize" position="-bottom-1.5 left-1/2 -translate-x-1/2" handle="s" />
                   <ResizeHandle cursor="sw-resize" position="-bottom-1.5 -left-1.5" handle="sw" />
                   <ResizeHandle cursor="w-resize" position="top-1/2 -translate-y-1/2 -left-1.5" handle="w" />
+
+                  <button
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); copySelectedArea(); }}
+                    className="absolute bottom-0 right-9 translate-y-full mt-1 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center p-1 rounded shadow-md pointer-events-auto transition-colors z-30"
+                    title="העתק תמונה (Ctrl+C)"
+                    style={{ transform: `scale(${100 / imageZoom})`, transformOrigin: 'top right', cursor: 'pointer' }}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                        {isCopied ? 'check' : 'content_copy'}
+                    </span>
+                  </button>
 
                   <button
                     onMouseDown={(e) => e.stopPropagation()}
