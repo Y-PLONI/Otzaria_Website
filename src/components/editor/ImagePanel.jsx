@@ -25,6 +25,7 @@ export default function ImagePanel({
   const wrapperRef = useRef(null)
   const imageRef = useRef(null)
   const [isRotating, setIsRotating] = useState(false)
+  
   const [isCopied, setIsCopied] = useState(false)
 
   const [interactionMode, setInteractionMode] = useState(null)
@@ -36,30 +37,37 @@ export default function ImagePanel({
     rectW: 0, rectH: 0
   })
 
-  const copySelectedArea = useCallback(async () => {
-    if (!selectionRect || !imageRef.current) return
+  const getSelectionCanvas = useCallback(() => {
+    if (!selectionRect || !imageRef.current) return null
+
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = imageRef.current
     
+    const scale = img.naturalWidth / img.clientWidth
+    
+    canvas.width = selectionRect.width * scale
+    canvas.height = selectionRect.height * scale
+    
+    ctx.translate(-selectionRect.x * scale, -selectionRect.y * scale)
+    
+    const centerX = img.naturalWidth / 2
+    const centerY = img.naturalHeight / 2
+    
+    ctx.translate(centerX, centerY)
+    ctx.rotate((rotation * Math.PI) / 180)
+    ctx.translate(-centerX, -centerY)
+    
+    ctx.drawImage(img, 0, 0)
+    
+    return canvas
+  }, [selectionRect, rotation])
+
+  const copySelectedArea = useCallback(async () => {
+    const canvas = getSelectionCanvas()
+    if (!canvas) return
+
     try {
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
-      const img = imageRef.current
-      
-      const scale = img.naturalWidth / img.clientWidth
-      
-      canvas.width = selectionRect.width * scale
-      canvas.height = selectionRect.height * scale
-      
-      ctx.translate(-selectionRect.x * scale, -selectionRect.y * scale)
-      
-      const centerX = img.naturalWidth / 2
-      const centerY = img.naturalHeight / 2
-      
-      ctx.translate(centerX, centerY)
-      ctx.rotate((rotation * Math.PI) / 180)
-      ctx.translate(-centerX, -centerY)
-      
-      ctx.drawImage(img, 0, 0)
-      
       canvas.toBlob(async (blob) => {
         if (!blob) return
         const item = new ClipboardItem({ "image/png": blob })
@@ -71,7 +79,27 @@ export default function ImagePanel({
     } catch (err) {
       console.error('Copy failed', err)
     }
-  }, [selectionRect, rotation])
+  }, [getSelectionCanvas])
+
+  const downloadSelectedArea = useCallback(() => {
+      const canvas = getSelectionCanvas()
+      if (!canvas) return
+
+      try {
+        const dataUrl = canvas.toDataURL('image/png')
+        
+        const link = document.createElement('a')
+        link.href = dataUrl
+        link.download = `crop-page-${pageNumber || 'image'}-${Date.now()}.png`
+        
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+      } catch (err) {
+        console.error('Download failed', err)
+      }
+  }, [getSelectionCanvas, pageNumber])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -399,6 +427,16 @@ export default function ImagePanel({
                   <ResizeHandle cursor="s-resize" position="-bottom-1.5 left-1/2 -translate-x-1/2" handle="s" />
                   <ResizeHandle cursor="sw-resize" position="-bottom-1.5 -left-1.5" handle="sw" />
                   <ResizeHandle cursor="w-resize" position="top-1/2 -translate-y-1/2 -left-1.5" handle="w" />
+
+                  <button
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); downloadSelectedArea(); }}
+                    className="absolute bottom-0 right-[72px] translate-y-full mt-1 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center p-1 rounded shadow-md pointer-events-auto transition-colors z-30"
+                    title="הורד בחירה"
+                    style={{ transform: `scale(${100 / imageZoom})`, transformOrigin: 'top right', cursor: 'pointer' }}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">download</span>
+                  </button>
 
                   <button
                     onMouseDown={(e) => e.stopPropagation()}
