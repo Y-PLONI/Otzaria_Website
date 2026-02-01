@@ -66,8 +66,10 @@ export async function sendBookNotification(bookName, bookSlug) {
             </div>
             `;
             return transporter.sendMail({
-                from: `"Otzaria Library" <${process.env.SMTP_FROM}>`,
-                to: email, 
+                from: {
+                    name: "ספריית אוצריא",
+                    address: process.env.SMTP_FROM
+                },                to: email, 
                 replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_FROM,
                 subject: `📚 ספר חדש בספרייה: ${bookName}`,
                 headers: {
