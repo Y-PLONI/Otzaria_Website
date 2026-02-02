@@ -13,7 +13,8 @@ import SettingsSidebar from '@/components/editor/SettingsSidebar'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 import SplitDialog from '@/components/editor/modals/SplitDialog'
 import InfoDialog from '@/components/editor/modals/InfoDialog'
-import { useDialog } from '@/components/DialogContext' // ייבוא ה-Hook החדש
+import { useDialog } from '@/components/DialogContext'
+import { useLoading } from '@/components/LoadingContext'
 
 // Hooks
 import { useAutoSave } from '@/hooks/useAutoSave'
@@ -26,6 +27,7 @@ export default function EditPage() {
   const bookPath = decodeURIComponent(params.bookPath)
   const pageNumber = parseInt(params.pageNumber)
   const { showAlert, showConfirm } = useDialog()
+  const { startLoading, stopLoading } = useLoading()
 
   // Data State
   const [bookData, setBookData] = useState(null)
@@ -62,9 +64,7 @@ export default function EditPage() {
   useEffect(() => { columnWidthRef.current = columnWidth }, [columnWidth])
 
   const [swapPanels, setSwapPanels] = useState(false)
-  const [isOCRBlocking, setIsOCRBlocking] = useState(false)
-  const cancelOCRRef = useRef(false)
-   
+  
   // Full Screen & Toolbar State
   const [isFullScreen, setIsFullScreen] = useState(false)
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false)
@@ -375,30 +375,36 @@ export default function EditPage() {
   }, [session, content, leftColumn, rightColumn, twoColumns, handleAutoSaveWrapper, showAlert]);
 
   const completePageLogic = async () => {
-    try {
-      const safeBookId = bookData?.id || bookData?._id;
-      const safePageId = pageData?.id || pageData?._id;
-      if (!safePageId || !safeBookId) return showAlert('שגיאה', 'מזהים חסרים');
+    const safeBookId = bookData?.id || bookData?._id;
+    const safePageId = pageData?.id || pageData?._id;
+    if (!safePageId || !safeBookId) return showAlert('שגיאה', 'מזהים חסרים');
 
+    startLoading('מעדכן סטטוס עמוד...');
+    try {
       const response = await fetch(`/api/book/complete-page`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pageId: safePageId, bookId: safeBookId })
       });
       const result = await response.json();
+      
+      stopLoading(); 
+
       if (result.success) router.push(`/library/book/${encodeURIComponent(bookPath)}`);
       else showAlert('שגיאה', `שגיאה מהשרת: ${result.error}`);
     } catch (error) {
+      stopLoading(); 
       console.error('Error completing page:', error);
       showAlert('שגיאה', 'שגיאה בסימון העמוד כהושלם');
     }
   };
 
   const handleUploadConfirm = async () => {
-    try {
-      let textContent = twoColumns ? `${rightColumnName}:\n${rightColumn}\n\n${leftColumnName}:\n${leftColumn}` : content;
-      if (!textContent.trim()) return showAlert('שגיאה', 'העמוד ריק');
+    let textContent = twoColumns ? `${rightColumnName}:\n${rightColumn}\n\n${leftColumnName}:\n${leftColumn}` : content;
+    if (!textContent.trim()) return showAlert('שגיאה', 'העמוד ריק');
 
+    startLoading('מעלה קובץ למערכת...');
+    try {
       const cleanBookName = bookPath.replace(/[^a-zA-Z0-9א-ת]/g, '_'); 
       const fileName = `${cleanBookName}_page_${pageNumber}.txt`;
       const blob = new Blob([textContent], { type: 'text/plain' });
@@ -413,6 +419,8 @@ export default function EditPage() {
       const response = await fetch('/api/upload-book', { method: 'POST', body: formData });
       const result = await response.json();
 
+      stopLoading(); 
+
       if (result.success) {
         showAlert('הצלחה', 'הטקסט הועלה בהצלחה! מסמן כהושלם.');
         await completePageLogic(); 
@@ -420,6 +428,7 @@ export default function EditPage() {
         showAlert('שגיאה', `שגיאה בהעלאה: ${result.error || 'שגיאה לא ידועה'}`);
       }
     } catch (error) {
+      stopLoading();
       console.error('Error uploading text:', error);
       showAlert('שגיאה', 'שגיאה בתהליך ההעלאה');
     }
@@ -662,8 +671,7 @@ export default function EditPage() {
 
   const handleOCR = async () => {
     if (!selectionRect) return showAlert('שגיאה', 'בחר אזור')
-    cancelOCRRef.current = false
-    setIsOCRBlocking(true)
+    startLoading('מזהה טקסט...') // התחלת טעינה גלובלית
 
     try {
         const response = await fetch(pageData.thumbnail)
@@ -689,16 +697,13 @@ export default function EditPage() {
 
         const croppedBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95))
         
-        if (cancelOCRRef.current) return
-
         let text = ''
         if (ocrMethod === 'gemini') text = await performGeminiOCR(croppedBlob, userApiKey, selectedModel, customPrompt)
         else if (ocrMethod === 'ocrwin') text = await performOCRWin(croppedBlob)
         else text = await performTesseractOCR(croppedBlob)
         
-        if (cancelOCRRef.current) return
         if (!text) {
-             setIsOCRBlocking(false)
+             stopLoading() // עצירה לפני Alert
              return showAlert('שגיאה', 'לא זוהה טקסט')
         }
         
@@ -713,17 +718,12 @@ export default function EditPage() {
         }
         setSelectionRect(null)
         setIsSelectionMode(false)
+        stopLoading() // עצירה בהצלחה
     } catch (e) {
         console.error(e)
-        if (!cancelOCRRef.current) showAlert('שגיאה', 'שגיאה ב-OCR: ' + e.message)
-    } finally {
-        setIsOCRBlocking(false)
+        stopLoading() // עצירה בכישלון
+        showAlert('שגיאה', 'שגיאה ב-OCR: ' + e.message)
     }
-  }
-
-  const handleCancelOCR = () => {
-      cancelOCRRef.current = true
-      setIsOCRBlocking(false)
   }
 
   const getInstructions = () => {
@@ -813,7 +813,7 @@ export default function EditPage() {
             <ImagePanel 
               thumbnailUrl={pageData?.thumbnail} pageNumber={pageNumber}
               imageZoom={imageZoom} 
-              setImageZoom={setImageZoom} // תוקן: העברת פונקציית העדכון
+              setImageZoom={setImageZoom} 
               isSelectionMode={isSelectionMode}
               selectionStart={selectionStart} selectionEnd={selectionEnd}
               selectionRect={selectionRect}
@@ -884,23 +884,6 @@ export default function EditPage() {
         isOpen={showInfoDialog} onClose={handleCloseInfoDialog}
         editingInstructions={getInstructions()}
       />
-
-      {isOCRBlocking && (
-        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center transition-all duration-300">
-          <div className="bg-white/10 border border-white/20 p-8 rounded-2xl flex flex-col items-center shadow-2xl backdrop-blur-md">
-            <div className="relative w-16 h-16 mb-6">
-              <div className="absolute inset-0 border-4 border-t-blue-500 border-r-transparent border-b-blue-500 border-l-transparent rounded-full animate-spin"></div>
-              <div className="absolute inset-2 border-4 border-t-purple-500 border-r-transparent border-b-purple-500 border-l-transparent rounded-full animate-spin reverse-spin opacity-70" style={{ animationDirection: 'reverse', animationDuration: '2s' }}></div>
-            </div>
-            <h3 className="text-white text-xl font-bold mb-2 tracking-wide">מזהה טקסט...</h3>
-            <p className="text-gray-300 text-sm mb-6">אנא המתן, הפעולה עשויה לקחת מספר שניות</p>
-            <button onClick={handleCancelOCR} className="px-6 py-2 bg-red-500/20 hover:bg-red-500/40 text-red-200 border border-red-500/50 rounded-full transition-colors flex items-center gap-2 text-sm font-medium">
-              <span className="material-symbols-outlined text-sm">close</span>
-              ביטול
-            </button>
-          </div>
-        </div>
-      )}
 
       {showUploadDialog && (
         <UploadDialog
