@@ -6,6 +6,7 @@ export default function ImagePanel({
   handleOCRSelection,
   isOcrProcessing,
   imageZoom,
+  setImageZoom,
   isSelectionMode,
   selectionStart,
   selectionEnd,
@@ -385,6 +386,32 @@ export default function ImagePanel({
       style={{ cursor: cursor, transform: `scale(${100 / imageZoom})` }}
     />
   )
+
+  useEffect(() => {
+    const container = imageContainerRef.current
+    if (!container) return
+
+    const handleWheelZoom = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+
+        const delta = e.deltaY > 0 ? -10 : 10 
+        
+        if (setImageZoom) {
+            setImageZoom(prevZoom => {
+                const newZoom = prevZoom + delta
+                return Math.max(10, Math.min(newZoom, 500))
+            })
+        }
+      }
+    }
+יעבוד
+    container.addEventListener('wheel', handleWheelZoom, { passive: false })
+
+    return () => {
+      container.removeEventListener('wheel', handleWheelZoom)
+    }
+  }, [setImageZoom])
 
   useEffect(() => {
     const onMove = (e) => handleMouseMove(e)
