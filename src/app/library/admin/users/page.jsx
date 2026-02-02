@@ -38,7 +38,7 @@ export default function AdminUsersPage() {
       setEditingUser(user._id)
       setFormData({
           name: user.name,
-          email: user.email, // <--- הוספנו את האימייל לנתוני הטופס
+          email: user.email,
           role: user.role,
           points: user.points
       })
@@ -51,7 +51,6 @@ export default function AdminUsersPage() {
         const confirmed = confirm(
             "⚠️ שים לב: שינוי כתובת האימייל יגרום לביטול אימות המשתמש (V) והוא יידרש לאמת את המייל החדש.\n\nהאם אתה בטוח שברצונך להמשיך?"
         )
-        // אם המנהל לחץ על "ביטול", עוצרים את הפונקציה כאן
         if (!confirmed) return 
     }
 
