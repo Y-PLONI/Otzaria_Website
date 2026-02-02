@@ -55,35 +55,38 @@ export function DialogProvider({ children }) {
 
       {dialogConfig.isOpen && (
         <div 
-          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+          className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4 transition-all duration-300"
           onClick={closeDialog}
         >
           <div 
-            className="bg-white/90 dark:bg-gray-800/90 border border-white/20 backdrop-blur-xl p-6 rounded-2xl max-w-sm w-full shadow-2xl transform transition-all scale-100"
+            className="glass-strong p-8 rounded-2xl max-w-sm w-full shadow-2xl transform transition-all scale-100 border border-surface-variant/50"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex flex-col items-center text-center mb-4">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 ${
-                dialogConfig.type === 'confirm' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 shadow-inner ${
+                dialogConfig.type === 'confirm' 
+                  ? 'bg-primary/10 text-primary' 
+                  : 'bg-secondary/10 text-secondary'
               }`}>
-                <span className="material-symbols-outlined text-2xl">
+                <span className="material-symbols-outlined text-[32px]">
                   {dialogConfig.type === 'confirm' ? 'help' : 'info'}
                 </span>
               </div>
               
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+              <h3 className="text-xl font-frank font-bold text-on-surface mb-2 tracking-wide">
                 {dialogConfig.title}
               </h3>
-              <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-line">
+              
+              <p className="text-on-surface/80 text-base leading-relaxed whitespace-pre-line">
                 {dialogConfig.message}
               </p>
             </div>
 
-            <div className="flex gap-3 justify-center mt-6">
+            <div className="flex gap-3 justify-center mt-2">
               {dialogConfig.type === 'confirm' && (
                 <button 
                   onClick={closeDialog}
-                  className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium transition-colors"
+                  className="px-5 py-2.5 rounded-xl border border-surface-variant text-on-surface/70 hover:bg-surface-variant/30 hover:text-on-surface font-medium transition-all duration-200"
                 >
                   {dialogConfig.cancelText}
                 </button>
@@ -91,10 +94,10 @@ export function DialogProvider({ children }) {
               
               <button 
                 onClick={handleConfirm}
-                className={`px-6 py-2 rounded-lg text-white text-sm font-medium shadow-md transition-colors ${
+                className={`px-6 py-2.5 rounded-xl text-on-primary font-medium shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 ${
                   dialogConfig.type === 'confirm' 
-                    ? 'bg-blue-600 hover:bg-blue-700' 
-                    : 'bg-gray-800 hover:bg-gray-900'
+                    ? 'bg-primary hover:bg-primary/90' 
+                    : 'bg-secondary hover:bg-secondary/90'
                 }`}
               >
                 {dialogConfig.confirmText}
