@@ -6,6 +6,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import VersionNotice from "@/components/VersionNotice";
 import ReminderGuard from "@/components/ReminderGuard"; 
 import { DialogProvider } from '@/components/DialogContext'
+import { LoadingProvider } from '@/components/LoadingContext'
 
 
 const frankRuehl = localFont({
@@ -43,11 +44,13 @@ export default function RootLayout({
         <ErrorBoundary>
           <SessionProvider>
             <DialogProvider>
-              <ReminderGuard>
-                {children}
-              </ReminderGuard>
-              
-              <VersionNotice />
+              <LoadingProvider>
+                <ReminderGuard>
+                  {children}
+                </ReminderGuard>
+                
+                <VersionNotice />
+              </LoadingProvider>
             </DialogProvider>
           </SessionProvider>
         </ErrorBoundary>

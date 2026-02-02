@@ -7,6 +7,8 @@ import Link from 'next/link'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import ImagePreviewModal from '@/components/ImagePreviewModal'
 import { useDialog } from '@/components/DialogContext'
+import { LoadingProvider } from '@/components/LoadingContext'
+import { useLoading } from '@/components/LoadingContext'
 
 const pageStatusConfig = {
   available: {
@@ -30,6 +32,7 @@ const pageStatusConfig = {
 }
 
 export default function BookPage() {
+  const { startLoading, stopLoading } = useLoading()
   const { data: session } = useSession()
   const router = useRouter()
   const params = useParams()
@@ -70,20 +73,27 @@ export default function BookPage() {
     loadBookData()
   }, [loadBookData])
 
+
   const handleReleasePage = async (pageNumber) => {
     if (!session) return;
     
+    // שליפת ה-ID מראש כדי למנוע מצב שנכנסים ללואדר ואז מגלים שגיאה
+    const pageId = pages.find(p => p.number === pageNumber)?.id;
+
     showConfirm(
         'שחרור עמוד',
         'האם אתה בטוח שברצונך לשחרר את העמוד? תאבד 5 נקודות.',
         async () => {
-            try {
-                const pageId = pages.find(p => p.number === pageNumber)?.id;
-                if (!pageId) {
-                    showAlert('שגיאה', 'שגיאה בזיהוי העמוד');
-                    return;
-                }
+            // בדיקת תקינות *לפני* שהמסך מחשיך
+            if (!pageId) {
+                showAlert('שגיאה', 'שגיאה בזיהוי העמוד');
+                return;
+            }
 
+            // 1. התחלת אנימציה - רק אחרי שהמשתמש לחץ "אישור"
+            startLoading('משחרר עמוד ומעדכן נתונים...'); 
+
+            try {
                 const response = await fetch(`/api/book/release-page`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -91,14 +101,21 @@ export default function BookPage() {
                 })
 
                 const result = await response.json()
+                
+                // 2. עצירת אנימציה - חובה לבצע לפני שמציגים הודעת הצלחה/כישלון
+                stopLoading(); 
+
                 if (result.success) {
-                    loadBookData()
+                    await loadBookData() // המתנה לטעינת הנתונים החדשים
                     showAlert('בוצע', 'העמוד שוחרר בהצלחה');
                 } else {
                     showAlert('שגיאה', result.error);
                 }
             } catch (err) {
                 console.error('Error releasing page:', err)
+                
+                // 3. עצירת אנימציה גם במקרה של קריסה (Catch)
+                stopLoading(); 
                 showAlert('שגיאה', 'שגיאה בשחרור העמוד');
             }
         }
