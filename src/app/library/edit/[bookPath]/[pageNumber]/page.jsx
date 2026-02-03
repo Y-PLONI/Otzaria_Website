@@ -857,7 +857,7 @@ export default function EditPage() {
         userApiKey={userApiKey} setUserApiKey={setUserApiKey}
         selectedModel={selectedModel} setSelectedModel={setSelectedModel}
         customPrompt={customPrompt} setCustomPrompt={setCustomPrompt}
-        saveSettings={() => { localStorage.setItem('gemini_api_key', userApiKey); showAlert('מידע', 'נשמר'); }}
+        saveSettings={() => { localStorage.setItem('gemini_api_key', userApiKey); showAlert('הצלחה', 'נשמר'); }}
         resetPrompt={() => setCustomPrompt('The text is in Hebrew, written in Rashi script...')}
       />
       
