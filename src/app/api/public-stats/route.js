@@ -10,8 +10,24 @@ export async function GET() {
 
     const [usersCount, booksCount, pagesStats] = await Promise.all([
         User.countDocuments(),
-        Book.countDocuments(),
+        
+        Book.countDocuments({ isHidden: { $ne: true } }), 
+        
         Page.aggregate([
+            {
+                $lookup: {
+                    from: 'books',       
+                    localField: 'book',  
+                    foreignField: '_id', 
+                    as: 'bookData'
+                }
+            },
+            {
+                $match: {
+                    'bookData.isHidden': { $ne: true },
+                    'status': 'completed'
+                }
+            },
             {
                 $group: {
                     _id: null,

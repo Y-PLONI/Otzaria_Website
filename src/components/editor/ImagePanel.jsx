@@ -6,6 +6,7 @@ export default function ImagePanel({
   handleOCRSelection,
   isOcrProcessing,
   imageZoom,
+  setImageZoom,
   isSelectionMode,
   selectionStart,
   selectionEnd,
@@ -387,6 +388,36 @@ export default function ImagePanel({
   )
 
   useEffect(() => {
+    const container = imageContainerRef.current
+    if (!container) return
+
+    const handleWheelZoom = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        e.stopPropagation()
+
+        const delta = e.deltaY > 0 ? -10 : 10 
+        
+        if (typeof setImageZoom === 'function') {
+            setImageZoom(prevZoom => {
+                const current = Number(prevZoom) || 100 
+                const newZoom = current + delta
+                return Math.max(10, Math.min(newZoom, 500))
+            })
+        } else {
+            console.error("setImageZoom prop is missing or not a function!");
+        }
+      }
+    }
+
+    container.addEventListener('wheel', handleWheelZoom, { passive: false })
+
+    return () => {
+      container.removeEventListener('wheel', handleWheelZoom)
+    }
+  }, [setImageZoom])
+
+  useEffect(() => {
     const onMove = (e) => handleMouseMove(e)
     const onUp = (e) => handleMouseUp(e)
 
@@ -426,7 +457,7 @@ export default function ImagePanel({
               onDragStart={(e) => e.preventDefault()}
               onMouseDown={handleMouseDownCreate} 
               style={{ 
-                transform: `scale(${imageZoom / 100})`,
+                zoom: `${imageZoom}%`,
                 cursor: isSelectionMode ? 'crosshair' : 'default',
                 transformOrigin: 'center center',
                 userSelect: 'none',

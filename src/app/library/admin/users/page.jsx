@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useDialog } from '@/components/DialogContext'
 
 export default function AdminUsersPage() {
   const { data: session } = useSession()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingUser, setEditingUser] = useState(null)
+  const { showAlert, showConfirm } = useDialog()
   
   const [formData, setFormData] = useState({})
 
@@ -36,7 +38,7 @@ export default function AdminUsersPage() {
       setEditingUser(user._id)
       setFormData({
           name: user.name,
-          email: user.email, // <--- הוספנו את האימייל לנתוני הטופס
+          email: user.email,
           role: user.role,
           points: user.points
       })
@@ -49,7 +51,6 @@ export default function AdminUsersPage() {
         const confirmed = confirm(
             "⚠️ שים לב: שינוי כתובת האימייל יגרום לביטול אימות המשתמש (V) והוא יידרש לאמת את המייל החדש.\n\nהאם אתה בטוח שברצונך להמשיך?"
         )
-        // אם המנהל לחץ על "ביטול", עוצרים את הפונקציה כאן
         if (!confirmed) return 
     }
 
@@ -63,13 +64,13 @@ export default function AdminUsersPage() {
       if (response.ok) {
         setEditingUser(null)
         loadUsers()
-        alert('המשתמש עודכן בהצלחה')
+        showAlert('הצלחה!', 'המשתמש עודכן בהצלחה')
       } else {
         const data = await response.json()
-        alert(data.error || 'שגיאה בעדכון')
+        showAlert('שגיאה', 'שגיאה בעדכון')
       }
     } catch (e) {
-      alert('שגיאה בתקשורת')
+      showAlert('שגיאה', 'שגיאה בתקשורת')
     }
   }
 
@@ -83,7 +84,7 @@ export default function AdminUsersPage() {
       })
       loadUsers()
     } catch (e) {
-      alert('שגיאה במחיקה')
+      showAlert('שגיאה', 'שגיאה במחיקה')
     }
   }
 
