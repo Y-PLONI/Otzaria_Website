@@ -1,115 +1,125 @@
-'use client'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 export default function InfoDialog({ isOpen, onClose, bookInstructions, globalInstructions }) {
-  const [doNotShowAgain, setDoNotShowAgain] = useState(false)
-  
-  useEffect(() => {
-    if (isOpen) setDoNotShowAgain(false);
-  }, [isOpen]);
+  const [mounted, setMounted] = useState(false)
+  const [dontShowAgain, setDontShowAgain] = useState(false)
 
-  if (!isOpen) return null
+  useEffect(() => {
+    setMounted(true)
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+      setDontShowAgain(false)
+    }
+    return () => { document.body.style.overflow = 'unset' }
+  }, [isOpen])
 
   const handleClose = () => {
-    onClose(doNotShowAgain)
+    onClose(dontShowAgain)
   }
 
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-scaleIn">
-        
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <span className="material-symbols-outlined text-blue-600">menu_book</span>
+  if (!isOpen || !mounted) return null
+
+  // פונקציית עזר לרינדור סקשנים בעיצוב המקורי בדיוק
+  const renderSections = (sections) => {
+    if (!sections) return null;
+    return sections.map((section, idx) => (
+      <div key={idx} className="bg-surface/50 border border-surface-variant rounded-xl p-5">
+        <h3 className="text-lg font-bold text-primary mb-4 flex items-center gap-2 border-b border-surface-variant/50 pb-2">
+          <span className="material-symbols-outlined">check_circle</span>
+          {section.title}
+        </h3>
+        <ul className="space-y-3">
+          {section.items.map((item, itemIdx) => (
+            <li key={itemIdx} className="flex items-start gap-3 text-on-surface/90">
+              <span className="material-symbols-outlined text-sm text-primary mt-1 flex-shrink-0">arrow_left</span>
+              <span className="leading-relaxed">{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ));
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={handleClose}>
+      <div 
+        className="flex flex-col bg-white glass-strong rounded-2xl w-full max-w-2xl shadow-2xl max-h-[85vh] animate-in zoom-in-95 duration-200" 
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* כותרת עליונה */}
+        <div className="flex items-center justify-between p-6 border-b border-surface-variant flex-shrink-0 bg-white/50 rounded-t-2xl">
+          <h2 className="text-2xl font-bold text-on-surface flex items-center gap-2">
+            <span className="material-symbols-outlined text-blue-600 text-3xl">info</span>
             <span>הנחיות עריכה</span>
           </h2>
-          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <span className="material-symbols-outlined">close</span>
+          <button 
+            onClick={handleClose} 
+            className="text-on-surface/50 hover:text-on-surface hover:bg-surface-variant p-2 rounded-full transition-colors"
+          >
+            <span className="material-symbols-outlined text-2xl block">close</span>
           </button>
         </div>
 
         {/* תוכן גלילה */}
-        <div className="flex-1 overflow-y-auto p-6">
-          
-          {bookInstructions && (
-            <div className="mb-8">
-              <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                 {bookInstructions.title || 'הנחיות לספר זה'}
-              </h3>
-
-              <div className="space-y-6">
-                {bookInstructions.sections?.length > 0 ? (
-                  bookInstructions.sections.map((section, idx) => (
-                    <div key={`book-${idx}`} className="bg-blue-50/50 rounded-lg p-4 border border-blue-100/50">
-                      <h4 className="font-bold text-gray-900 mb-2">{section.title}</h4>
-                      <ul className="list-disc list-inside space-y-2 text-gray-700 text-sm">
-                        {section.items.map((item, itemIdx) => (
-                          <li key={itemIdx} className="leading-relaxed marker:text-blue-500">{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 italic">אין הנחיות מיוחדות לספר זה.</p>
-                )}
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+          <div className="space-y-8">
+            
+            {/* חלק 1: הנחיות הספר */}
+            {bookInstructions && bookInstructions.sections && bookInstructions.sections.length > 0 && (
+              <div>
+                 {/* כותרת משנה רק כדי להבדיל, אבל בעיצוב נקי שתואם למקור */}
+                <h4 className="text-md font-bold text-on-surface/70 mb-3 pr-1 border-r-4 border-primary/50 mr-1">
+                  {bookInstructions.title || 'הנחיות לספר זה'}
+                </h4>
+                <div className="space-y-6">
+                  {renderSections(bookInstructions.sections)}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {bookInstructions && globalInstructions && (
-            <hr className="my-6 border-gray-200 border-dashed" />
-          )}
+            {/* קו מפריד עדין אם יש את שני הסוגים */}
+            {bookInstructions?.sections?.length > 0 && globalInstructions?.sections?.length > 0 && (
+               <div className="border-t border-surface-variant/60 my-2"></div>
+            )}
 
-          {globalInstructions && globalInstructions.sections?.length > 0 && (
-            <div className="opacity-90">
-              <h3 className="text-lg font-bold text-gray-700 mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-gray-500">settings</span>
-                {globalInstructions.title || 'הנחיות כלליות למערכת'}
-              </h3>
-              
-              <div className="bg-gray-50 rounded-xl p-5 border border-gray-200 space-y-4">
-                {globalInstructions.sections.map((section, idx) => (
-                  <div key={`global-${idx}`}>
-                    {/* מציג כותרת משנה רק אם היא שונה מהכותרת הראשית */}
-                    {section.title && section.title !== globalInstructions.title && (
-                      <h4 className="font-semibold text-gray-700 mb-2 text-sm">{section.title}</h4>
-                    )}
-                    <ul className="list-disc list-inside space-y-1 text-gray-600 text-sm">
-                      {section.items.map((item, itemIdx) => (
-                        <li key={itemIdx} className="leading-relaxed">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+            {/* חלק 2: הנחיות גלובליות */}
+            {globalInstructions && globalInstructions.sections && globalInstructions.sections.length > 0 && (
+              <div>
+                <h4 className="text-md font-bold text-on-surface/70 mb-3 pr-1 border-r-4 border-primary/50 mr-1">
+                  {globalInstructions.title || 'הנחיות מערכת'}
+                </h4>
+                <div className="space-y-6">
+                  {renderSections(globalInstructions.sections)}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
+          </div>
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
-          <label className="flex items-center gap-2 cursor-pointer select-none group">
-            <div className="relative flex items-center">
-              <input 
-                type="checkbox" 
-                checked={doNotShowAgain}
-                onChange={(e) => setDoNotShowAgain(e.target.checked)}
-                className="peer sr-only"
-              />
-              <div className="w-5 h-5 border-2 border-gray-300 rounded peer-checked:bg-blue-600 peer-checked:border-blue-600 transition-all"></div>
-              <span className="material-symbols-outlined absolute text-white text-[16px] opacity-0 peer-checked:opacity-100 pointer-events-none left-[2px]">check</span>
-            </div>
-            <span className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors">אל תציג שוב לספר זה</span>
+        {/* פוטר */}
+        <div className="p-6 border-t border-surface-variant bg-surface/30 flex-shrink-0 rounded-b-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+          <label className="flex items-center gap-2 cursor-pointer text-on-surface/80 hover:text-on-surface select-none group">
+            <input 
+              type="checkbox" 
+              checked={dontShowAgain} 
+              onChange={(e) => setDontShowAgain(e.target.checked)}
+              className="w-5 h-5 rounded border-surface-variant text-primary focus:ring-primary cursor-pointer transition-colors"
+            />
+            <span className="text-sm font-medium group-hover:text-primary transition-colors">אל תציג שוב לספר זה</span>
           </label>
 
           <button 
-            onClick={handleClose}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-sm font-medium"
+            onClick={handleClose} 
+            className="w-full sm:w-auto px-8 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent font-bold transition-all hover:-translate-y-0.5 shadow-md flex items-center justify-center gap-2"
           >
-            אישור
+            <span className="material-symbols-outlined">check</span>
+            הבנתי, בואו נתחיל!
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
