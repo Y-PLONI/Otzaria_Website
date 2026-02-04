@@ -38,6 +38,6 @@ export const config = {
     '/api/admin/((?!books/upload).*)',
     '/api/upload-text/:path*',
     '/api/dicta/books/:path*', // הגנה על API של ספרי דיקטה
-    '/dicta-editor/:path*' // עורך דיקטה דורש התחברות
+    '/library/dicta-editor/:path*' 
   ]
 };
