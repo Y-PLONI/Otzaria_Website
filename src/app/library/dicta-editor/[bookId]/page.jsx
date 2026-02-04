@@ -12,6 +12,7 @@ import PageBHeaderModal from '@/components/dicta-tools/PageBHeaderModal'
 import ReplacePageBModal from '@/components/dicta-tools/ReplacePageBModal'
 import HeaderErrorCheckerModal from '@/components/dicta-tools/HeaderErrorCheckerModal'
 import TextCleanerModal from '@/components/dicta-tools/TextCleanerModal'
+import AddPageNumberModal from '@/components/dicta-tools/AddPageNumberModal'
 
 export default function DictaEditorPage() {
   const params = useParams()
@@ -236,6 +237,14 @@ export default function DictaEditorPage() {
           >
             <span className="material-symbols-outlined text-gray-700">swap_horiz</span>
           </button>
+
+          <button
+            onClick={() => setActiveTool('addPageNumber')}
+            className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+            title="מיזוג דף ועמוד"
+          >
+            <span className="material-symbols-outlined text-gray-700">auto_stories</span>
+          </button>
           
           <button
             onClick={() => setActiveTool('headerCheck')}
@@ -347,6 +356,13 @@ export default function DictaEditorPage() {
       
       <TextCleanerModal
         isOpen={activeTool === 'cleanText'}
+        onClose={() => setActiveTool(null)}
+        bookId={bookId}
+        onSuccess={refreshContent}
+      />
+
+      <AddPageNumberModal
+        isOpen={activeTool === 'addPageNumber'}
         onClose={() => setActiveTool(null)}
         bookId={bookId}
         onSuccess={refreshContent}
