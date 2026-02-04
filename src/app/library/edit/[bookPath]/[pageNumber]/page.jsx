@@ -70,6 +70,7 @@ export default function EditPage() {
   const [showFindReplace, setShowFindReplace] = useState(false)
   const [findText, setFindText] = useState('')
   const [replaceText, setReplaceText] = useState('')
+  const [useRegex, setUseRegex] = useState(false)
   const [savedSearches, setSavedSearches] = useState([])
 
   const [isSelectionMode, setIsSelectionMode] = useState(false)
@@ -230,12 +231,13 @@ export default function EditPage() {
       }
   };
 
-  const addSavedSearch = (label, newFindText, newReplaceText) => {
+  const addSavedSearch = (label, newFindText, newReplaceText, isRegex = false) => {
     const newSearch = {
       id: Date.now().toString(),
       label: label || newFindText,
       findText: newFindText,
       replaceText: newReplaceText,
+      isRegex: isRegex
     };
     saveSearchesToServer([...savedSearches, newSearch]);
   };
@@ -523,36 +525,67 @@ export default function EditPage() {
     handleAutoSaveWrapper(content, '', content, true)
   }
 
-  const handleFindReplace = (replaceAll = false, overrideFind = null, overrideReplace = null) => {
+  const handleFindReplace = (replaceAll = false, overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
     const textToFind = overrideFind !== null ? overrideFind : findText;
     const textToReplace = overrideReplace !== null ? overrideReplace : replaceText;
+    const isRegexMode = useRegexOverride !== null ? useRegexOverride : useRegex;
 
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
     
     const processPattern = (str) => str.replaceAll('^13', '\n');
     
-    const pattern = processPattern(textToFind);
+    const patternStr = processPattern(textToFind);
     const replacement = processPattern(textToReplace || ''); 
+
+    const createRegex = (global) => {
+        try {
+            if (isRegexMode) {
+                return new RegExp(patternStr, global ? 'g' : '');
+            } else {
+                const escaped = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                return new RegExp(escaped, global ? 'g' : '');
+            }
+        } catch (e) {
+            return null;
+        }
+    };
+
+    const regex = createRegex(replaceAll);
+    if (!regex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
 
     let totalOccurrences = 0;
 
     const executeReplace = (text) => {
-      if (!text || !pattern) return text;
-      const parts = text.split(pattern);
-      const count = parts.length - 1; 
+      if (!text) return text;
+      
+      const checkRegex = createRegex(true); 
+      const matches = text.match(checkRegex);
+      const count = matches ? matches.length : 0;
+      
       if (count === 0) return text;
+
       if (replaceAll) {
         totalOccurrences += count;
-        return parts.join(replacement);
+        return text.replace(regex, replacement);
       } else {
-        totalOccurrences += 1;
-        return text.replace(pattern, replacement);
+        if (regex.test(text)) {
+            totalOccurrences += 1;
+            return text.replace(regex, replacement);
+        }
+        return text;
       }
     };
 
     if (twoColumns) {
-      const newRight = executeReplace(rightColumn);
-      const newLeft = executeReplace(leftColumn);
+      let newRight = executeReplace(rightColumn);
+      let newLeft = leftColumn;
+      
+      if (!replaceAll && newRight === rightColumn) {
+          newLeft = executeReplace(leftColumn);
+      } else if (replaceAll) {
+          newLeft = executeReplace(leftColumn);
+      }
+
       if (totalOccurrences > 0) {
         setRightColumn(newRight);
         setLeftColumn(newLeft);
@@ -565,7 +598,8 @@ export default function EditPage() {
         handleAutoSaveWrapper(newContent, leftColumn, rightColumn, false);
       }
     }
-    if (totalOccurrences > 0) showAlert('הצלחה', `ההחלפה בוצעת בהצלחה! הוחלפו ${totalOccurrences} מופעים.`);
+    
+    if (totalOccurrences > 0) showAlert('הצלחה', `ההחלפה בוצעה בהצלחה! הוחלפו ${totalOccurrences} מופעים.`);
     else showAlert('לידיעתך', 'לא נמצאו תוצאות התואמות לחיפוש.');
   };
 
@@ -661,7 +695,6 @@ export default function EditPage() {
     
     let isCancelled = false;
 
-    // הפעלת הטעינה עם Callback לביטול
     startLoading('מזהה טקסט...', () => {
         isCancelled = true;
     }) 
@@ -699,7 +732,6 @@ export default function EditPage() {
         else if (ocrMethod === 'ocrwin') text = await performOCRWin(croppedBlob)
         else text = await performTesseractOCR(croppedBlob)
         
-        // בדיקת ביטול אחרי סיום ה-OCR ולפני עדכון ה-state
         if (isCancelled) return;
 
         if (!text) {
@@ -720,7 +752,6 @@ export default function EditPage() {
         setIsSelectionMode(false)
         stopLoading() 
     } catch (e) {
-        // אם בוטל, אנחנו לא מציגים שגיאה
         if (!isCancelled) {
             console.error(e)
             stopLoading() 
@@ -873,6 +904,8 @@ export default function EditPage() {
         runAllSavedReplacements={runAllSavedReplacements}
         handleRemoveDigits={handleRemoveDigits}
         onAddRemoveDigitsToSaved={addRemoveDigitsToSaved}
+        useRegex={useRegex}
+        setUseRegex={setUseRegex}
       />
 
       <SplitDialog 
