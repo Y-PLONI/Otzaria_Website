@@ -525,7 +525,7 @@ export default function EditPage() {
     handleAutoSaveWrapper(content, '', content, true)
   }
 
-  const handleFindReplace = (replaceAll = false, overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
+    const handleFindReplace = (replaceAll = false, overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
     const textToFind = overrideFind !== null ? overrideFind : findText;
     const textToReplace = overrideReplace !== null ? overrideReplace : replaceText;
     const isRegexMode = useRegexOverride !== null ? useRegexOverride : useRegex;
@@ -553,12 +553,14 @@ export default function EditPage() {
     const regex = createRegex(replaceAll);
     if (!regex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
 
+    const checkRegex = createRegex(true);
+    if (!checkRegex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
+
     let totalOccurrences = 0;
 
     const executeReplace = (text) => {
       if (!text) return text;
       
-      const checkRegex = createRegex(true); 
       const matches = text.match(checkRegex);
       const count = matches ? matches.length : 0;
       
@@ -973,3 +975,4 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
   )
 
 }
+
