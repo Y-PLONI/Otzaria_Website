@@ -38,6 +38,7 @@ export default function EditPage() {
   const [rightColumn, setRightColumn] = useState('')
   const [twoColumns, setTwoColumns] = useState(false)
   const [activeTextarea, setActiveTextarea] = useState(null)
+  const [textAlign, setTextAlign] = useState('right');
   const [selectedFont, setSelectedFont] = useState('Times New Roman')
   const allInstructions = useMemo(() => {
       const globalRawSections = globalInstructions?.sections || [];
@@ -110,6 +111,15 @@ export default function EditPage() {
   const [showUploadDialog, setShowUploadDialog] = useState(false)
 
   const { save: debouncedSave, status: saveStatus } = useAutoSave()
+
+  useEffect(() => {
+    const savedAlign = localStorage.getItem('textAlign');
+    if (savedAlign) setTextAlign(savedAlign);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('textAlign', textAlign);
+  }, [textAlign]);
 
   useEffect(() => {
     const savedApiKey = localStorage.getItem('gemini_api_key')
@@ -900,6 +910,8 @@ export default function EditPage() {
         twoColumns={twoColumns} toggleColumns={toggleColumns}
         layoutOrientation={layoutOrientation} setLayoutOrientation={setLayoutOrientation}
         swapPanels={swapPanels}
+        textAlign={textAlign}
+        setTextAlign={setTextAlign}
         handleDownloadImage={handleDownloadImage}
         togglePanelOrder={togglePanelOrder}
         handleRemoveDigits={handleRemoveDigits}
@@ -946,6 +958,7 @@ export default function EditPage() {
               handleColumnChange={handleColumnChange}
               setActiveTextarea={setActiveTextarea} selectedFont={selectedFont}
               columnWidth={columnWidth} onColumnResizeStart={handleColumnResizeStart}
+              textAlign={textAlign}
             />
           </div>
           
