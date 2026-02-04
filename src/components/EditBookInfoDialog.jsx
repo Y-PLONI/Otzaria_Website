@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useDialog } from '@/components/DialogContext'
 
 export default function EditBookInfoDialog({ book, onClose, onSave }) {
+  const { showAlert } = useDialog()
   const [title, setTitle] = useState('הנחיות עריכה')
   const [sections, setSections] = useState([
     { title: 'כללי', items: [''] }
@@ -17,14 +19,12 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
       setTitle(book.editingInfo.title || 'הנחיות עריכה')
       setSections(book.editingInfo.sections || [{ title: 'כללי', items: [''] }])
     }
-    // Lock body scroll
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = 'unset' }
   }, [book])
 
   if (!book || !mounted) return null
 
-  // Helper functions
   const addSection = () => setSections([...sections, { title: '', items: [''] }])
   const removeSection = (index) => setSections(sections.filter((_, i) => i !== index))
   const updateSectionTitle = (index, newTitle) => {
@@ -68,15 +68,15 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
       const result = await response.json()
 
       if (result.success) {
-        alert('✅ המידע נשמר בהצלחה!')
+        showAlert('הצלחה', 'המידע נשמר בהצלחה!')
         onSave()
         onClose()
       } else {
-        alert('❌ שגיאה: ' + result.error)
+        showAlert('שגיאה', result.error || 'שגיאה בשמירה')
       }
     } catch (error) {
       console.error('Error saving book info:', error)
-      alert('❌ שגיאה בשמירת המידע')
+      showAlert('שגיאה', 'שגיאה בשמירת המידע')
     } finally {
       setSaving(false)
     }
@@ -90,7 +90,6 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
         className="flex flex-col bg-white rounded-2xl w-full max-w-4xl shadow-2xl max-h-[90vh]" 
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <span className="material-symbols-outlined text-blue-600 text-3xl">edit_note</span>
@@ -104,10 +103,8 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
           </button>
         </div>
 
-        {/* Scrollable Content */}
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
           <div className="space-y-6">
-            {/* כותרת ראשית */}
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2">
                 כותרת ראשית
@@ -121,7 +118,6 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
               />
             </div>
 
-            {/* סעיפים */}
             <div>
               <div className="flex items-center justify-between mb-4">
                 <label className="block text-sm font-bold text-gray-900">
@@ -191,7 +187,6 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex gap-3 p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex-shrink-0">
           <button
             onClick={handleSave}

@@ -6,6 +6,9 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import ImagePreviewModal from '@/components/ImagePreviewModal'
+import { useDialog } from '@/components/DialogContext'
+import { LoadingProvider } from '@/components/LoadingContext'
+import { useLoading } from '@/components/LoadingContext'
 
 const pageStatusConfig = {
   available: {
@@ -29,9 +32,11 @@ const pageStatusConfig = {
 }
 
 export default function BookPage() {
+  const { startLoading, stopLoading } = useLoading()
   const { data: session } = useSession()
   const router = useRouter()
   const params = useParams()
+  const { showAlert, showConfirm } = useDialog()
   
   const rawPath = Array.isArray(params.path) ? params.path.join('/') : params.path
   const bookPath = decodeURIComponent(rawPath)
@@ -40,8 +45,6 @@ export default function BookPage() {
   const [pages, setPages] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [confirmDialog, setConfirmDialog] = useState(null)
-  const [uploadDialog, setUploadDialog] = useState(null)
   const [viewMode, setViewMode] = useState('single') 
   const [previewImage, setPreviewImage] = useState(null)
   const [activeFilter, setActiveFilter] = useState('all')
@@ -70,62 +73,93 @@ export default function BookPage() {
     loadBookData()
   }, [loadBookData])
 
+
   const handleReleasePage = async (pageNumber) => {
     if (!session) return;
-    if (!confirm('האם אתה בטוח שברצונך לשחרר את העמוד? תאבד 5 נקודות.')) return;
+    
+    // שליפת ה-ID מראש כדי למנוע מצב שנכנסים ללואדר ואז מגלים שגיאה
+    const pageId = pages.find(p => p.number === pageNumber)?.id;
 
-    try {
-      const pageId = pages.find(p => p.number === pageNumber)?.id;
-      if (!pageId) return alert('שגיאה בזיהוי העמוד');
+    showConfirm(
+        'שחרור עמוד',
+        'האם אתה בטוח שברצונך לשחרר את העמוד? תאבד 5 נקודות.',
+        async () => {
+            // בדיקת תקינות *לפני* שהמסך מחשיך
+            if (!pageId) {
+                showAlert('שגיאה', 'שגיאה בזיהוי העמוד');
+                return;
+            }
 
-      const response = await fetch(`/api/book/release-page`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pageId: pageId })
-      })
+            // 1. התחלת אנימציה - רק אחרי שהמשתמש לחץ "אישור"
+            startLoading('משחרר עמוד ומעדכן נתונים...'); 
 
-      const result = await response.json()
-      if (result.success) {
-        loadBookData()
-      } else {
-        alert(`❌ ${result.error}`)
-      }
-    } catch (err) {
-      console.error('Error releasing page:', err)
-      alert('❌ שגיאה בשחרור העמוד')
-    }
+            try {
+                const response = await fetch(`/api/book/release-page`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pageId: pageId })
+                })
+
+                const result = await response.json()
+                
+                // 2. עצירת אנימציה - חובה לבצע לפני שמציגים הודעת הצלחה/כישלון
+                stopLoading(); 
+
+                if (result.success) {
+                    await loadBookData() // המתנה לטעינת הנתונים החדשים
+                    showAlert('בוצע', 'העמוד שוחרר בהצלחה');
+                } else {
+                    showAlert('שגיאה', result.error);
+                }
+            } catch (err) {
+                console.error('Error releasing page:', err)
+                
+                // 3. עצירת אנימציה גם במקרה של קריסה (Catch)
+                stopLoading(); 
+                showAlert('שגיאה', 'שגיאה בשחרור העמוד');
+            }
+        }
+    );
   }
 
   const handleUncompletePage = async (pageNumber) => {
     if (!session) return;
-    if (!confirm('האם אתה בטוח שברצונך לבטל את הסימון "הושלם"?\nהעמוד יחזור לסטטוס "בטיפול" והנקודות שקיבלת ירדו.')) return;
 
-    try {
-      const pageId = pages.find(p => p.number === pageNumber)?.id;
-      if (!pageId) return alert('שגיאה בזיהוי העמוד');
+    showConfirm(
+        'ביטול סיום',
+        'האם אתה בטוח שברצונך לבטל את הסימון "הושלם"?\nהעמוד יחזור לסטטוס "בטיפול" והנקודות שקיבלת ירדו.',
+        async () => {
+            try {
+                const pageId = pages.find(p => p.number === pageNumber)?.id;
+                if (!pageId) {
+                    showAlert('שגיאה', 'שגיאה בזיהוי העמוד');
+                    return;
+                }
 
-      const response = await fetch(`/api/book/uncomplete-page`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pageId: pageId })
-      });
+                const response = await fetch(`/api/book/uncomplete-page`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pageId: pageId })
+                });
 
-      const result = await response.json();
+                const result = await response.json();
 
-      if (result.success) {
-        // עדכון ה-State המקומי עם העמוד המעודכן שחזר מהשרת
-        setPages(prevPages => 
-          prevPages.map(page => 
-            page.number === pageNumber ? result.page : page
-          )
-        );
-      } else {
-        alert(`❌ ${result.error}`);
-      }
-    } catch (err) {
-      console.error('Error uncompleting page:', err);
-      alert('❌ שגיאה בביטול הסימון');
-    }
+                if (result.success) {
+                    setPages(prevPages => 
+                        prevPages.map(page => 
+                            page.number === pageNumber ? result.page : page
+                        )
+                    );
+                    showAlert('בוצע', 'העמוד הוחזר לסטטוס בטיפול');
+                } else {
+                    showAlert('שגיאה', result.error);
+                }
+            } catch (err) {
+                console.error('Error uncompleting page:', err);
+                showAlert('שגיאה', 'שגיאה בביטול הסימון');
+            }
+        }
+    );
   };
 
   const handleClaimPage = async (pageNumber) => {
@@ -134,71 +168,78 @@ export default function BookPage() {
       return
     }
 
-    setConfirmDialog({
-      pageNumber,
-      onConfirm: async () => {
-        setConfirmDialog(null)
+    showConfirm(
+        `עבודה על עמוד ${pageNumber}`,
+        `האם אתה מעוניין לעבוד על עמוד זה?\nהעמוד יסומן כ"בטיפול" ויוצמד אליך.`,
+        async () => {
             if (!session.user || (!session.user.id && !session.user._id)) {
-        alert('שגיאת התחברות: חסר מזהה משתמש. נסה להתחבר מחדש.');
-        return;
+                showAlert('שגיאה', 'שגיאת התחברות: חסר מזהה משתמש. נסה להתחבר מחדש.');
+                return;
+            }
+            try {
+                const userId = session.user._id || session.user.id;
+                
+                const response = await fetch(`/api/book/claim-page`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                    bookPath: bookPath,
+                    pageNumber,
+                    userId: userId, 
+                    userName: session.user.name
+                    })
+                })
+                
+                const result = await response.json()
+                
+                if (result.success) {
+                    setPages(prevPages => 
+                    prevPages.map(page => 
+                        page.number === pageNumber ? { 
+                        ...page, 
+                        status: 'in-progress', 
+                        claimedBy: session.user.name, 
+                        claimedById: userId,
+                        claimedAt: new Date().toISOString()
+                        } : page
+                    )
+                    )
+                    showAlert('בהצלחה!', 'העמוד נתפס על ידך בהצלחה. כעת תוכל לערוך אותו.');
+                } else {
+                    if (result.error === 'TERMS_NOT_ACCEPTED' || result.redirectUrl) {
+                        router.push('/library/auth/approve-terms-on-edit');
+                        return;
+                    }
+                    showAlert('שגיאה', result.error);
+                }
+
+            } catch (error) {
+                console.error('Error claiming page:', error)
+                showAlert('שגיאה', 'שגיאה בתפיסת העמוד');
+            }
         }
-        try {
-          const userId = session.user._id || session.user.id;
-          
-          const response = await fetch(`/api/book/claim-page`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookPath: bookPath,
-              pageNumber,
-              userId: userId, 
-              userName: session.user.name
-            })
-          })
-          
-          const result = await response.json()
-          
-          if (result.success) {
-            setPages(prevPages => 
-              prevPages.map(page => 
-                page.number === pageNumber ? { 
-                  ...page, 
-                  status: 'in-progress', 
-                  claimedBy: session.user.name, 
-                  claimedById: userId,
-                  claimedAt: new Date().toISOString()
-                } : page
-              )
-            )
-          } else {
-            alert(`❌ ${result.error}`)
-          }
-        } catch (error) {
-          console.error('Error claiming page:', error)
-          alert('❌ שגיאה בתפיסת העמוד')
-        }
-      },
-      onCancel: () => setConfirmDialog(null)
-    })
+    );
   }
 
   const handleMarkComplete = async (pageNumber) => {
     if (!session) return
 
-    setUploadDialog({
-      pageNumber,
-      onConfirm: async () => {
-        await uploadPageText(pageNumber)
-        setUploadDialog(null)
-      },
-      onCancel: () => setUploadDialog(null)
-    })
+    showConfirm(
+        `סיום עבודה על עמוד ${pageNumber}`,
+        'האם ברצונך להעלות את הטקסט שערכת למערכת?\nהטקסט יועלה כקובץ חדש, יישלח לאישור מנהל והעמוד יסומן כהושלם.',
+        async () => {
+            await uploadPageText(pageNumber)
+        }
+    );
   }
   
   const completePageWithoutUpload = async (pageNumber) => {
     try {
       const pageId = pages.find(p => p.number === pageNumber)?.id;
-      if (!pageId || !bookData.id) return alert('שגיאה בזיהוי העמוד או הספר');
+      if (!pageId || !bookData.id) {
+          showAlert('שגיאה', 'שגיאה בזיהוי העמוד או הספר');
+          return;
+      }
 
       const response = await fetch(`/api/book/complete-page`, {
         method: 'POST',
@@ -218,11 +259,11 @@ export default function BookPage() {
           )
         )
       } else {
-        alert(`❌ ${result.error}`)
+        showAlert('שגיאה', result.error);
       }
     } catch (error) {
       console.error('Error completing page:', error)
-      alert('❌ שגיאה בסימון העמוד כהושלם')
+      showAlert('שגיאה', 'שגיאה בסימון העמוד כהושלם');
     }
   }
 
@@ -235,7 +276,7 @@ export default function BookPage() {
       const contentResult = await contentResponse.json()
       
       if (!contentResult.success || !contentResult.data) {
-        alert('❌ לא נמצא תוכן לעמוד זה')
+        showAlert('שגיאה', 'לא נמצא תוכן לעמוד זה');
         return
       }
 
@@ -251,7 +292,7 @@ export default function BookPage() {
       }
 
       if (!textContent.trim()) {
-        alert('❌ העמוד ריק, אין מה להעלות')
+        showAlert('שגיאה', 'העמוד ריק, אין מה להעלות');
         return
       }
 
@@ -273,13 +314,13 @@ export default function BookPage() {
 
       if (uploadResult.success) {
         await completePageWithoutUpload(pageNumber)
-        alert('✅ הטקסט הועלה בהצלחה והעמוד סומן כהושלם!')
+        showAlert('הצלחה', 'הטקסט הועלה בהצלחה והעמוד סומן כהושלם!');
       } else {
-        alert(`❌ ${uploadResult.error || 'שגיאה בהעלאת הטקסט'}`)
+        showAlert('שגיאה', uploadResult.error || 'שגיאה בהעלאת הטקסט');
       }
     } catch (error) {
       console.error('Error uploading text:', error)
-      alert('❌ שגיאה בהעלאת הטקסט')
+      showAlert('שגיאה', 'שגיאה בהעלאת הטקסט');
     }
   }
 
@@ -446,7 +487,7 @@ export default function BookPage() {
                       onClaim={handleClaimPage}
                       onComplete={handleMarkComplete}
                       onRelease={handleReleasePage}
-                      onUncomplete={handleUncompletePage} // <--- הוספנו כאן את הפונקציה
+                      onUncomplete={handleUncompletePage}
                       onPreview={() => setPreviewImage(page.thumbnail)}
                       currentUser={session?.user}
                       bookPath={bookPath}
@@ -458,14 +499,6 @@ export default function BookPage() {
           </div>
         </div>
       </div>
-
-      {confirmDialog && (
-        <ConfirmDialog pageNumber={confirmDialog.pageNumber} userName={session?.user?.name} onConfirm={confirmDialog.onConfirm} onCancel={confirmDialog.onCancel} />
-      )}
-
-      {uploadDialog && (
-        <UploadDialog pageNumber={uploadDialog.pageNumber} bookName={bookData?.name} onConfirm={uploadDialog.onConfirm} onSkip={uploadDialog.onSkip} onCancel={uploadDialog.onCancel} />
-      )}
 
       <ImagePreviewModal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} imageSrc={previewImage} altText="תצוגת עמוד" />
     </div>
@@ -566,19 +599,14 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
     page.claimedById === (currentUser.id || currentUser._id)
   );
 
-  // לוגיקת הרשאות כניסה לעורך (צפייה/עריכה)
-  // 1. פנוי - כולם יכולים
-  // 2. תפוס/הושלם - רק מנהלים או הבעלים
   const canEnterEditor = page.status === 'available' || isClaimedByMe || isAdmin;
 
-  // קישור לעורך
   const editUrl = `/library/edit/${encodeURIComponent(bookPath)}/${page.number}`;
 
   return (
     <div 
       className="group relative glass rounded-xl overflow-hidden border-2 border-surface-variant hover:border-primary/50 transition-all flex flex-col h-full"
     >
-      {/* Page Preview */}
       <div 
         className="aspect-[3/4] bg-surface flex items-center justify-center relative overflow-hidden cursor-zoom-in"
         onClick={onPreview}
@@ -598,7 +626,6 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
           </>
         )}
         
-        {/* כפתור שחרור - רק אם בטיפול ושייך לי */}
         {page.status === 'in-progress' && isClaimedByMe && (
           <button
             onClick={(e) => {
@@ -639,7 +666,6 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
         )}
 
         <div className="mt-auto grid gap-2">
-          {/* כפתור כניסה/צפייה - מופיע אם יש הרשאה */}
           {canEnterEditor && (
             <Link
               href={editUrl}
@@ -655,9 +681,6 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
             </Link>
           )}
 
-          {/* כפתורים נוספים לפי סטטוס */}
-          
-          {/* כפתור תפיסה מהירה (רק אם פנוי) */}
           {page.status === 'available' && (
             <button
               onClick={() => onClaim(page.number)}
@@ -686,83 +709,6 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
             </button>
           )}
 
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ConfirmDialog({ pageNumber, userName, onConfirm, onCancel }) {
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
-      <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-primary">edit_note</span>
-          </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-2">עבודה על עמוד {pageNumber}</h2>
-          <p className="text-on-surface/70">האם אתה מעוניין לעבוד על עמוד זה?</p>
-        </div>
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
-            <div className="text-sm text-blue-800">
-              <p className="font-bold mb-1">מה יקרה?</p>
-              <ul className="space-y-1">
-                <li>• העמוד יסומן כ&quot;בטיפול&quot;</li>
-                <li>• העמוד יוצמד אליך ({userName})</li>
-                <li>• משתמשים אחרים יראו שהעמוד תפוס</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={onConfirm} className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors font-bold">
-            <span className="material-symbols-outlined">check_circle</span>
-            <span>כן, אני רוצה לעבוד על זה</span>
-          </button>
-          <button onClick={onCancel} className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors">ביטול</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function UploadDialog({ pageNumber, onConfirm, onCancel }) {
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
-      <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-green-600">upload_file</span>
-          </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על עמוד {pageNumber}</h2>
-          <p className="text-on-surface/70">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
-        </div>
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
-            <div className="text-sm text-blue-800">
-              <p className="font-bold mb-1">מה יקרה?</p>
-              <ul className="space-y-1">
-                <li>• הטקסט שערכת יועלה כקובץ חדש</li>
-                <li>• הקובץ יישלח לאישור מנהל</li>
-                <li>• העמוד יסומן כהושלם</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3">
-          <button onClick={onConfirm} className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold">
-            <span className="material-symbols-outlined">upload</span>
-            <span>כן, העלה את הטקסט</span>
-          </button>
-          <button
-            onClick={onCancel}
-            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors"
-          >
-            ביטול
-          </button>
         </div>
       </div>
     </div>

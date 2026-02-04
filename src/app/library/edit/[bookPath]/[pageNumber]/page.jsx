@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 
-// Components
 import EditorHeader from '@/components/editor/EditorHeader'
 import EditorToolbar from '@/components/editor/EditorToolbar'
 import ImagePanel from '@/components/editor/ImagePanel'
@@ -13,8 +12,9 @@ import SettingsSidebar from '@/components/editor/SettingsSidebar'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 import SplitDialog from '@/components/editor/modals/SplitDialog'
 import InfoDialog from '@/components/editor/modals/InfoDialog'
+import { useDialog } from '@/components/DialogContext'
+import { useLoading } from '@/components/LoadingContext'
 
-// Hooks
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useOCR } from '@/hooks/useOCR'
 
@@ -24,14 +24,14 @@ export default function EditPage() {
   const params = useParams()
   const bookPath = decodeURIComponent(params.bookPath)
   const pageNumber = parseInt(params.pageNumber)
+  const { showAlert, showConfirm } = useDialog()
+  const { startLoading, stopLoading } = useLoading()
 
-  // Data State
   const [bookData, setBookData] = useState(null)
   const [pageData, setPageData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Editor State
   const [content, setContent] = useState('')
   const [leftColumn, setLeftColumn] = useState('')
   const [rightColumn, setRightColumn] = useState('')
@@ -39,19 +39,17 @@ export default function EditPage() {
   const [activeTextarea, setActiveTextarea] = useState(null)
   const [selectedFont, setSelectedFont] = useState('monospace')
    
-  // Layout State
   const [imageZoom, setImageZoom] = useState(100)
+  const [rotation, setRotation] = useState(0)
   const [layoutOrientation, setLayoutOrientation] = useState('vertical')
   const [imagePanelWidth, setImagePanelWidth] = useState(50)
   const [isResizing, setIsResizing] = useState(false)
   const [columnWidth, setColumnWidth] = useState(50)
   const [isColumnResizing, setIsColumnResizing] = useState(false)
   
-  // DOM Refs
   const splitContainerRef = useRef(null)
   const textEditorContainerRef = useRef(null)
   
-  // Value Refs for persistent access during resizing
   const imagePanelWidthRef = useRef(imagePanelWidth)
   const columnWidthRef = useRef(columnWidth)
 
@@ -59,27 +57,21 @@ export default function EditPage() {
   useEffect(() => { columnWidthRef.current = columnWidth }, [columnWidth])
 
   const [swapPanels, setSwapPanels] = useState(false)
-  const [isOCRBlocking, setIsOCRBlocking] = useState(false)
-  const cancelOCRRef = useRef(false)
-   
-  // Full Screen & Toolbar State
+  
   const [isFullScreen, setIsFullScreen] = useState(false)
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false)
 
-  // Split Logic State
   const [showSplitDialog, setShowSplitDialog] = useState(false)
   const [rightColumnName, setRightColumnName] = useState('חלק 1')
   const [leftColumnName, setLeftColumnName] = useState('חלק 2')
   const [splitMode, setSplitMode] = useState('content')
   const [isContentSplit, setIsContentSplit] = useState(false)
 
-  // Find & Replace State
   const [showFindReplace, setShowFindReplace] = useState(false)
   const [findText, setFindText] = useState('')
   const [replaceText, setReplaceText] = useState('')
   const [savedSearches, setSavedSearches] = useState([])
 
-  // Selection & OCR State
   const [isSelectionMode, setIsSelectionMode] = useState(false)
   const [selectionStart, setSelectionStart] = useState(null)
   const [selectionEnd, setSelectionEnd] = useState(null)
@@ -87,7 +79,6 @@ export default function EditPage() {
   const [ocrMethod, setOcrMethod] = useState('ocrwin')
   const { isProcessing: isOcrProcessing, performGeminiOCR, performTesseractOCR, performOCRWin } = useOCR()
 
-  // Settings State
   const [showSettings, setShowSettings] = useState(false)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
   const [userApiKey, setUserApiKey] = useState('')
@@ -97,7 +88,6 @@ export default function EditPage() {
 
   const { save: debouncedSave, status: saveStatus } = useAutoSave()
 
-  // Load Settings & Saved Searches & Preferences
   useEffect(() => {
     const savedApiKey = localStorage.getItem('gemini_api_key')
     const savedPrompt = localStorage.getItem('gemini_prompt')
@@ -118,7 +108,6 @@ export default function EditPage() {
     if (savedSwap) setSwapPanels(savedSwap === 'true')
 
     if (status === 'authenticated') {
-        // טעינת חיפושים שמורים
         fetch('/api/user/saved-searches')
             .then(res => res.json())
             .then(data => {
@@ -226,24 +215,18 @@ export default function EditPage() {
     }
   }
 
-  // --- Server Persistence Logic ---
-
   const saveSearchesToServer = async (updatedList) => {
-
       setSavedSearches(updatedList); 
-      
       try {
           const res = await fetch('/api/user/saved-searches', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ savedSearches: updatedList })
           });
-          
           if (!res.ok) throw new Error('Failed to save');
-          
       } catch (err) {
           console.error('Failed to save searches to server', err);
-          alert('שגיאה בשמירת הנתונים בשרת. הנתונים נשמרו מקומית בלבד עד לריענון.');
+          showAlert('שגיאה', 'שגיאה בשמירת הנתונים בשרת. הנתונים נשמרו מקומית בלבד עד לריענון.');
       }
   };
 
@@ -334,7 +317,7 @@ export default function EditPage() {
         setContent(tempContent);
         handleAutoSaveWrapper(tempContent, leftColumn, rightColumn, false);
       }
-      alert('כל הפעולות השמורות בוצעו בהצלחה');
+      showAlert('הצלחה', 'כל הפעולות השמורות בוצעו בהצלחה');
     }
   };
 
@@ -345,59 +328,70 @@ export default function EditPage() {
   }
 
   const handleRemoveDigits = () => {
-    if (!window.confirm('האם אתה בטוח שברצונך למחוק את כל הספרות (0-9) מהטקסט?')) return;
-    const regex = /[0-9]/g; 
-    if (twoColumns) {
-      const newRight = rightColumn.replace(regex, '');
-      const newLeft = leftColumn.replace(regex, '');
-      setRightColumn(newRight);
-      setLeftColumn(newLeft);
-      handleAutoSaveWrapper(content, newLeft, newRight, true);
-    } else {
-      const newContent = content.replace(regex, '');
-      setContent(newContent);
-      handleAutoSaveWrapper(newContent, leftColumn, rightColumn, false);
-    }
+    showConfirm(
+        'ניקוי ספרות',
+        'האם אתה בטוח שברצונך למחוק את כל הספרות (0-9) מהטקסט?',
+        () => {
+            const regex = /[0-9]/g; 
+            if (twoColumns) {
+              const newRight = rightColumn.replace(regex, '');
+              const newLeft = leftColumn.replace(regex, '');
+              setRightColumn(newRight);
+              setLeftColumn(newLeft);
+              handleAutoSaveWrapper(content, newLeft, newRight, true);
+            } else {
+              const newContent = content.replace(regex, '');
+              setContent(newContent);
+              handleAutoSaveWrapper(newContent, leftColumn, rightColumn, false);
+            }
+        }
+    )
   };
 
-  const handleAutoSaveWrapper = (newContent, left = leftColumn, right = rightColumn, two = twoColumns) => {
+  const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns) => {
     debouncedSave({
       bookPath, pageNumber, content: newContent, leftColumn: left, rightColumn: right,
       twoColumns: two, isContentSplit, rightColumnName, leftColumnName
     })
-  }
+  }, [debouncedSave, bookPath, pageNumber, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName]);
 
-  const handleFinishClick = () => {
-    if (!session) return alert('שגיאה: אינך מחובר');
+  const handleFinishClick = useCallback(() => {
+    if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת');
     handleAutoSaveWrapper(content, leftColumn, rightColumn, twoColumns);
     setShowUploadDialog(true);
-  }
+  }, [session, content, leftColumn, rightColumn, twoColumns, handleAutoSaveWrapper, showAlert]);
 
   const completePageLogic = async () => {
-    try {
-      const safeBookId = bookData?.id || bookData?._id;
-      const safePageId = pageData?.id || pageData?._id;
-      if (!safePageId || !safeBookId) return alert('שגיאה מזהים חסרים');
+    const safeBookId = bookData?.id || bookData?._id;
+    const safePageId = pageData?.id || pageData?._id;
+    if (!safePageId || !safeBookId) return showAlert('שגיאה', 'מזהים חסרים');
 
+    startLoading('מעדכן סטטוס עמוד...');
+    try {
       const response = await fetch(`/api/book/complete-page`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pageId: safePageId, bookId: safeBookId })
       });
       const result = await response.json();
+      
+      stopLoading(); 
+
       if (result.success) router.push(`/library/book/${encodeURIComponent(bookPath)}`);
-      else alert(`❌ שגיאה מהשרת: ${result.error}`);
+      else showAlert('שגיאה', `שגיאה מהשרת: ${result.error}`);
     } catch (error) {
+      stopLoading(); 
       console.error('Error completing page:', error);
-      alert('❌ שגיאה בסימון העמוד כהושלם');
+      showAlert('שגיאה', 'שגיאה בסימון העמוד כהושלם');
     }
   };
 
   const handleUploadConfirm = async () => {
-    try {
-      let textContent = twoColumns ? `${rightColumnName}:\n${rightColumn}\n\n${leftColumnName}:\n${leftColumn}` : content;
-      if (!textContent.trim()) return alert('❌ העמוד ריק');
+    let textContent = twoColumns ? `${rightColumnName}:\n${rightColumn}\n\n${leftColumnName}:\n${leftColumn}` : content;
+    if (!textContent.trim()) return showAlert('שגיאה', 'העמוד ריק');
 
+    startLoading('מעלה קובץ למערכת...');
+    try {
       const cleanBookName = bookPath.replace(/[^a-zA-Z0-9א-ת]/g, '_'); 
       const fileName = `${cleanBookName}_page_${pageNumber}.txt`;
       const blob = new Blob([textContent], { type: 'text/plain' });
@@ -412,19 +406,22 @@ export default function EditPage() {
       const response = await fetch('/api/upload-book', { method: 'POST', body: formData });
       const result = await response.json();
 
+      stopLoading(); 
+
       if (result.success) {
-        alert('✅ הטקסט הועלה בהצלחה! מסמן כהושלם.');
+        showAlert('הצלחה', 'הטקסט הועלה בהצלחה! מסמן כהושלם.');
         await completePageLogic(); 
       } else {
-        alert(`❌ שגיאה בהעלאה: ${result.error || 'שגיאה לא ידועה'}`);
+        showAlert('שגיאה', `שגיאה בהעלאה: ${result.error || 'שגיאה לא ידועה'}`);
       }
     } catch (error) {
+      stopLoading();
       console.error('Error uploading text:', error);
-      alert('❌ שגיאה בתהליך ההעלאה');
+      showAlert('שגיאה', 'שגיאה בתהליך ההעלאה');
     }
   };
 
-  const handleColumnChange = (column, newText) => {
+  const handleColumnChange = useCallback((column, newText) => {
     if (column === 'left') {
       setLeftColumn(newText)
       handleAutoSaveWrapper(content, newText, rightColumn, twoColumns)
@@ -432,7 +429,7 @@ export default function EditPage() {
       setRightColumn(newText)
       handleAutoSaveWrapper(content, leftColumn, newText, twoColumns)
     }
-  }
+  }, [content, leftColumn, rightColumn, twoColumns, handleAutoSaveWrapper]);
 
   const handleResizeStart = (e) => {
     e.preventDefault()
@@ -499,7 +496,7 @@ export default function EditPage() {
   }
 
   const handleDownloadImage = async () => {
-    if (!pageData?.thumbnail) return alert('אין תמונה להורדה');
+    if (!pageData?.thumbnail) return showAlert('שגיאה', 'אין תמונה להורדה');
     try {
       const response = await fetch(pageData.thumbnail);
       const blob = await response.blob();
@@ -530,7 +527,7 @@ export default function EditPage() {
     const textToFind = overrideFind !== null ? overrideFind : findText;
     const textToReplace = overrideReplace !== null ? overrideReplace : replaceText;
 
-    if (!textToFind) return alert('הזן טקסט לחיפוש');
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
     
     const processPattern = (str) => str.replaceAll('^13', '\n');
     
@@ -568,11 +565,11 @@ export default function EditPage() {
         handleAutoSaveWrapper(newContent, leftColumn, rightColumn, false);
       }
     }
-    if (totalOccurrences > 0) alert(`ההחלפה בוצעה בהצלחה! הוחלפו ${totalOccurrences} מופעים.`);
-    else alert('לא נמצאו תוצאות התואמות לחיפוש.');
+    if (totalOccurrences > 0) showAlert('הצלחה', `ההחלפה בוצעת בהצלחה! הוחלפו ${totalOccurrences} מופעים.`);
+    else showAlert('לידיעתך', 'לא נמצאו תוצאות התואמות לחיפוש.');
   };
 
-  const insertTag = (tag) => {
+  const insertTag = useCallback((tag) => {
     let activeEl = document.activeElement;
     if (!activeEl || activeEl.tagName !== 'TEXTAREA') {
         if (activeTextarea === 'left') activeEl = document.querySelector('textarea[data-column="left"]');
@@ -583,56 +580,131 @@ export default function EditPage() {
     
     const start = activeEl.selectionStart;
     const end = activeEl.selectionEnd;
-    const text = activeEl.value;
-    const before = text.substring(0, start);
-    const selected = text.substring(start, end);
-    const after = text.substring(end);
+    const selected = activeEl.value.substring(start, end);
     
     let insertion = `<${tag}>${selected}</${tag}>`
     if (['h1', 'h2', 'h3'].includes(tag)) insertion = `\n<${tag}>${selected}</${tag}>\n`
     
-    const newText = before + insertion + after;
-    const col = activeEl.getAttribute('data-column');
-    if (col === 'right') handleColumnChange('right', newText);
-    else if (col === 'left') handleColumnChange('left', newText);
-    else {
-        setContent(newText);
-        handleAutoSaveWrapper(newText);
-    }
+    activeEl.focus();
+    const success = document.execCommand('insertText', false, insertion);
     
-    setTimeout(() => {
-        activeEl.focus();
+    if (!success) {
+      const text = activeEl.value;
+      const before = text.substring(0, start);
+      const after = text.substring(end);
+      const newText = before + insertion + after;
+      
+      const col = activeEl.getAttribute('data-column');
+      if (col === 'right') handleColumnChange('right', newText);
+      else if (col === 'left') handleColumnChange('left', newText);
+      else {
+          setContent(newText);
+          handleAutoSaveWrapper(newText);
+      }
+      
+      setTimeout(() => {
         const newCursorPos = start + insertion.length;
         activeEl.setSelectionRange(newCursorPos, newCursorPos);
-    }, 0);
-  }
+      }, 0);
+    }
+  }, [activeTextarea, handleColumnChange, handleAutoSaveWrapper]);
+
+  const handlersRef = useRef({ insertTag, handleFinishClick });
+
+  useEffect(() => {
+    handlersRef.current = { insertTag, handleFinishClick };
+  }, [insertTag, handleFinishClick]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const isModKey = e.ctrlKey || e.metaKey;
+      if (!isModKey) return;
+
+      const { insertTag: currentInsertTag, handleFinishClick: currentHandleFinish } = handlersRef.current;
+
+      switch (e.code) {
+        case 'KeyB':
+          e.preventDefault();
+          currentInsertTag('b');
+          break;
+        case 'KeyI':
+          e.preventDefault();
+          currentInsertTag('i');
+          break;
+        case 'KeyU':
+          e.preventDefault();
+          currentInsertTag('u');
+          break;
+        case 'Equal':
+        case 'NumpadAdd':
+          e.preventDefault();
+          currentInsertTag('big');
+          break;
+        case 'Minus':
+        case 'NumpadSubtract':
+          e.preventDefault();
+          currentInsertTag('small');
+          break;
+        case 'KeyS':
+          e.preventDefault();
+          currentHandleFinish();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleOCR = async () => {
-    if (!selectionRect) return alert('בחר אזור')
-    cancelOCRRef.current = false
-    setIsOCRBlocking(true)
-
-    const response = await fetch(pageData.thumbnail)
-    const blob = await response.blob()
-    const img = await createImageBitmap(blob)
-    const canvas = document.createElement('canvas')
-    canvas.width = selectionRect.width
-    canvas.height = selectionRect.height
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(img, selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height, 0, 0, selectionRect.width, selectionRect.height)
-    const croppedBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95))
+    if (!selectionRect) return showAlert('שגיאה', 'בחר אזור')
     
+    let isCancelled = false;
+
+    // הפעלת הטעינה עם Callback לביטול
+    startLoading('מזהה טקסט...', () => {
+        isCancelled = true;
+    }) 
+
     try {
+        const response = await fetch(pageData.thumbnail)
+        if (isCancelled) return;
+
+        const blob = await response.blob()
+        const img = await createImageBitmap(blob)
+        
+        const canvas = document.createElement('canvas')
+        canvas.width = selectionRect.width
+        canvas.height = selectionRect.height
+        const ctx = canvas.getContext('2d')
+        
+        ctx.translate(canvas.width / 2, canvas.height / 2)
+        
+        ctx.rotate((rotation * Math.PI) / 180)
+        
+        const selCenterX = selectionRect.x + selectionRect.width / 2
+        const selCenterY = selectionRect.y + selectionRect.height / 2
+        
+        const imgCenterX = img.width / 2
+        const imgCenterY = img.height / 2
+        
+        ctx.drawImage(img, -selCenterX, -selCenterY)
+
+        const croppedBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95))
+        
+        if (isCancelled) return;
+
         let text = ''
-        if (cancelOCRRef.current) return
         if (ocrMethod === 'gemini') text = await performGeminiOCR(croppedBlob, userApiKey, selectedModel, customPrompt)
         else if (ocrMethod === 'ocrwin') text = await performOCRWin(croppedBlob)
         else text = await performTesseractOCR(croppedBlob)
         
-        if (cancelOCRRef.current) return
+        // בדיקת ביטול אחרי סיום ה-OCR ולפני עדכון ה-state
+        if (isCancelled) return;
+
         if (!text) {
-             setIsOCRBlocking(false)
-             return alert('לא זוהה טקסט')
+             stopLoading() 
+             return showAlert('שגיאה', 'לא זוהה טקסט')
         }
         
         if (twoColumns) {
@@ -646,16 +718,15 @@ export default function EditPage() {
         }
         setSelectionRect(null)
         setIsSelectionMode(false)
+        stopLoading() 
     } catch (e) {
-        if (!cancelOCRRef.current) alert('שגיאה ב-OCR: ' + e.message)
-    } finally {
-        setIsOCRBlocking(false)
+        // אם בוטל, אנחנו לא מציגים שגיאה
+        if (!isCancelled) {
+            console.error(e)
+            stopLoading() 
+            showAlert('שגיאה', 'שגיאה ב-OCR: ' + e.message)
+        }
     }
-  }
-
-  const handleCancelOCR = () => {
-      cancelOCRRef.current = true
-      setIsOCRBlocking(false)
   }
 
   const getInstructions = () => {
@@ -744,13 +815,18 @@ export default function EditPage() {
           >
             <ImagePanel 
               thumbnailUrl={pageData?.thumbnail} pageNumber={pageNumber}
-              imageZoom={imageZoom} isSelectionMode={isSelectionMode}
+              imageZoom={imageZoom} 
+              setImageZoom={setImageZoom} 
+              isSelectionMode={isSelectionMode}
               selectionStart={selectionStart} selectionEnd={selectionEnd}
               selectionRect={selectionRect}
               setSelectionStart={setSelectionStart} setSelectionEnd={setSelectionEnd}
               setSelectionRect={setSelectionRect}
               layoutOrientation={layoutOrientation} imagePanelWidth={imagePanelWidth}
               isResizing={isResizing} handleResizeStart={handleResizeStart}
+              rotation={rotation} setRotation={setRotation}
+              handleOCRSelection={handleOCR}
+              isOcrProcessing={isOcrProcessing}
             />
             <TextEditor 
               ref={textEditorContainerRef}
@@ -781,7 +857,7 @@ export default function EditPage() {
         userApiKey={userApiKey} setUserApiKey={setUserApiKey}
         selectedModel={selectedModel} setSelectedModel={setSelectedModel}
         customPrompt={customPrompt} setCustomPrompt={setCustomPrompt}
-        saveSettings={() => { localStorage.setItem('gemini_api_key', userApiKey); alert('נשמר'); }}
+        saveSettings={() => { localStorage.setItem('gemini_api_key', userApiKey); showAlert('הצלחה', 'נשמר'); }}
         resetPrompt={() => setCustomPrompt('The text is in Hebrew, written in Rashi script...')}
       />
       
@@ -811,23 +887,6 @@ export default function EditPage() {
         isOpen={showInfoDialog} onClose={handleCloseInfoDialog}
         editingInstructions={getInstructions()}
       />
-
-      {isOCRBlocking && (
-        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center transition-all duration-300">
-          <div className="bg-white/10 border border-white/20 p-8 rounded-2xl flex flex-col items-center shadow-2xl backdrop-blur-md">
-            <div className="relative w-16 h-16 mb-6">
-              <div className="absolute inset-0 border-4 border-t-blue-500 border-r-transparent border-b-blue-500 border-l-transparent rounded-full animate-spin"></div>
-              <div className="absolute inset-2 border-4 border-t-purple-500 border-r-transparent border-b-purple-500 border-l-transparent rounded-full animate-spin reverse-spin opacity-70" style={{ animationDirection: 'reverse', animationDuration: '2s' }}></div>
-            </div>
-            <h3 className="text-white text-xl font-bold mb-2 tracking-wide">מזהה טקסט...</h3>
-            <p className="text-gray-300 text-sm mb-6">אנא המתן, הפעולה עשויה לקחת מספר שניות</p>
-            <button onClick={handleCancelOCR} className="px-6 py-2 bg-red-500/20 hover:bg-red-500/40 text-red-200 border border-red-500/50 rounded-full transition-colors flex items-center gap-2 text-sm font-medium">
-              <span className="material-symbols-outlined text-sm">close</span>
-              ביטול
-            </button>
-          </div>
-        </div>
-      )}
 
       {showUploadDialog && (
         <UploadDialog
@@ -880,5 +939,3 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
     </div>
   )
 }
-
-

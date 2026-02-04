@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useDialog } from '@/components/DialogContext'
 
 export default function AdminUsersPage() {
   const { data: session } = useSession()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingUser, setEditingUser] = useState(null)
+  const { showAlert, showConfirm } = useDialog()
   
   const [formData, setFormData] = useState({})
 
@@ -36,31 +38,46 @@ export default function AdminUsersPage() {
       setEditingUser(user._id)
       setFormData({
           name: user.name,
+          email: user.email,
           role: user.role,
           points: user.points
       })
   }
 
   const handleUpdateUser = async () => {
-    try {
-      const response = await fetch('/api/admin/users', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: editingUser, ...formData })
-      })
-      
-      if (response.ok) {
-        setEditingUser(null)
-        loadUsers()
-        alert('המשתמש עודכן בהצלחה')
+    const originalUser = users.find(u => u._id === editingUser);
+
+    const performUpdate = async () => {
+          try {
+              const response = await fetch('/api/admin/users', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: editingUser, ...formData })
+              });
+            
+              if (response.ok) {
+                  setEditingUser(null);
+                  loadUsers();
+                  showAlert('הצלחה!', 'המשתמש עודכן בהצלחה');
+              } else {
+                  const data = await response.json();
+                  showAlert('שגיאה', data.error || 'שגיאה בעדכון');
+              }
+          } catch (e) {
+              showAlert('שגיאה', 'שגיאה בתקשורת');
+          }
+      };
+
+      if (originalUser && formData.email !== originalUser.email) {
+          showConfirm(
+              'שינוי כתובת אימייל',
+              "⚠️ שים לב: שינוי כתובת האימייל יגרום לביטול אימות המשתמש (V) והוא יידרש לאמת את המייל החדש.\n\nהאם אתה בטוח שברצונך להמשיך?",
+              performUpdate
+          );
       } else {
-        const data = await response.json()
-        alert(data.error || 'שגיאה בעדכון')
+          await performUpdate();
       }
-    } catch (e) {
-      alert('שגיאה בתקשורת')
-    }
-  }
+  };
 
   const handleDeleteUser = async (userId) => {
     if (!confirm('למחוק את המשתמש?')) return
@@ -72,7 +89,7 @@ export default function AdminUsersPage() {
       })
       loadUsers()
     } catch (e) {
-      alert('שגיאה במחיקה')
+      showAlert('שגיאה', 'שגיאה במחיקה')
     }
   }
 
@@ -87,7 +104,6 @@ export default function AdminUsersPage() {
   const sortedUsers = [...users].sort((a, b) => {
     if (!sortConfig.key) return 0
     
-    // שליפת הערכים, עם ברירת מחדל למניעת שגיאות
     let aValue = a[sortConfig.key] || ''
     let bValue = b[sortConfig.key] || ''
     
@@ -153,7 +169,6 @@ export default function AdminUsersPage() {
             </tr>
           </thead>
           <tbody>
-            {/* --- שינוי 5: שימוש ב-sortedUsers במקום ב-users --- */}
             {sortedUsers.map(user => {
               const isEditing = editingUser === user._id
               return (
@@ -167,7 +182,20 @@ export default function AdminUsersPage() {
                       />
                     ) : user.name}
                   </td>
-                  <td className="p-4 text-sm text-gray-600 font-mono">{user.email}</td>
+                  
+                  {/* --- שינוי: הפיכת עמודת האימייל לניתנת לעריכה --- */}
+                  <td className="p-4 text-sm text-gray-600 font-mono">
+                    {isEditing ? (
+                        <input
+                            type="email"
+                            dir="ltr" // חשוב כדי שהמייל יוצג נכון
+                            className="border rounded px-2 py-1 w-full font-mono text-sm"
+                            value={formData.email}
+                            onChange={e => setFormData({ ...formData, email: e.target.value })}
+                        />
+                    ) : user.email}
+                  </td>
+
                   <td className="p-4">
                     {isEditing ? (
                       <select

@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, Suspense } from 'react' // הווסף Suspense
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 
-export default function LoginPage() {
+// 1. צור רכיב פנימי שמכיל את הלוגיקה שמשתמשת ב-useSearchParams
+function LoginContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const passwordRef = useRef(null)
 
   const [formData, setFormData] = useState({
@@ -17,10 +19,22 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    const errorType = searchParams.get('error')
+    
+    if (errorType === 'InvalidToken') {
+      setError('קישור האימות אינו תקין או שכבר נעשה בו שימוש.')
+    } else if (errorType === 'TokenExpired') {
+      setError('קישור האימות פג תוקף. אנא בקש קישור אימות חדש.')
+    } else if (errorType === 'ServerError') {
+      setError('אירעה שגיאה בתקשורת מול השרת, אנא התחבר מחדש.')
+    }
+  }, [searchParams])
+
   const handleUsernameKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      e.preventDefault()
+      passwordRef.current?.focus()
     }
   }
 
@@ -37,7 +51,7 @@ export default function LoginPage() {
       })
 
       if (result?.error) {
-        setError(result.error)
+        setError('שם משתמש או סיסמה שגויים')
       } else {
         router.refresh()
         router.push('/library/dashboard')
@@ -50,10 +64,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
-      <div className="w-full max-w-md">
+    <div className="w-full max-w-md">
         <div className="glass-strong rounded-2xl p-8 shadow-2xl">
-          {/* Logo */}
           <div className="flex justify-center mb-6">
             <Link href="/library">
               <Image src="/logo.png" alt="לוגו אוצריא" width={80} height={80} />
@@ -70,7 +82,7 @@ export default function LoginPage() {
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
               <span className="material-symbols-outlined">error</span>
-              <span>{error}</span>
+              <span className="text-sm font-medium">{error}</span>
             </div>
           )}
 
@@ -160,6 +172,20 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+  )
+}
+
+// 2. רכיב ה-Page הראשי שעוטף ב-Suspense
+export default function LoginPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
+      <Suspense fallback={
+        <div className="flex items-center justify-center">
+          <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+        </div>
+      }>
+        <LoginContent />
+      </Suspense>
     </div>
   )
 }
