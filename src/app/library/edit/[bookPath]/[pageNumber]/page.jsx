@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 
@@ -31,6 +31,7 @@ export default function EditPage() {
   const [pageData, setPageData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [globalInstructions, setGlobalInstructions] = useState(null);
 
   const [content, setContent] = useState('')
   const [leftColumn, setLeftColumn] = useState('')
@@ -38,6 +39,27 @@ export default function EditPage() {
   const [twoColumns, setTwoColumns] = useState(false)
   const [activeTextarea, setActiveTextarea] = useState(null)
   const [selectedFont, setSelectedFont] = useState('Times New Roman')
+  const allInstructions = useMemo(() => {
+      const globalRawSections = globalInstructions?.sections || [];
+      const globalData = {
+          title: 'הנחיות גלובליות',
+          sections: globalRawSections
+      };
+
+      const bookInfo = bookData?.editingInfo || {};
+      const bookSections = bookInfo.sections || [];
+      
+      // שינינו את השם כאן ל-bookInstData כדי למנוע התנגשות עם ה-state של bookData
+      const bookInstData = {
+          title: bookInfo.title || 'הנחיות עריכה לספר זה',
+          sections: bookSections
+      };
+
+      return {
+          bookInstructions: bookInstData,
+          globalInstructions: globalData
+      };
+  }, [bookData, globalInstructions]); // מתעדכן אוטומטית כשהמידע משתנה
    
   const [imageZoom, setImageZoom] = useState(100)
   const [rotation, setRotation] = useState(0)
@@ -692,6 +714,23 @@ export default function EditPage() {
   const handlersRef = useRef({ insertTag, handleFinishClick });
 
   useEffect(() => {
+    const fetchGlobalInstructions = async () => {
+      try {
+        const res = await fetch('/api/global-instructions'); 
+        const data = await res.json();
+        
+        if (data.success && data.instructions) {
+          setGlobalInstructions(data.instructions);
+        }
+      } catch (err) {
+        console.error('Failed to fetch global instructions:', err);
+      }
+    };
+
+    fetchGlobalInstructions();
+  }, []);
+
+  useEffect(() => {
     handlersRef.current = { insertTag, handleFinishClick };
   }, [insertTag, handleFinishClick]);
 
@@ -804,13 +843,6 @@ export default function EditPage() {
             showAlert('שגיאה', 'שגיאה ב-OCR: ' + e.message)
         }
     }
-  }
-
-  const getInstructions = () => {
-      return bookData?.editingInfo || { 
-          title: 'הנחיות כלליות', 
-          sections: [{ title: 'כללי', items: ['העתק במדויק'] }] 
-      }
   }
 
   const handleCloseInfoDialog = async (doNotShowAgain) => {
@@ -964,7 +996,8 @@ export default function EditPage() {
 
       <InfoDialog 
         isOpen={showInfoDialog} onClose={handleCloseInfoDialog}
-        editingInstructions={getInstructions()}
+        bookInstructions={allInstructions.bookInstructions}
+        globalInstructions={allInstructions.globalInstructions}
       />
 
       {showUploadDialog && (
