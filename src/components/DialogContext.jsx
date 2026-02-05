@@ -83,6 +83,28 @@ export function DialogProvider({ children }) {
   }, [dialogConfig.onConfirm, closeDialog])
 
   useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (!dialogConfig.isOpen) return
+
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        
+        if (dialogConfig.type === 'confirm') {
+          handleConfirm()
+        } else {
+          closeDialog()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [dialogConfig.isOpen, dialogConfig.type, handleConfirm, closeDialog])
+
+  useEffect(() => {
     if (dialogConfig.isOpen) {
       const animationTimer = setTimeout(() => setIsVisible(true), 10)
       
