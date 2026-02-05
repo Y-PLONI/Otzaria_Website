@@ -94,12 +94,12 @@ export default function Home() {
                     מאגר תורני רחב עם ממשק מודרני ומהיר
                 </p>
                 
-                <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+                <div className="flex flex-col gap-4 justify-center items-center mt-8">
                     <Link href="#download" className="px-8 py-4 bg-primary text-white rounded-lg text-lg font-medium hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl">
                         הורד עכשיו
                     </Link>
-                    <Link href="/library" className="px-8 py-4 bg-white border-2 border-primary text-primary rounded-lg text-lg font-medium hover:bg-primary/5 transition-all">
-                        לספרייה המקוונת
+                    <Link href="/library" className="px-4 py-4 bg-white border-2 border-primary text-primary rounded-lg text-sm font-medium hover:bg-primary/5 transition-all">
+                        לספריית העריכה המקוונת
                     </Link>
                 </div>
             </div>

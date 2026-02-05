@@ -93,7 +93,7 @@ export default function PrivacyPolicyPage() {
               <div className="pt-8 border-t border-surface-variant text-center">
                 <p className="mb-4">יש לך שאלות בנוגע למדיניות הפרטיות?</p>
                 <a 
-                  href="https://forum.otzaria.org" 
+                  href="/forum" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-accent transition-colors font-bold"
