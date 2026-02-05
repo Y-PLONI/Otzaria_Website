@@ -211,14 +211,36 @@ export default function EditPage() {
     try {
       setLoading(true)
       setError(null)
+    
       const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}`)
       const bookResult = await bookRes.json()
 
       if (bookResult.success) {
         setBookData(bookResult.book)
+      
         if (bookResult.pages && bookResult.pages.length > 0) {
            const foundPage = bookResult.pages.find(p => p.number === pageNumber);
-           if (foundPage) setPageData(foundPage);
+         
+           if (foundPage) {
+             
+               const currentUserId = session?.user?._id || session?.user?.id;
+               const isAdmin = session?.user?.role === 'admin';
+
+               const isClaimedByMe = foundPage.claimedById === currentUserId;
+             
+               const isAvailable = foundPage.status === 'available';
+
+               const canEnter = isAvailable || isClaimedByMe || isAdmin;
+
+               if (!canEnter) {
+                   const holderName = foundPage.claimedBy || 'משתמש אחר';
+                   setError(`אין לך הרשאה לערוך דף זה. הדף נמצא בטיפול על ידי ${holderName}.`);
+                   setLoading(false);
+                   return;
+               }
+
+               setPageData(foundPage);
+           }
         }
       } else {
         throw new Error(bookResult.error)
@@ -244,7 +266,6 @@ export default function EditPage() {
       setLoading(false)
     }
   }
-
   const saveSearchesToServer = async (updatedList) => {
       setSavedSearches(updatedList); 
       try {
@@ -1155,4 +1176,5 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
       </div>
     </div>
   )
+
 }
