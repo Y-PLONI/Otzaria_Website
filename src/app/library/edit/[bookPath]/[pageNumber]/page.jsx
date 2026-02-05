@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-
 import EditorHeader from '@/components/editor/EditorHeader'
 import EditorToolbar from '@/components/editor/EditorToolbar'
 import ImagePanel from '@/components/editor/ImagePanel'
@@ -14,7 +13,6 @@ import SplitDialog from '@/components/editor/modals/SplitDialog'
 import InfoDialog from '@/components/editor/modals/InfoDialog'
 import { useDialog } from '@/components/DialogContext'
 import { useLoading } from '@/components/LoadingContext'
-
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useOCR } from '@/hooks/useOCR'
 
@@ -1102,6 +1100,9 @@ export default function EditPage() {
         isOpen={showInfoDialog} onClose={handleCloseInfoDialog}
         bookInstructions={allInstructions.bookInstructions}
         globalInstructions={allInstructions.globalInstructions}
+        // 👇 העברת הפרופס החדשים לקומפוננטת הדיאלוג
+        examplePage={bookData?.examplePage}
+        bookPath={bookPath}
       />
 
       {showUploadDialog && (
@@ -1154,5 +1155,4 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
       </div>
     </div>
   )
-
 }
