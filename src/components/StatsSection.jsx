@@ -33,9 +33,9 @@ export default function StatsSection() {
   if (!stats) return null
 
   const items = [
-    { label: 'משתמשים', value: stats.users?.total || 0, icon: 'group' },
-    { label: 'ספרים', value: stats.books?.total || 0, icon: 'menu_book' },
-    { label: 'עמודים', value: stats.totalPages || 0, icon: 'description' },
+    { label: 'משתמשים רשומים', value: stats.users?.total || 0, icon: 'group' },
+    { label: 'ספרים הועלו', value: stats.books?.total || 0, icon: 'menu_book' },
+    { label: 'עמודים הושלמו', value: stats.totalPages || 0, icon: 'description' },
   ]
 
   return (
