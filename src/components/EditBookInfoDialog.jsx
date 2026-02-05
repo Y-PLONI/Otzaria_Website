@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialog } from '@/components/DialogContext'
 
-export default function EditBookInfoDialog({ book, onClose, onSave }) {
+// הוספתי prop אופציונלי בשם onSetExamplePage למקרה שתרצה להעביר פונקציה מבחוץ
+export default function EditBookInfoDialog({ book, onClose, onSave, onSetExamplePage }) {
   const { showAlert } = useDialog()
   const [title, setTitle] = useState('הנחיות עריכה')
   const [sections, setSections] = useState([
@@ -81,6 +82,16 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
       setSaving(false)
     }
   }
+  
+  // פונקציה לטיפול בלחיצה על הגדרת עמוד דוגמא
+  const handleSetExamplePage = () => {
+      if (onSetExamplePage) {
+          onSetExamplePage(book);
+      } else {
+          // לוגיקה ברירת מחדל או הודעה זמנית
+          alert('פונקציונליות הגדרת עמוד דוגמא טרם מומשה');
+      }
+  }
 
   if (!book) return null
 
@@ -90,20 +101,35 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
         className="flex flex-col bg-white rounded-2xl w-full max-w-4xl shadow-2xl max-h-[90vh]" 
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header Section */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <span className="material-symbols-outlined text-blue-600 text-3xl">edit_note</span>
             <span>עריכת מידע - {book.name}</span>
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 p-2 rounded-full transition-colors"
-          >
-            <span className="material-symbols-outlined text-2xl block">close</span>
-          </button>
+          
+          {/* Action Buttons Group (Left Side) */}
+          <div className="flex items-center gap-3">
+            <button
+                onClick={handleSetExamplePage}
+                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors text-sm font-bold"
+                title="הגדר את העמוד הנוכחי כעמוד דוגמא לספר"
+            >
+                <span className="material-symbols-outlined text-lg">bookmark_add</span>
+                <span>הגדר עמוד דוגמא</span>
+            </button>
+
+            <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 p-2 rounded-full transition-colors"
+            >
+                <span className="material-symbols-outlined text-2xl block">close</span>
+            </button>
+          </div>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+          {/* ... Rest of the component content remains exactly the same ... */}
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2">

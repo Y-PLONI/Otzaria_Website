@@ -50,7 +50,6 @@ export default function EditPage() {
       const bookInfo = bookData?.editingInfo || {};
       const bookSections = bookInfo.sections || [];
       
-      // שינינו את השם כאן ל-bookInstData כדי למנוע התנגשות עם ה-state של bookData
       const bookInstData = {
           title: bookInfo.title || 'הנחיות עריכה לספר זה',
           sections: bookSections
@@ -60,7 +59,7 @@ export default function EditPage() {
           bookInstructions: bookInstData,
           globalInstructions: globalData
       };
-  }, [bookData, globalInstructions]); // מתעדכן אוטומטית כשהמידע משתנה
+  }, [bookData, globalInstructions]); 
    
   const [imageZoom, setImageZoom] = useState(100)
   const [rotation, setRotation] = useState(0)
@@ -572,7 +571,6 @@ export default function EditPage() {
     handleAutoSaveWrapper(content, '', content, true)
   }
   
-  // השתמשנו בdocument.execCommand כדי לשמור את ההסטורריה לצורך ביטולים
   const updateTextWithHistory = (newText, column) => {
     let el;
     if (column === 'right') el = document.querySelector('textarea[data-column="right"]');
@@ -601,7 +599,111 @@ export default function EditPage() {
     }
   }
 
-  const handleFindReplace = (replaceAll = false, overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
+  const getActiveTextarea = () => {
+    let activeEl = null;
+    if (activeTextarea === 'left') activeEl = document.querySelector('textarea[data-column="left"]');
+    else if (activeTextarea === 'right') activeEl = document.querySelector('textarea[data-column="right"]');
+    else activeEl = document.querySelector('.editor-container textarea');
+
+    if (!activeEl) {
+        if (twoColumns) activeEl = document.querySelector('textarea[data-column="right"]');
+        else activeEl = document.querySelector('.editor-container textarea');
+    }
+    return activeEl;
+  }
+
+  const handleFindNext = (textToFind, isRegexMode) => {
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
+
+    const activeEl = getActiveTextarea();
+    if (!activeEl) return;
+
+    const processPattern = (str) => str.replaceAll('^13', '\n');
+    const patternStr = processPattern(textToFind);
+    const text = activeEl.value;
+    const startPos = activeEl.selectionEnd;
+
+    let matchIndex = -1;
+    let matchLength = 0;
+
+    if (isRegexMode) {
+        try {
+            const regex = new RegExp(patternStr, 'g');
+            regex.lastIndex = startPos;
+            const match = regex.exec(text);
+            if (match) {
+                matchIndex = match.index;
+                matchLength = match[0].length;
+            } else {
+                regex.lastIndex = 0;
+                const matchFromStart = regex.exec(text);
+                if (matchFromStart) {
+                    matchIndex = matchFromStart.index;
+                    matchLength = matchFromStart[0].length;
+                    showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
+                }
+            }
+        } catch (e) {
+            return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
+        }
+    } else {
+        matchIndex = text.indexOf(patternStr, startPos);
+        if (matchIndex === -1) {
+            matchIndex = text.indexOf(patternStr, 0);
+            if (matchIndex !== -1) {
+                 showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
+            }
+        }
+        matchLength = patternStr.length;
+    }
+
+    if (matchIndex !== -1) {
+        activeEl.focus();
+        activeEl.setSelectionRange(matchIndex, matchIndex + matchLength);
+        
+        const lineHeight = 24; 
+        const lines = text.substr(0, matchIndex).split('\n').length;
+        const scrollPos = (lines - 5) * lineHeight; 
+        activeEl.scrollTop = scrollPos > 0 ? scrollPos : 0;
+    } else {
+        showAlert('חיפוש', 'לא נמצאו מופעים.');
+    }
+  };
+
+  const handleReplaceCurrent = (textToReplace, textToFind, isRegexMode) => {
+    const activeEl = getActiveTextarea();
+    if (!activeEl) return;
+
+    if (activeEl.selectionStart === activeEl.selectionEnd) {
+        handleFindNext(textToFind, isRegexMode);
+        return;
+    }
+
+    const processPattern = (str) => str.replaceAll('^13', '\n');
+    const replacement = processPattern(textToReplace || '');
+
+    activeEl.focus();
+    const success = document.execCommand('insertText', false, replacement);
+    
+    if (!success) {
+        const text = activeEl.value;
+        const before = text.substring(0, activeEl.selectionStart);
+        const after = text.substring(activeEl.selectionEnd);
+        const newText = before + replacement + after;
+        
+        const col = activeEl.getAttribute('data-column');
+        if (col === 'right') handleColumnChange('right', newText);
+        else if (col === 'left') handleColumnChange('left', newText);
+        else {
+            setContent(newText);
+            handleAutoSaveWrapper(newText);
+        }
+    }
+    
+    handleFindNext(textToFind, isRegexMode);
+  };
+
+  const handleReplaceAll = (overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
     const textToFind = overrideFind !== null ? overrideFind : findText;
     const textToReplace = overrideReplace !== null ? overrideReplace : replaceText;
     const isRegexMode = useRegexOverride !== null ? useRegexOverride : useRegex;
@@ -626,7 +728,7 @@ export default function EditPage() {
         }
     };
 
-    const regex = createRegex(replaceAll);
+    const regex = createRegex(true);
     if (!regex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
 
     const checkRegex = createRegex(true);
@@ -642,27 +744,13 @@ export default function EditPage() {
       
       if (count === 0) return text;
 
-      if (replaceAll) {
-        totalOccurrences += count;
-        return text.replace(regex, replacement);
-      } else {
-        if (regex.test(text)) {
-            totalOccurrences += 1;
-            return text.replace(regex, replacement);
-        }
-        return text;
-      }
+      totalOccurrences += count;
+      return text.replace(regex, replacement);
     };
 
     if (twoColumns) {
       const newRight = executeReplace(rightColumn);
-      let newLeft = leftColumn;
-      
-      if (!replaceAll && newRight === rightColumn) {
-          newLeft = executeReplace(leftColumn);
-      } else if (replaceAll) {
-          newLeft = executeReplace(leftColumn);
-      }
+      const newLeft = executeReplace(leftColumn);
 
       if (newRight !== rightColumn) {
           updateTextWithHistory(newRight, 'right');
@@ -988,7 +1076,9 @@ export default function EditPage() {
         isOpen={showFindReplace} onClose={() => setShowFindReplace(false)}
         findText={findText} setFindText={setFindText}
         replaceText={replaceText} setReplaceText={setReplaceText}
-        handleFindReplace={handleFindReplace}
+        handleReplaceAll={handleReplaceAll}
+        handleFindNext={handleFindNext}
+        handleReplaceCurrent={handleReplaceCurrent}
         savedSearches={savedSearches}
         addSavedSearch={addSavedSearch}
         removeSavedSearch={removeSavedSearch}
