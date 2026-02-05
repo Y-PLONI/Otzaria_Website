@@ -25,6 +25,8 @@ export default function EditorToolbar({
   togglePanelOrder, 
   handleRemoveDigits,
   handleFinish,
+  isPageAvailable,
+  onClaim,
   setShowInfoDialog,
   setShowSettings,
   thumbnailUrl,
@@ -39,7 +41,6 @@ export default function EditorToolbar({
     e.preventDefault();
   };
 
-  // --- קבוצת כלי התמונה ---
   const ImageTools = (
     <div className="flex items-center gap-1.5 justify-center">
       <button
@@ -121,7 +122,6 @@ export default function EditorToolbar({
     </div>
   );
 
-  // --- קבוצת כלי הטקסט ---
   const TextTools = (
     <div className="flex items-center gap-1.5 flex-wrap justify-center">
       <div className="flex items-center gap-0 bg-gray-100 rounded-md p-0.5">
@@ -191,10 +191,17 @@ export default function EditorToolbar({
 
       <div className="w-px h-5 bg-gray-200"></div>
 
-      <button onClick={handleFinish} className="flex items-center gap-1.5 px-3 py-1 h-7 bg-green-600 hover:bg-green-700 text-white rounded-md shadow-sm transition-colors ml-2" title="סיים הקלדת קובץ וסמן כהושלם">
-        <span className="material-symbols-outlined text-sm">upload_file</span>
-        <span className="text-[11px] font-bold">סיים</span>
-      </button>
+      {isPageAvailable ? (
+        <button onClick={onClaim} className="flex items-center gap-1.5 px-3 py-1 h-7 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-sm transition-colors ml-2" title="תפוס עמוד לעריכה">
+          <span className="material-symbols-outlined text-sm">lock</span>
+          <span className="text-[11px] font-bold">תפוס</span>
+        </button>
+      ) : (
+        <button onClick={handleFinish} className="flex items-center gap-1.5 px-3 py-1 h-7 bg-green-600 hover:bg-green-700 text-white rounded-md shadow-sm transition-colors ml-2" title="סיים הקלדת קובץ וסמן כהושלם">
+          <span className="material-symbols-outlined text-sm">upload_file</span>
+          <span className="text-[11px] font-bold">סיים</span>
+        </button>
+      )}
 
       <div className="w-px h-5 bg-gray-200"></div>
 

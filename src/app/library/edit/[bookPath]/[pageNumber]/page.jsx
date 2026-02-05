@@ -428,6 +428,50 @@ export default function EditPage() {
     setShowUploadDialog(true);
   }, [session, content, leftColumn, rightColumn, twoColumns, handleAutoSaveWrapper, showAlert]);
 
+  const handleClaim = async () => {
+    if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת');
+    
+    showConfirm(
+      `עבודה על עמוד ${pageNumber}`,
+      `האם אתה מעוניין לעבוד על עמוד זה?\nהעמוד יסומן כ"בטיפול" ויוצמד אליך.`,
+      async () => {
+          startLoading('תופס עמוד...');
+          try {
+              const userId = session.user._id || session.user.id;
+              const response = await fetch(`/api/book/claim-page`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      bookPath,
+                      pageNumber,
+                      userId: userId, 
+                      userName: session.user.name
+                  })
+              });
+              
+              const result = await response.json();
+              stopLoading(); 
+
+              if (result.success) {
+                  setPageData(prev => ({
+                      ...prev, 
+                      status: 'in-progress', 
+                      claimedBy: session.user.name, 
+                      claimedById: userId
+                  }));
+                  showAlert('הצלחה', 'העמוד נתפס על ידך בהצלחה! כעת ניתן לערוך ולשמור.');
+              } else {
+                  showAlert('שגיאה', result.error || 'שגיאה בתפיסת העמוד');
+              }
+          } catch (error) {
+              stopLoading();
+              console.error('Error claiming page:', error);
+              showAlert('שגיאה', 'שגיאה בתפיסת העמוד');
+          }
+      }
+    );
+  };
+
   const completePageLogic = async () => {
     const safeBookId = bookData?.id || bookData?._id;
     const safePageId = pageData?.id || pageData?._id;
@@ -1022,7 +1066,9 @@ export default function EditPage() {
         handleDownloadImage={handleDownloadImage}
         togglePanelOrder={togglePanelOrder}
         handleRemoveDigits={handleRemoveDigits}
-        handleFinish={handleFinishClick} 
+        handleFinish={handleFinishClick}
+        isPageAvailable={pageData?.status === 'available'}
+        onClaim={handleClaim}
         setShowInfoDialog={setShowInfoDialog} setShowSettings={setShowSettings}
         thumbnailUrl={pageData?.thumbnail}
         isCollapsed={isToolbarCollapsed}
@@ -1121,7 +1167,6 @@ export default function EditPage() {
         isOpen={showInfoDialog} onClose={handleCloseInfoDialog}
         bookInstructions={allInstructions.bookInstructions}
         globalInstructions={allInstructions.globalInstructions}
-        // 👇 העברת הפרופס החדשים לקומפוננטת הדיאלוג
         examplePage={bookData?.examplePage}
         bookPath={bookPath}
       />
@@ -1176,5 +1221,4 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
       </div>
     </div>
   )
-
 }
