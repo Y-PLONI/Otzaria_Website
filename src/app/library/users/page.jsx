@@ -183,11 +183,11 @@ export default function UsersPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {paginatedUsers.map((user, index) => {
                     const globalIndex = startIndex + index + 1;
-                    const isTop3 = sortBy === 'points' && globalIndex <= 3 && !searchQuery; // הצג מדליות רק כשאין חיפוש והמיון לפי נקודות
-                    
+                    const isTop3 = sortBy === 'points' && globalIndex <= 3 && !searchQuery;
+  
                     return (
                       <div
-                        key={user._id}
+                        key={user._id || user.id || `user-${index}`}
                         className="group glass p-4 rounded-xl hover:shadow-lg transition-all border border-transparent hover:border-primary/20 relative overflow-hidden"
                       >
                          {/* Rank Badge for Top 3 */}

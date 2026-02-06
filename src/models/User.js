@@ -15,6 +15,7 @@ const UserSchema = new mongoose.Schema({
   verificationToken: { type: String },
   verificationTokenExpires: { type: Date },
   verificationRequestHistory: [{ type: Date }],
+  lastSubscriptionReminderDismissedAt: { type: Date },
   
   savedSearches: [{
     id: { type: String },
@@ -30,5 +31,3 @@ const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
 
 export default User;
-
-

@@ -44,6 +44,9 @@ export default function DashboardPage() {
   const [newEmail, setNewEmail] = useState('')
   const [updatingEmail, setUpdatingEmail] = useState(false)
 
+  const [showReminderModal, setShowReminderModal] = useState(false)
+  const [dismissingReminder, setDismissingReminder] = useState(false)
+
   useEffect(() => {
       update();
     }, []);
@@ -56,6 +59,7 @@ export default function DashboardPage() {
       loadUserStats(isFirstTime); 
       loadMyMessages();
       setNewEmail(session?.user?.email || '');
+      checkSubscriptionReminder();
     }
   }, [status, router, session]);
 
@@ -108,6 +112,50 @@ export default function DashboardPage() {
       setLoadingSub(false)
     }
   }
+
+  const checkSubscriptionReminder = async () => {
+    try {
+      const response = await fetch('/api/user/notifications');
+      const data = await response.json();
+      
+      if (data.success) {
+        setIsSubscribed(data.isSubscribed);
+
+        if (data.isSubscribed) return;
+
+        const lastDismissed = data.lastDismissedAt ? new Date(data.lastDismissedAt) : null;
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        if (!lastDismissed || lastDismissed < oneWeekAgo) {
+            setShowReminderModal(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking subscription status:', error);
+    }
+  }
+
+  const handleDismissReminderServerSide = async () => {
+    try {
+        setDismissingReminder(true);
+        const response = await fetch('/api/user/notifications/dismiss', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            setShowReminderModal(false);
+        } else {
+            setShowReminderModal(false);
+        }
+    } catch (error) {
+        console.error('Error dismissing reminder:', error);
+        setShowReminderModal(false);
+    } finally {
+        setDismissingReminder(false);
+    }
+  };
 
   const toggleSubscription = async () => {
     try {
@@ -313,6 +361,36 @@ export default function DashboardPage() {
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
+  const getPageNumbers = () => {
+    const result = [];
+    
+    const pages = new Set([
+      1, 
+      totalPages, 
+      currentPage, 
+      currentPage - 1, 
+      currentPage + 1
+    ]);
+
+    const sortedPages = Array.from(pages)
+      .filter(p => p >= 1 && p <= totalPages)
+      .sort((a, b) => a - b);
+
+    for (let i = 0; i < sortedPages.length; i++) {
+      const page = sortedPages[i];
+      const prevPage = sortedPages[i - 1];
+
+      if (i > 0) {
+        if (page - prevPage > 1) {
+           result.push('...');
+        }
+      }
+      result.push(page);
+    }
+
+    return result;
+  };
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -492,20 +570,40 @@ export default function DashboardPage() {
                 </div>
 
                 {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-2 mt-8">
-                    {Array.from({ length: totalPages }, (_, i) => (
-                      <button
-                        key={i + 1}
-                        onClick={() => paginate(i + 1)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
-                          currentPage === i + 1
-                            ? 'bg-primary text-white shadow-md'
-                            : 'bg-surface-variant text-on-surface hover:bg-primary/20'
-                        }`}
-                      >
-                        {i + 1}
-                      </button>
+                  <div className="flex justify-center items-center gap-2 mt-8 select-none">
+                    <button
+                      onClick={() => paginate(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">chevron_right</span>
+                    </button>
+
+                    {getPageNumbers().map((page, index) => (
+                      page === '...' ? (
+                        <span key={`dots-${index}`} className="w-8 text-center text-on-surface/50">...</span>
+                      ) : (
+                        <button
+                          key={page}
+                          onClick={() => paginate(page)}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
+                            currentPage === page
+                              ? 'bg-primary text-white shadow-md'
+                              : 'bg-surface-variant text-on-surface hover:bg-primary/20'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
                     ))}
+
+                    <button
+                      onClick={() => paginate(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">chevron_left</span>
+                    </button>
                   </div>
                 )}
               </>
@@ -821,6 +919,61 @@ export default function DashboardPage() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReminderModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="bg-white glass-strong rounded-2xl w-full max-w-md shadow-2xl p-8 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-accent"></div>
+
+            <div className="text-center space-y-6">
+              <div className="inline-flex items-center justify-center p-4 bg-primary/10 rounded-full mb-2">
+                <span className="material-symbols-outlined text-5xl text-primary animate-pulse">
+                  mark_email_unread
+                </span>
+              </div>
+
+              <div>
+                <h3 className="text-2xl font-bold text-on-surface mb-3">
+                  פספסת משהו...
+                </h3>
+                <p className="text-on-surface/80 leading-relaxed">
+                  המערכת זיהתה שאינך רשום לקבלת עדכונים במייל.
+                  <br />
+                  רצינו להזכיר לך שכדאי להירשם כדי לא לפספס ספרים חדשים וחשובים שעולים לספרייה וזמינים לעריכה!
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-4">
+                <button
+                  onClick={async () => {
+                      await toggleSubscription(); 
+                      setShowReminderModal(false);
+                  }}
+                  disabled={loadingSub}
+                  className="w-full py-3 px-6 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
+                >
+                  {loadingSub ? (
+                    <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined">mark_email_read</span>
+                      רשום אותי עכשיו
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleDismissReminderServerSide}
+                  disabled={dismissingReminder}
+                  className="w-full py-2 px-6 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl text-sm font-medium transition-colors"
+                >
+                  {dismissingReminder ? 'מעדכן...' : 'לא מעוניין (הזכר לי שוב בעוד שבוע)'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

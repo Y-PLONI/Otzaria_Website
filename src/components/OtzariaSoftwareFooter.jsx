@@ -17,6 +17,9 @@ export default function OtzariaSoftwareFooter() {
           >
             GitHub
           </a>
+          <Link href="/license" className="hover:text-primary transition-colors">
+            רשיון
+          </Link>
           <Link href="/library" className="hover:text-primary transition-colors">
             הספרייה המקוונת
           </Link>

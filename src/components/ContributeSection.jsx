@@ -141,7 +141,7 @@ export default function ContributeSection() {
                   className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-colors border border-outline w-full sm:w-auto"
                 >
                   <span className="material-symbols-outlined">library_books</span>
-                  <span>עיין בספרייה</span>
+                  <span>ערוך בספרייה</span>
                 </Link>
               </motion.div>
             </div>
