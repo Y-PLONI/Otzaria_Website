@@ -12,58 +12,36 @@ export async function POST(request) {
 
         const formData = await request.formData();
         const file = formData.get('file');
-        const bookName = formData.get('bookName');
+        const bookName = formData.get('bookName'); // מכיל את שם הספר + מספר העמוד
 
-        // ולידציות בסיסיות
         if (!file || !bookName) return NextResponse.json({ error: 'Missing data' }, { status: 400 });
 
-        // 1. אבטחה: בדיקת סוג קובץ (MIME Type) בנוסף לסיומת
-        // אנו מוודאים שהדפדפן מזהה את זה כטקסט פשוט
+        // ולידציה בסיסית
         if (file.type !== 'text/plain' && !file.name.toLowerCase().endsWith('.txt')) {
-            return NextResponse.json({ error: 'רק קבצי טקסט (.txt) מותרים' }, { status: 400 });
-        }
-
-        // 2. אבטחה: הגבלת גודל קובץ (למשל 10MB)
-        const MAX_SIZE = 10 * 1024 * 1024;
-        if (file.size > MAX_SIZE) {
-            return NextResponse.json({ error: 'הקובץ גדול מדי (מקסימום 10MB)' }, { status: 400 });
+            return NextResponse.json({ error: 'רק קבצי טקסט מותרים' }, { status: 400 });
         }
 
         const content = await file.text();
-
-        // 3. אבטחה: בדיקה שהתוכן לא מכיל תווים בינאריים חשודים (Null Bytes)
-        // זה מונע העלאת קבצי הרצה שהוסוו כטקסט
-        if (content.indexOf('\0') !== -1) {
-             return NextResponse.json({ error: 'הקובץ מכיל תווים לא חוקיים' }, { status: 400 });
-        }
-
         await connectDB();
 
-        // יצירת רשומה ב-DB
-        const upload = await Upload.create({
-            uploader: session.user._id,
-            bookName: bookName,
-            originalFileName: file.name,
-            content: content,
-            fileSize: file.size,
-            lineCount: content.split('\n').length,
-            status: 'pending'
-        });
+        // לוגיקת ה"דחיסה": עדכון אם קיים, אחרת יצירה (Upsert)
+        const upload = await Upload.findOneAndUpdate(
+            { uploader: session.user._id, bookName: bookName }, // חיפוש לפי משתמש ושם ספר/עמוד
+            { 
+                originalFileName: file.name,
+                content: content,
+                fileSize: file.size,
+                lineCount: content.split('\n').length,
+                status: 'pending',
+                updatedAt: new Date()
+            },
+            { upsert: true, new: true } // upsert יוצר חדש אם לא נמצא דף תואם
+        );
 
-        return NextResponse.json({ 
-            success: true, 
-            message: 'הספר הועלה בהצלחה',
-            upload: {
-                id: upload._id,
-                bookName: upload.bookName,
-                status: upload.status,
-                uploadedAt: upload.createdAt
-            }
-        });
+        return NextResponse.json({ success: true, id: upload._id });
 
     } catch (error) {
-        console.error('Upload Error:', error);
-        return NextResponse.json({ success: false, error: 'שגיאה בהעלאה' }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'שגיאה בעיבוד' }, { status: 500 });
     }
 }
 

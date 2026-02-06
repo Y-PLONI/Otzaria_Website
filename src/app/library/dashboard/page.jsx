@@ -44,6 +44,9 @@ export default function DashboardPage() {
   const [newEmail, setNewEmail] = useState('')
   const [updatingEmail, setUpdatingEmail] = useState(false)
 
+  const [showReminderModal, setShowReminderModal] = useState(false)
+  const [dismissingReminder, setDismissingReminder] = useState(false)
+
   useEffect(() => {
       update();
     }, []);
@@ -56,6 +59,7 @@ export default function DashboardPage() {
       loadUserStats(isFirstTime); 
       loadMyMessages();
       setNewEmail(session?.user?.email || '');
+      checkSubscriptionReminder();
     }
   }, [status, router, session]);
 
@@ -108,6 +112,50 @@ export default function DashboardPage() {
       setLoadingSub(false)
     }
   }
+
+  const checkSubscriptionReminder = async () => {
+    try {
+      const response = await fetch('/api/user/notifications');
+      const data = await response.json();
+      
+      if (data.success) {
+        setIsSubscribed(data.isSubscribed);
+
+        if (data.isSubscribed) return;
+
+        const lastDismissed = data.lastDismissedAt ? new Date(data.lastDismissedAt) : null;
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        if (!lastDismissed || lastDismissed < oneWeekAgo) {
+            setShowReminderModal(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking subscription status:', error);
+    }
+  }
+
+  const handleDismissReminderServerSide = async () => {
+    try {
+        setDismissingReminder(true);
+        const response = await fetch('/api/user/notifications/dismiss', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            setShowReminderModal(false);
+        } else {
+            setShowReminderModal(false);
+        }
+    } catch (error) {
+        console.error('Error dismissing reminder:', error);
+        setShowReminderModal(false);
+    } finally {
+        setDismissingReminder(false);
+    }
+  };
 
   const toggleSubscription = async () => {
     try {
@@ -871,6 +919,61 @@ export default function DashboardPage() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReminderModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="bg-white glass-strong rounded-2xl w-full max-w-md shadow-2xl p-8 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-accent"></div>
+
+            <div className="text-center space-y-6">
+              <div className="inline-flex items-center justify-center p-4 bg-primary/10 rounded-full mb-2">
+                <span className="material-symbols-outlined text-5xl text-primary animate-pulse">
+                  mark_email_unread
+                </span>
+              </div>
+
+              <div>
+                <h3 className="text-2xl font-bold text-on-surface mb-3">
+                  פספסת משהו...
+                </h3>
+                <p className="text-on-surface/80 leading-relaxed">
+                  המערכת זיהתה שאינך רשום לקבלת עדכונים במייל.
+                  <br />
+                  רצינו להזכיר לך שכדאי להירשם כדי לא לפספס ספרים חדשים וחשובים שעולים לספרייה וזמינים לעריכה!
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-4">
+                <button
+                  onClick={async () => {
+                      await toggleSubscription(); 
+                      setShowReminderModal(false);
+                  }}
+                  disabled={loadingSub}
+                  className="w-full py-3 px-6 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
+                >
+                  {loadingSub ? (
+                    <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined">mark_email_read</span>
+                      רשום אותי עכשיו
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleDismissReminderServerSide}
+                  disabled={dismissingReminder}
+                  className="w-full py-2 px-6 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl text-sm font-medium transition-colors"
+                >
+                  {dismissingReminder ? 'מעדכן...' : 'לא מעוניין (הזכר לי שוב בעוד שבוע)'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
