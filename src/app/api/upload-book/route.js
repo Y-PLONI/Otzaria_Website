@@ -14,11 +14,13 @@ export async function POST(request) {
         const file = formData.get('file');
         const bookName = formData.get('bookName'); // מכיל את שם הספר + מספר העמוד
 
-        if (!file || !bookName) return NextResponse.json({ error: 'Missing data' }, { status: 400 });
-
-        // ולידציה בסיסית
         if (file.type !== 'text/plain' && !file.name.toLowerCase().endsWith('.txt')) {
-            return NextResponse.json({ error: 'רק קבצי טקסט מותרים' }, { status: 400 });
+            return NextResponse.json({ error: 'רק קבצי טקסט (.txt) מותרים' }, { status: 400 });
+        }
+
+        const MAX_SIZE = 10 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+            return NextResponse.json({ error: 'הקובץ גדול מדי (מקסימום 10MB)' }, { status: 400 });
         }
 
         const content = await file.text();
