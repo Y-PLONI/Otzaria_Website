@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useDialog } from '@/components/DialogContext'
 
 export default function AdminPagesPage() {
   const [pages, setPages] = useState([])
@@ -11,6 +12,8 @@ export default function AdminPagesPage() {
   
   const [booksList, setBooksList] = useState([])
   const [usersList, setUsersList] = useState([])
+
+  const { showAlert, showConfirm } = useDialog()
 
   const loadPages = async () => {
     try {
@@ -26,12 +29,15 @@ export default function AdminPagesPage() {
       if (data.success) {
         setPages(data.pages)
         
+        // יצירת רשימת ספרים ייחודית
         const books = [...new Set(data.pages.map(p => p.bookName))].sort()
         setBooksList(books)
         
+        // יצירת רשימת משתמשים ייחודית
         const users = data.pages
             .filter(p => p.claimedBy)
             .reduce((acc, p) => {
+                // בדיקה אם המשתמש כבר קיים במערך הצובר לפי ID
                 if (!acc.some(u => u.id === p.claimedById)) {
                     acc.push({ id: p.claimedById, name: p.claimedBy })
                 }
@@ -76,34 +82,39 @@ export default function AdminPagesPage() {
               setEditingPage(null)
               loadPages()
           } else {
-              alert('שגיאה בשמירה')
+              showAlert('שגיאה', 'שגיאה בשמירה')
           }
       } catch (e) {
-          alert('תקלה בתקשורת')
+          showAlert('שגיאה', 'תקלה בתקשורת')
       }
   }
 
-  const handleReleasePage = async (bookName, pageNumber) => {
-      if(!confirm('לשחרר את העמוד? המשתמש יאבד את השיוך לעמוד זה.')) return
-      try {
-          await fetch('/api/admin/pages/update', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                  bookName, 
-                  pageNumber, 
-                  updates: { status: 'available', claimedBy: null, claimedAt: null } 
-              })
-          })
-          loadPages()
-      } catch (e) {
-          alert('שגיאה')
-      }
+  const handleReleasePage = (bookName, pageNumber) => {
+      showConfirm(
+          'שחרור עמוד',
+          'לשחרר את העמוד? המשתמש יאבד את השיוך לעמוד זה.',
+          async () => {
+              try {
+                  await fetch('/api/admin/pages/update', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ 
+                          bookName, 
+                          pageNumber, 
+                          updates: { status: 'available', claimedBy: null, claimedAt: null } 
+                      })
+                  })
+                  loadPages()
+              } catch (e) {
+                  showAlert('שגיאה', 'אירעה שגיאה בעת שחרור העמוד')
+              }
+          }
+      )
   }
 
   const handleDownload = (pageId, fileName) => {
       if (!pageId) {
-          alert('שגיאה: מזהה עמוד חסר');
+          showAlert('שגיאה', 'שגיאה: מזהה עמוד חסר');
           return;
       }
       const link = document.createElement('a')
@@ -173,7 +184,8 @@ export default function AdminPagesPage() {
               >
                   <option value="">כל המשתמשים</option>
                   {usersList.map(user => (
-                      <option key={user._id} value={user.id}>{user.name}</option>
+                      // TIQUN: Changed key from user._id to user.id
+                      <option key={user.id} value={user.id}>{user.name}</option>
                   ))}
               </select>
           </div>
@@ -215,9 +227,11 @@ export default function AdminPagesPage() {
                   {pages.map((page, idx) => {
                       const isEditing = editingPage === `${page.bookName}-${page.number}`
                       const pageId = page._id || page.id; 
-                      
+                      // TIQUN: Prefer pageId over idx for stable rendering
+                      const rowKey = pageId || idx;
+
                       return (
-                      <tr key={idx} className="border-b hover:bg-gray-50 transition-colors">
+                      <tr key={rowKey} className="border-b hover:bg-gray-50 transition-colors">
                           <td className="p-4 font-medium">{page.bookName}</td>
                           <td className="p-4">{page.number}</td>
                           <td className="p-4">
@@ -307,7 +321,7 @@ export default function AdminPagesPage() {
       </div>
       
       <div className="mt-4 text-sm text-gray-500 text-left">
-          סהכ רשומות: {pages.length}
+          סה"כ רשומות: {pages.length}
       </div>
     </div>
   )

@@ -313,6 +313,36 @@ export default function DashboardPage() {
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
+  const getPageNumbers = () => {
+    const result = [];
+    
+    const pages = new Set([
+      1, 
+      totalPages, 
+      currentPage, 
+      currentPage - 1, 
+      currentPage + 1
+    ]);
+
+    const sortedPages = Array.from(pages)
+      .filter(p => p >= 1 && p <= totalPages)
+      .sort((a, b) => a - b);
+
+    for (let i = 0; i < sortedPages.length; i++) {
+      const page = sortedPages[i];
+      const prevPage = sortedPages[i - 1];
+
+      if (i > 0) {
+        if (page - prevPage > 1) {
+           result.push('...');
+        }
+      }
+      result.push(page);
+    }
+
+    return result;
+  };
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -492,20 +522,40 @@ export default function DashboardPage() {
                 </div>
 
                 {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-2 mt-8">
-                    {Array.from({ length: totalPages }, (_, i) => (
-                      <button
-                        key={i + 1}
-                        onClick={() => paginate(i + 1)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
-                          currentPage === i + 1
-                            ? 'bg-primary text-white shadow-md'
-                            : 'bg-surface-variant text-on-surface hover:bg-primary/20'
-                        }`}
-                      >
-                        {i + 1}
-                      </button>
+                  <div className="flex justify-center items-center gap-2 mt-8 select-none">
+                    <button
+                      onClick={() => paginate(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">chevron_right</span>
+                    </button>
+
+                    {getPageNumbers().map((page, index) => (
+                      page === '...' ? (
+                        <span key={`dots-${index}`} className="w-8 text-center text-on-surface/50">...</span>
+                      ) : (
+                        <button
+                          key={page}
+                          onClick={() => paginate(page)}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
+                            currentPage === page
+                              ? 'bg-primary text-white shadow-md'
+                              : 'bg-surface-variant text-on-surface hover:bg-primary/20'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
                     ))}
+
+                    <button
+                      onClick={() => paginate(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">chevron_left</span>
+                    </button>
                   </div>
                 )}
               </>

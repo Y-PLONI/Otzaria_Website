@@ -520,7 +520,7 @@ export default function EditPage() {
       stopLoading(); 
 
       if (result.success) {
-        showAlert('הצלחה', 'הטקסט הועלה בהצלחה! מסמן כהושלם.');
+        showAlert('הצלחה', 'הטקסט הועלה בהצלחהוהעמוד סומן כהושלם!');
         await completePageLogic(); 
       } else {
         showAlert('שגיאה', `שגיאה בהעלאה: ${result.error || 'שגיאה לא ידועה'}`);

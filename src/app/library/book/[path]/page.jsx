@@ -9,6 +9,7 @@ import ImagePreviewModal from '@/components/ImagePreviewModal'
 import { useDialog } from '@/components/DialogContext'
 import { LoadingProvider } from '@/components/LoadingContext'
 import { useLoading } from '@/components/LoadingContext'
+import Header from '@/components/Header'
 
 const pageStatusConfig = {
   available: {
@@ -366,142 +367,137 @@ export default function BookPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href={`/library/books`} className="flex items-center gap-2 text-on-surface hover:text-primary transition-colors">
-              <span className="material-symbols-outlined">arrow_forward</span>
-              <span>חזרה לספרייה</span>
-            </Link>
-            <div className="w-px h-8 bg-surface-variant"></div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <span className="material-symbols-outlined text-xl text-red-600">
-                  picture_as_pdf
-                </span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-on-surface">{bookData.name}</h1>
-                <p className="text-sm text-on-surface/60">{stats.total} עמודים</p>
-              </div>
+  <div className="flex min-h-screen flex-col bg-background">
+    {/* Global Header Component */}
+    <Header />
+
+    {/* Sticky Page Header */}
+    <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
+      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href={`/library/books`} className="flex items-center gap-2 text-on-surface hover:text-primary transition-colors">
+            <span className="material-symbols-outlined">arrow_forward</span>
+            <span>חזרה לרשימת הספרים</span>
+          </Link>
+          <div className="w-px h-8 bg-surface-variant"></div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+              <span className="material-symbols-outlined text-xl text-red-600">
+                picture_as_pdf
+              </span>
             </div>
-          </div>
-
-          {session && (
-            <Link 
-              href="/library/dashboard" 
-              className="flex items-center justify-center hover:opacity-80 transition-opacity"
-              title={session.user.name}
-            >
-              <div 
-                className="w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-base shadow-md hover:shadow-lg transition-shadow"
-                style={{ backgroundColor: getAvatarColor(session.user.name) }}
-              >
-                {getInitial(session.user.name)}
-              </div>
-            </Link>
-          )}
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Filters */}
-          <div className="grid grid-cols-4 gap-4 mb-8">
-            <button 
-              onClick={() => setActiveFilter('all')}
-              className={`glass p-4 rounded-xl text-center border transition-all ${
-                activeFilter === 'all' 
-                ? 'border-primary ring-2 ring-primary/20 bg-primary/5' 
-                : 'border-surface-variant/30 hover:border-primary/50'
-              }`}
-            >
-              <p className="text-3xl font-bold text-on-surface">{stats.total}</p>
-              <p className="text-sm text-on-surface/70">סה&quot;כ עמודים</p>
-            </button>
-            <button 
-              onClick={() => setActiveFilter('available')}
-              className={`glass p-4 rounded-xl text-center border-2 transition-all ${
-                activeFilter === 'available'
-                  ? 'border-gray-500 bg-gray-50 ring-2 ring-gray-200'
-                  : 'border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              <p className="text-3xl font-bold text-gray-700">{stats.available}</p>
-              <p className="text-sm text-gray-700">זמינים</p>
-            </button>
-            <button 
-              onClick={() => setActiveFilter('in-progress')}
-              className={`glass p-4 rounded-xl text-center border-2 transition-all ${
-                activeFilter === 'in-progress'
-                  ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                  : 'border-blue-300 hover:border-blue-400'
-              }`}
-            >
-              <p className="text-3xl font-bold text-blue-700">{stats.inProgress}</p>
-              <p className="text-sm text-blue-700">בטיפול</p>
-            </button>
-            <button 
-              onClick={() => setActiveFilter('completed')}
-              className={`glass p-4 rounded-xl text-center border-2 transition-all ${
-                activeFilter === 'completed'
-                  ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                  : 'border-green-300 hover:border-green-400'
-              }`}
-            >
-              <p className="text-3xl font-bold text-green-700">{stats.completed}</p>
-              <p className="text-sm text-green-700">הושלמו</p>
-            </button>
-          </div>
-
-          <div className="glass-strong rounded-2xl p-6 border border-surface-variant/30">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-on-surface">עמודי הספר</h2>
-              
-              <div className="flex gap-2 bg-surface rounded-lg p-1">
-                <button onClick={() => setViewMode('single')} className={`p-2 rounded transition-colors ${viewMode === 'single' ? 'bg-primary text-on-primary' : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'}`} title="עמוד אחד">
-                  <span className="material-symbols-outlined">crop_portrait</span>
-                </button>
-                <button onClick={() => setViewMode('double')} className={`p-2 rounded transition-colors ${viewMode === 'double' ? 'bg-primary text-on-primary' : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'}`} title="שני עמודים">
-                  <span className="material-symbols-outlined">auto_stories</span>
-                </button>
-              </div>
-            </div>
-            
-            <div className={
-              viewMode === 'single'
-                ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
-                : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4'
-            }>
-              {pages
-                .filter(page => activeFilter === 'all' || page.status === activeFilter)
-                .map((page) => (
-                <div
-                  key={page.id || page.number}
-                  className="relative"
-                  style={{ contentVisibility: 'auto', containIntrinsicSize: '300px 400px' }}
-                >
-                   <PageCard
-                      page={page}
-                      onClaim={handleClaimPage}
-                      onComplete={handleMarkComplete}
-                      onRelease={handleReleasePage}
-                      onUncomplete={handleUncompletePage}
-                      onPreview={() => setPreviewImage(page.thumbnail)}
-                      currentUser={session?.user}
-                      bookPath={bookPath}
-                      isAdmin={session?.user?.role === 'admin'}
-                    />
-                </div>
-              ))}
+            <div>
+              <h1 className="text-xl font-bold text-on-surface">{bookData.name}</h1>
+              <p className="text-sm text-on-surface/60">{stats.total} עמודים</p>
             </div>
           </div>
         </div>
       </div>
+    </header>
 
-      <ImagePreviewModal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} imageSrc={previewImage} altText="תצוגת עמוד" />
+    {/* Main Content Area */}
+    <div className="container mx-auto px-4 py-8 flex-grow">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Filters */}
+        <div className="grid grid-cols-4 gap-4 mb-8">
+          <button 
+            onClick={() => setActiveFilter('all')}
+            className={`glass p-4 rounded-xl text-center border transition-all ${
+              activeFilter === 'all' 
+              ? 'border-primary ring-2 ring-primary/20 bg-primary/5' 
+              : 'border-surface-variant/30 hover:border-primary/50'
+            }`}
+          >
+            <p className="text-3xl font-bold text-on-surface">{stats.total}</p>
+            <p className="text-sm text-on-surface/70">סה&quot;כ עמודים</p>
+          </button>
+          
+          <button 
+            onClick={() => setActiveFilter('available')}
+            className={`glass p-4 rounded-xl text-center border-2 transition-all ${
+              activeFilter === 'available'
+                ? 'border-gray-500 bg-gray-50 ring-2 ring-gray-200'
+                : 'border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            <p className="text-3xl font-bold text-gray-700">{stats.available}</p>
+            <p className="text-sm text-gray-700">זמינים</p>
+          </button>
+          
+          <button 
+            onClick={() => setActiveFilter('in-progress')}
+            className={`glass p-4 rounded-xl text-center border-2 transition-all ${
+              activeFilter === 'in-progress'
+                ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                : 'border-blue-300 hover:border-blue-400'
+            }`}
+          >
+            <p className="text-3xl font-bold text-blue-700">{stats.inProgress}</p>
+            <p className="text-sm text-blue-700">בטיפול</p>
+          </button>
+          
+          <button 
+            onClick={() => setActiveFilter('completed')}
+            className={`glass p-4 rounded-xl text-center border-2 transition-all ${
+              activeFilter === 'completed'
+                ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                : 'border-green-300 hover:border-green-400'
+            }`}
+          >
+            <p className="text-3xl font-bold text-green-700">{stats.completed}</p>
+            <p className="text-sm text-green-700">הושלמו</p>
+          </button>
+        </div>
+
+        {/* Pages Grid Container */}
+        <div className="glass-strong rounded-2xl p-6 border border-surface-variant/30">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-on-surface">עמודי הספר</h2>
+            
+            <div className="flex gap-2 bg-surface rounded-lg p-1">
+              <button onClick={() => setViewMode('single')} className={`p-2 rounded transition-colors ${viewMode === 'single' ? 'bg-primary text-on-primary' : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'}`} title="עמוד אחד">
+                <span className="material-symbols-outlined">crop_portrait</span>
+              </button>
+              <button onClick={() => setViewMode('double')} className={`p-2 rounded transition-colors ${viewMode === 'double' ? 'bg-primary text-on-primary' : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'}`} title="שני עמודים">
+                <span className="material-symbols-outlined">auto_stories</span>
+              </button>
+            </div>
+          </div>
+          
+          <div className={
+            viewMode === 'single'
+              ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
+              : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4'
+          }>
+            {pages
+              .filter(page => activeFilter === 'all' || page.status === activeFilter)
+              .map((page) => (
+              <div
+                key={page.id || page.number}
+                className="relative"
+                style={{ contentVisibility: 'auto', containIntrinsicSize: '300px 400px' }}
+              >
+                  <PageCard
+                    page={page}
+                    onClaim={handleClaimPage}
+                    onComplete={handleMarkComplete}
+                    onRelease={handleReleasePage}
+                    onUncomplete={handleUncompletePage}
+                    onPreview={() => setPreviewImage(page.thumbnail)}
+                    currentUser={session?.user}
+                    bookPath={bookPath}
+                    isAdmin={session?.user?.role === 'admin'}
+                  />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
+
+    <ImagePreviewModal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} imageSrc={previewImage} altText="תצוגת עמוד" />
+  </div>
   )
 }
 
