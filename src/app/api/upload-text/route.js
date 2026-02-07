@@ -1,3 +1,9 @@
+import { NextResponse } from 'next/server';
+import connectDB from '@/lib/db';
+import Upload from '@/models/Upload';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+
 export async function POST(request) {
     try {
         const session = await getServerSession(authOptions);
@@ -12,13 +18,10 @@ export async function POST(request) {
         const content = await file.text();
         await connectDB();
 
-
         const upload = await Upload.findOneAndUpdate(
-            
 
             { bookName: bookName }, 
             
-
             { 
                 uploader: session.user._id, 
                 originalFileName: file.name,
@@ -29,7 +32,6 @@ export async function POST(request) {
                 createdAt: new Date() 
             },
             
-
             { 
                 upsert: true, 
                 new: true, 
