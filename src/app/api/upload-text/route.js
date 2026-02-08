@@ -26,8 +26,6 @@ export async function POST(request) {
                 uploader: session.user._id, 
                 originalFileName: file.name,
                 content: content,
-                fileSize: file.size,
-                lineCount: content.split('\n').length,
                 status: 'pending',
                 createdAt: new Date() 
             },
