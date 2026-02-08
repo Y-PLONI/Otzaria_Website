@@ -13,23 +13,40 @@ export async function POST(request) {
         const file = formData.get('file');
         const bookName = formData.get('bookName');
 
-        if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
+        if (!file || !bookName) return NextResponse.json({ error: 'Missing data' }, { status: 400 });
 
-        // קריאת הטקסט מהקובץ
-        const textContent = await file.text();
-
+        const content = await file.text();
         await connectDB();
 
-        const upload = await Upload.create({
-            uploader: session.user._id,
-            bookName,
-            originalFileName: file.name,
-            content: textContent,
-            status: 'pending'
+        const upload = await Upload.findOneAndUpdate(
+
+            { bookName: bookName }, 
+            
+            { 
+                uploader: session.user._id, 
+                originalFileName: file.name,
+                content: content,
+                fileSize: file.size,
+                lineCount: content.split('\n').length,
+                status: 'pending',
+                createdAt: new Date() 
+            },
+            
+            { 
+                upsert: true, 
+                new: true, 
+                setDefaultsOnInsert: true 
+            }
+        );
+
+        return NextResponse.json({ 
+            success: true, 
+            message: 'התוכן עודכן בהצלחה',
+            uploadId: upload._id 
         });
 
-        return NextResponse.json({ success: true, message: 'הועלה בהצלחה וממתין לאישור' });
     } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('Upload Error:', error);
+        return NextResponse.json({ success: false, error: 'שגיאה בעיבוד הקובץ' }, { status: 500 });
     }
 }
