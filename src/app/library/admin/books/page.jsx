@@ -39,6 +39,15 @@ export default function AdminBooksPage() {
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false)
   const [isSavingInstructions, setIsSavingInstructions] = useState(false)
 
+  const [hidePersonalBooks, setHidePersonalBooks] = useState(false)
+
+  useEffect(() => {
+    const saved = localStorage.getItem('admin_hide_personal_books')
+    if (saved !== null) {
+        setHidePersonalBooks(JSON.parse(saved))
+    }
+  }, [])
+
   const loadBooks = async () => {
     try {
       setLoading(true)
@@ -327,7 +336,15 @@ export default function AdminBooksPage() {
     }
 };
 
+  const toggleHidePersonal = (checked) => {
+    setHidePersonalBooks(checked);
+    localStorage.setItem('admin_hide_personal_books', JSON.stringify(checked));
+  };
+
   const filteredBooks = books.filter(book => {  
+    const isPersonal = book.isPrivate || !!book.ownerId;
+    if (hidePersonalBooks && isPersonal) return false;
+
     const matchesSearch = book.name.toLowerCase().includes(searchTerm.toLowerCase());  
     if (!matchesSearch) return false;  
 
@@ -419,25 +436,37 @@ export default function AdminBooksPage() {
             </div>
         </div>
 
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {[
-            { id: 'all', label: 'כל הספרים' },
-            { id: 'in_progress', label: 'בטיפול' },
-            { id: 'hidden', label: 'מוסתרים' },
-            { id: 'completed', label: 'הושלמו' },
-        ].map(tab => (
-            <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                    activeTab === tab.id 
-                    ? 'bg-primary text-on-primary' 
-                    : 'bg-white/50 text-gray-600 hover:bg-white/80'
-                }`}
-            >
-                {tab.label}
-            </button>
-        ))}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+        <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 w-full md:w-auto">
+            {[
+                { id: 'all', label: 'כל הספרים' },
+                { id: 'in_progress', label: 'בטיפול' },
+                { id: 'hidden', label: 'מוסתרים' },
+                { id: 'completed', label: 'הושלמו' },
+            ].map(tab => (
+                <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                        activeTab === tab.id 
+                        ? 'bg-primary text-on-primary' 
+                        : 'bg-white/50 text-gray-600 hover:bg-white/80'
+                    }`}
+                >
+                    {tab.label}
+                </button>
+            ))}
+        </div>
+
+        <label className="flex items-center gap-2 cursor-pointer select-none whitespace-nowrap bg-white/40 px-3 py-2 rounded-lg border border-transparent hover:border-gray-200 transition-all">
+            <input 
+                type="checkbox" 
+                checked={hidePersonalBooks}
+                onChange={(e) => toggleHidePersonal(e.target.checked)}
+                className="w-4 h-4 text-primary rounded focus:ring-primary border-gray-300"
+            />
+            <span className="text-sm font-medium text-gray-700">אל תציג ספרים אישיים</span>
+        </label>
       </div>
 
         {books.length === 0 ? (
@@ -455,7 +484,6 @@ export default function AdminBooksPage() {
                 const isHidden = book.isHidden === true;
                 const progress = book.totalPages > 0 ? Math.round((book.completedPages / book.totalPages) * 100) : 0;
                 
-                // זיהוי אם הספר אישי וחילוץ שם המשתמש
                 const isPersonal = book.isPrivate || !!book.ownerId;
                 const ownerName = book.ownerName || 'משתמש פרטי';
 
@@ -483,7 +511,6 @@ export default function AdminBooksPage() {
                                         {book.category || 'כללי'}
                                     </span>
                                     
-                                    {/* שינוי: תצוגת תגית משתמש לספרים אישיים, או תגית מוסתר לספרים רגילים */}
                                     {isPersonal ? (
                                          <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[12px]">person</span>
@@ -939,5 +966,4 @@ export default function AdminBooksPage() {
         />
     </>
   )
-
 }
