@@ -10,10 +10,8 @@ export default function PersonalLibraryPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   
-  // ניהול מצב המודל (חלון ההעלאה)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
 
-  // פונקציה לשליפת הספרים (מוגדרת בחוץ כדי שנוכל לקרוא לה גם אחרי העלאה)
   const fetchUserBooks = async () => {
     try {
         setLoading(true);
@@ -55,14 +53,16 @@ export default function PersonalLibraryPage() {
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto flex flex-col gap-8">
             
-            {/* כותרת וכפתור העלאה */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
                   <h1 className="text-4xl font-bold text-foreground font-frank mb-2">
                     הספרים שלי
                   </h1>
                   <p className="text-on-surface/60 text-lg">
-                    אזור אישי ({flatBooks.length} ספרים)
+                    אזור אישי - ספרים לעבודה אישית ({flatBooks.length} ספרים)
+                  </p>
+                  <p className="text-on-surface/60 text-lg">
+                    כאן תוכלו להעלות ולנהל ספרים לעבודה אישית שאח"כ יוכנסו לאוצריא
                   </p>
                 </div>
 
