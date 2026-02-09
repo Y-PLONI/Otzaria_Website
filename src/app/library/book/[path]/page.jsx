@@ -78,20 +78,17 @@ export default function BookPage() {
   const handleReleasePage = async (pageNumber) => {
     if (!session) return;
     
-    // שליפת ה-ID מראש כדי למנוע מצב שנכנסים ללואדר ואז מגלים שגיאה
     const pageId = pages.find(p => p.number === pageNumber)?.id;
 
     showConfirm(
         'שחרור עמוד',
         'האם אתה בטוח שברצונך לשחרר את העמוד? תאבד 5 נקודות.',
         async () => {
-            // בדיקת תקינות *לפני* שהמסך מחשיך
             if (!pageId) {
                 showAlert('שגיאה', 'שגיאה בזיהוי העמוד');
                 return;
             }
 
-            // 1. התחלת אנימציה - רק אחרי שהמשתמש לחץ "אישור"
             startLoading('משחרר עמוד ומעדכן נתונים...'); 
 
             try {
@@ -103,19 +100,16 @@ export default function BookPage() {
 
                 const result = await response.json()
                 
-                // 2. עצירת אנימציה - חובה לבצע לפני שמציגים הודעת הצלחה/כישלון
                 stopLoading(); 
 
                 if (result.success) {
-                    await loadBookData() // המתנה לטעינת הנתונים החדשים
+                    await loadBookData() 
                     showAlert('בוצע', 'העמוד שוחרר בהצלחה');
                 } else {
                     showAlert('שגיאה', result.error);
                 }
             } catch (err) {
                 console.error('Error releasing page:', err)
-                
-                // 3. עצירת אנימציה גם במקרה של קריסה (Catch)
                 stopLoading(); 
                 showAlert('שגיאה', 'שגיאה בשחרור העמוד');
             }
@@ -375,9 +369,12 @@ export default function BookPage() {
     <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href={`/library/books`} className="flex items-center gap-2 text-on-surface hover:text-primary transition-colors">
+          <Link 
+            href={bookData.isOwner ? '/library/dashboard/my-uploads' : '/library/books'} 
+            className="flex items-center gap-2 text-on-surface hover:text-primary transition-colors"
+          >
             <span className="material-symbols-outlined">arrow_forward</span>
-            <span>חזרה לרשימת הספרים</span>
+            <span>{bookData.isOwner ? 'חזרה לספרים שלי' : 'חזרה לרשימת הספרים'}</span>
           </Link>
           <div className="w-px h-8 bg-surface-variant"></div>
           <div className="flex items-center gap-3">
@@ -387,7 +384,14 @@ export default function BookPage() {
               </span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-on-surface">{bookData.name}</h1>
+              <h1 className="text-xl font-bold text-on-surface flex items-center gap-2">
+                {bookData.name}
+                {bookData.isOwner && (
+                  <span className="material-symbols-outlined text-primary text-xl" title="ספר אישי">
+                    lock_person
+                  </span>
+                )}
+              </h1>
               <p className="text-sm text-on-surface/60">{stats.total} עמודים</p>
             </div>
           </div>
@@ -400,7 +404,7 @@ export default function BookPage() {
       <div className="max-w-7xl mx-auto">
         
         {/* Filters */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className={`grid gap-4 mb-8 ${bookData.isOwner ? 'grid-cols-3' : 'grid-cols-4'}`}>
           <button 
             onClick={() => setActiveFilter('all')}
             className={`glass p-4 rounded-xl text-center border transition-all ${
@@ -413,17 +417,19 @@ export default function BookPage() {
             <p className="text-sm text-on-surface/70">סה&quot;כ עמודים</p>
           </button>
           
-          <button 
-            onClick={() => setActiveFilter('available')}
-            className={`glass p-4 rounded-xl text-center border-2 transition-all ${
-              activeFilter === 'available'
-                ? 'border-gray-500 bg-gray-50 ring-2 ring-gray-200'
-                : 'border-gray-300 hover:border-gray-400'
-            }`}
-          >
-            <p className="text-3xl font-bold text-gray-700">{stats.available}</p>
-            <p className="text-sm text-gray-700">זמינים</p>
-          </button>
+          {!bookData.isOwner && (
+            <button 
+                onClick={() => setActiveFilter('available')}
+                className={`glass p-4 rounded-xl text-center border-2 transition-all ${
+                activeFilter === 'available'
+                    ? 'border-gray-500 bg-gray-50 ring-2 ring-gray-200'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+            >
+                <p className="text-3xl font-bold text-gray-700">{stats.available}</p>
+                <p className="text-sm text-gray-700">זמינים</p>
+            </button>
+          )}
           
           <button 
             onClick={() => setActiveFilter('in-progress')}
@@ -486,6 +492,7 @@ export default function BookPage() {
                     onUncomplete={handleUncompletePage}
                     onPreview={() => setPreviewImage(page.thumbnail)}
                     currentUser={session?.user}
+                    isBookOwner={bookData.isOwner}
                     bookPath={bookPath}
                     isAdmin={session?.user?.role === 'admin'}
                   />
@@ -587,8 +594,10 @@ function formatTimeAgo(dateString) {
   }
 }
 
-function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin }) {
+function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin, isBookOwner }) {
   const status = pageStatusConfig[page.status]
+
+  const editUrl = `/library/edit/${encodeURIComponent(bookPath)}/${page.number}`;
   
   const isClaimedByMe = currentUser && (
     page.claimedBy === currentUser.name || 
@@ -597,7 +606,7 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
 
   const canEnterEditor = page.status === 'available' || isClaimedByMe || isAdmin;
 
-  const editUrl = `/library/edit/${encodeURIComponent(bookPath)}/${page.number}`;
+  const showReleaseButton = page.status === 'in-progress' && isClaimedByMe && !isBookOwner;
 
   return (
     <div 
@@ -622,7 +631,7 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
           </>
         )}
         
-        {page.status === 'in-progress' && isClaimedByMe && (
+        {showReleaseButton && (
           <button
             onClick={(e) => {
               e.stopPropagation()

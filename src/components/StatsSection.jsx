@@ -22,7 +22,7 @@ export default function StatsSection() {
   const [stats, setStats] = useState(null)
 
   useEffect(() => {
-    fetch('/api/public-stats')
+    fetch('/api/stats')
       .then(res => res.json())
       .then(data => {
         if (data.success) setStats(data.stats)

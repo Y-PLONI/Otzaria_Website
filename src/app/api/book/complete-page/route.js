@@ -52,6 +52,22 @@ export async function POST(request) {
         
         const userIdToReward = page.claimedBy._id || page.claimedBy; 
         await User.findByIdAndUpdate(userIdToReward, { $inc: { points: 10 } });
+
+        const book = await Book.findById(page.book);
+        
+        if (book && (book.ownerId || book.isPrivate)) {
+            
+            const totalPages = await Page.countDocuments({ book: book._id });
+            const completedPagesCount = await Page.countDocuments({ book: book._id, status: 'completed' });
+
+            if (totalPages > 0 && totalPages === completedPagesCount) {
+                await Book.findByIdAndUpdate(book._id, {
+                    $unset: { ownerId: 1 },
+                    isPrivate: false,
+                    isHidden: false
+                });
+            }
+        }
     }
 
     return NextResponse.json({ 
