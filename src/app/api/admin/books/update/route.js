@@ -49,6 +49,10 @@ export async function PUT(request) {
         { new: true }
     );
 
+    if (!updatedBook) {
+        return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+    }
+
     if (sendNotification && isHidden === false) {
         await sendBookNotification(updatedBook.name, updatedBook.slug);
     }
