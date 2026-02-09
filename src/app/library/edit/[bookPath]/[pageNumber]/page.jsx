@@ -846,8 +846,18 @@ export default function EditPage() {
     const end = activeEl.selectionEnd;
     const selected = activeEl.value.substring(start, end);
     
-    let insertion = `<${tag}>${selected}</${tag}>`
-    if (['h1', 'h2', 'h3'].includes(tag)) insertion = `\n<${tag}>${selected}</${tag}>\n`
+    const match = selected.match(/^(\s*)([\s\S]*?)(\s*)$/);
+    const preSpace = match[1] || '';
+    const content = match[2] || '';
+    const postSpace = match[3] || '';
+
+    let taggedContent = `<${tag}>${content}</${tag}>`;
+    
+    if (['h1', 'h2', 'h3'].includes(tag)) {
+        taggedContent = `\n<${tag}>${content}</${tag}>\n`;
+    }
+
+    const insertion = preSpace + taggedContent + postSpace;
     
     activeEl.focus();
     const success = document.execCommand('insertText', false, insertion);
@@ -1221,4 +1231,5 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
       </div>
     </div>
   )
+
 }
