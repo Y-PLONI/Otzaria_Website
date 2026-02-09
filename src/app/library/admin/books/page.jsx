@@ -456,8 +456,8 @@ export default function AdminBooksPage() {
                 const progress = book.totalPages > 0 ? Math.round((book.completedPages / book.totalPages) * 100) : 0;
                 
                 // זיהוי אם הספר אישי וחילוץ שם המשתמש
-                const isPersonal = book.isPrivate || (book.ownerId && book.ownerId !== null);
-                const ownerName = book.ownerName || (typeof book.ownerId === 'object' ? book.ownerId.name : null) || 'משתמש פרטי';
+                const isPersonal = book.isPrivate || !!book.ownerId;
+                const ownerName = book.ownerName || 'משתמש פרטי';
 
                 return (
                     <div key={book.id || book.path} className={`group glass p-0 rounded-xl border transition-all hover:shadow-lg overflow-hidden flex flex-col ${isHidden ? 'border-amber-200 bg-amber-50/30' : 'border-white/50'}`}>
