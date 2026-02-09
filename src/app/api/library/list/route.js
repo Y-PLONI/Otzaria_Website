@@ -17,19 +17,16 @@ export async function GET() {
 
     const query = isAdmin ? {} : { isHidden: { $ne: true } };
 
-    // 1. שליפת כל הספרים
-    // אנחנו משתמשים ב-lean() לביצועים מהירים יותר
     const books = await Book.find(query)
-      .select('name slug totalPages category updatedAt isHidden editingInfo') 
+      .select('name slug totalPages category updatedAt isHidden editingInfo ownerId isPrivate') 
+      .populate('ownerId', 'name') // שליפת השם של הבעלים
       .sort({ updatedAt: -1 })
       .lean();
 
-    // 2. ביצוע אגרגציה לספירת סטטוסים מתוך טבלת העמודים
-    // זה נותן לנו תמונת מצב מדויקת בזמן אמת לכל ספר
     const stats = await Page.aggregate([
       {
         $group: {
-          _id: '$book', // מקבצים לפי ID של הספר
+          _id: '$book',
           completed: { 
             $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } 
           },
@@ -40,13 +37,11 @@ export async function GET() {
       }
     ]);
 
-    // המרת מערך הסטטיסטיקות למילון (Map) לגישה מהירה לפי ID
     const statsMap = stats.reduce((acc, curr) => {
       acc[curr._id.toString()] = curr;
       return acc;
     }, {});
 
-    // 3. מיזוג הנתונים
     const formattedBooks = books.map(book => {
       const bookStats = statsMap[book._id.toString()] || { completed: 0, inProgress: 0 };
       
@@ -56,17 +51,18 @@ export async function GET() {
         path: book.slug,
         thumbnail: `/uploads/books/${book.slug}/page.1.jpg`,
         totalPages: book.totalPages,
-        // שימוש בנתונים מהאגרגציה
         completedPages: bookStats.completed,
         inProgressPages: bookStats.inProgress,
-        // חישוב הפנויים
         availablePages: Math.max(0, book.totalPages - bookStats.completed - bookStats.inProgress),
         category: book.category || 'כללי',
-        // חישוב סטטוס כללי של הספר
         status: bookStats.completed === book.totalPages ? 'completed' : 'in-progress',
         lastUpdated: book.updatedAt,
         isHidden: book.isHidden || false,
-        editingInfo: book.editingInfo || null
+        editingInfo: book.editingInfo || null,
+        
+        ownerId: book.ownerId,
+        ownerName: book.ownerId?.name || null,
+        isPrivate: book.isPrivate || false
       };
     });
 

@@ -454,6 +454,11 @@ export default function AdminBooksPage() {
             {filteredBooks.map(book => {
                 const isHidden = book.isHidden === true;
                 const progress = book.totalPages > 0 ? Math.round((book.completedPages / book.totalPages) * 100) : 0;
+                
+                // זיהוי אם הספר אישי וחילוץ שם המשתמש
+                const isPersonal = book.isPrivate || !!book.ownerId;
+                const ownerName = book.ownerName || 'משתמש פרטי';
+
                 return (
                     <div key={book.id || book.path} className={`group glass p-0 rounded-xl border transition-all hover:shadow-lg overflow-hidden flex flex-col ${isHidden ? 'border-amber-200 bg-amber-50/30' : 'border-white/50'}`}>
                     <div className="bg-gradient-to-b from-primary/5 to-transparent p-4 flex items-start justify-between relative">
@@ -477,7 +482,14 @@ export default function AdminBooksPage() {
                                     <span className="text-xs text-gray-500 bg-white/50 px-2 py-0.5 rounded-full border border-gray-100">
                                         {book.category || 'כללי'}
                                     </span>
-                                    {isHidden && (
+                                    
+                                    {/* שינוי: תצוגת תגית משתמש לספרים אישיים, או תגית מוסתר לספרים רגילים */}
+                                    {isPersonal ? (
+                                         <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[12px]">person</span>
+                                            {ownerName}
+                                        </span>
+                                    ) : isHidden && (
                                         <span className="bg-amber-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[12px]">visibility_off</span>
                                             מוסתר
@@ -514,67 +526,88 @@ export default function AdminBooksPage() {
                         </div>
 
                         <div className="mt-auto space-y-2">
-                            {progress === 100 ? (
+                                                        {progress === 100 ? (
                                 <button
-                                     onClick={() => handleDownloadFullText(book)}
-                                     className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-bold transition-all mb-1 shadow-sm"
-                                     title="הורד את כל דפי הספר כקובץ טקסט אחד"
+                                    onClick={() => handleDownloadFullText(book)}
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-bold transition-all mb-1 shadow-sm"
+                                    title="הורד את כל דפי הספר כקובץ טקסט אחד"
                                 >
-                                     <span className="material-symbols-outlined text-sm">download</span>
-                                     הורד טקסט מאוחד
+                                    <span className="material-symbols-outlined text-sm">download</span>
+                                    הורד טקסט מאוחד
                                 </button>
                             ) : (
                                 <button
-                                     onClick={() => handleDownloadFullText(book)}
-                                     className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100/50 rounded text-xs transition-all mb-1"
-                                     title="הורד את הטקסט הקיים (חלקי)"
-                                 >
-                                     <span className="material-symbols-outlined text-[16px]">download</span>
-                                     <span>הורד טקסט חלקי</span>
+                                    onClick={() => handleDownloadFullText(book)}
+                                    className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100/50 rounded text-xs transition-all mb-1"
+                                    title="הורד את הטקסט הקיים (חלקי)"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">download</span>
+                                    <span>הורד טקסט חלקי</span>
                                 </button>
-                             )}
+                            )}
 
-                            <div className="grid grid-cols-2 gap-2">
-                                <Link
-                                    href={`/library/book/${encodeURIComponent(book.path)}`}
-                                    className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
-                                >
-                                    <span className="material-symbols-outlined text-sm">visibility</span>
-                                    צפה
-                                </Link>
-                                <button
-                                    onClick={() => setEditingBookInfo(book)}
-                                    className="flex items-center justify-center gap-1 px-3 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
-                                >
-                                    <span className="material-symbols-outlined text-sm">edit_note</span>
-                                    פרטים
-                                </button>
-                            </div>
+                            {isPersonal ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Link
+                                        href={`/library/book/${encodeURIComponent(book.path)}`}
+                                        className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">visibility</span>
+                                        צפה
+                                    </Link>
+                                    <button
+                                        onClick={() => handleDeleteBook(book.id)}
+                                        className="flex items-center justify-center gap-1 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm transition-colors font-medium"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                        <span>מחק</span>
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Link
+                                            href={`/library/book/${encodeURIComponent(book.path)}`}
+                                            className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">visibility</span>
+                                            צפה
+                                        </Link>
+                                        <button
+                                            onClick={() => setEditingBookInfo(book)}
+                                            className="flex items-center justify-center gap-1 px-3 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">edit_note</span>
+                                            פרטים
+                                        </button>
+                                    </div>
 
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => handleVisibilityClick(book)}
-                                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                                        isHidden 
-                                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' 
-                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
-                                    }`}
-                                    title={isHidden ? "הפוך לספר גלוי לכולם" : "הסתר ספר מהציבור"}
-                                >
-                                    <span className="material-symbols-outlined text-sm">
-                                        {isHidden ? 'visibility_off' : 'visibility'}
-                                    </span>
-                                    <span>{isHidden ? 'מוסתר' : 'גלוי'}</span>
-                                </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => handleVisibilityClick(book)}
+                                            className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                                                isHidden 
+                                                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' 
+                                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+                                            }`}
+                                            title={isHidden ? "הפוך לספר גלוי לכולם" : "הסתר ספר מהציבור"}
+                                        >
+                                            <span className="material-symbols-outlined text-sm">
+                                                {isHidden ? 'visibility_off' : 'visibility'}
+                                            </span>
+                                            <span>{isHidden ? 'מוסתר' : 'גלוי'}</span>
+                                        </button>
 
-                                <button
-                                    onClick={() => handleDeleteBook(book.id)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm transition-colors font-medium"
-                                >
-                                    <span className="material-symbols-outlined text-sm">delete</span>
-                                    <span>מחק</span>
-                                </button>
-                            </div>
+                                        <button
+                                            onClick={() => handleDeleteBook(book.id)}
+                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm transition-colors font-medium"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">delete</span>
+                                            <span>מחק</span>
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                     </div>
@@ -906,4 +939,5 @@ export default function AdminBooksPage() {
         />
     </>
   )
+
 }

@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useDialog } from '@/components/DialogContext';
 
 export default function BookReminderPage() {
     const { data: session } = useSession();
+    const { showConfirm } = useDialog();
     
     const [books, setBooks] = useState([]);
     const [allUsers, setAllUsers] = useState([]); 
@@ -46,23 +48,27 @@ export default function BookReminderPage() {
         return `לפני ${days === 1 ? 'יום אחד' : days + ' ימים'}`;
     };
 
-    const handleDeleteHistory = async (id) => {
-        if (!confirm('האם אתה בטוח שברצונך למחוק רשומה זו מההיסטוריה?')) return;
+    const handleDeleteHistory = (id) => {
+        showConfirm(
+            'מחיקת היסטוריה',
+            'האם אתה בטוח שברצונך למחוק רשומה זו מההיסטוריה?',
+            async () => {
+                try {
+                    setHistory(prev => prev.filter(item => item.id !== id));
 
-        try {
-            setHistory(prev => prev.filter(item => item.id !== id));
-
-            const res = await fetch(`/api/admin/history?id=${id}`, {
-                method: 'DELETE',
-            });
-            
-            const data = await res.json();
-            if (!data.success) {
-                console.error('Failed to delete history item');
+                    const res = await fetch(`/api/admin/history?id=${id}`, {
+                        method: 'DELETE',
+                    });
+                    
+                    const data = await res.json();
+                    if (!data.success) {
+                        console.error('Failed to delete history item');
+                    }
+                } catch (error) {
+                    console.error('Error deleting history:', error);
+                }
             }
-        } catch (error) {
-            console.error('Error deleting history:', error);
-        }
+        );
     };
 
     useEffect(() => {
@@ -208,64 +214,79 @@ export default function BookReminderPage() {
         `;
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
         if (!selectedBookPath || recipients.length === 0) return;
 
-        setStatus({ loading: true, error: '', success: '' });
+        const selectedBook = books.find(b => b.path === selectedBookPath);
+        if (!selectedBook) return;
 
-        try {
-            const selectedBook = books.find(b => b.path === selectedBookPath);
-            const emailHtml = generateEmailHtml(selectedBook.name, customMessage);
-            const emailSubject = `הודעה מערכת בנוגע לספר "${selectedBook.name}"`;
-            
-            const isPartial = recipients.length < foundUsersDetails.length;
+        const executeSend = async () => {
+            setStatus({ loading: true, error: '', success: '' });
 
-            const response = await fetch('/api/admin/send-email', { 
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    bcc: recipients,
-                    subject: emailSubject,
-                    html: emailHtml,
-                    text: customMessage,
-                    bookName: selectedBook.name,
-                    bookPath: selectedBook.path,
-                    isPartial: isPartial
-                }),
-            });
-
-            const textResponse = await response.text();
-            let result;
             try {
-                result = textResponse ? JSON.parse(textResponse) : {};
-            } catch (e) {
-                console.error('Failed to parse response:', textResponse);
-                throw new Error('התקבלה תשובה לא תקינה מהשרת');
-            }
+                const emailHtml = generateEmailHtml(selectedBook.name, customMessage);
+                const emailSubject = `הודעה מערכת בנוגע לספר "${selectedBook.name}"`;
+                const isPartial = recipients.length < foundUsersDetails.length;
 
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || 'שגיאה בשליחה');
-            }
+                const response = await fetch('/api/admin/send-email', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bcc: recipients,
+                        subject: emailSubject,
+                        html: emailHtml,
+                        text: customMessage,
+                        bookName: selectedBook.name,
+                        bookPath: selectedBook.path,
+                        isPartial: isPartial
+                    }),
+                });
 
-            const newHistoryItem = {
-                id: Date.now().toString(),
-                adminName: session?.user?.name || 'אדמין',
-                bookName: selectedBook.name,
-                timestamp: new Date().toISOString(),
-                isPartial: isPartial
-            };
+                const textResponse = await response.text();
+                let result;
+                try {
+                    result = textResponse ? JSON.parse(textResponse) : {};
+                } catch (e) {
+                    throw new Error('התקבלה תשובה לא תקינה מהשרת');
+                }
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'שגיאה בשליחה');
+                }
+
+                const newHistoryItem = {
+                    id: Date.now().toString(),
+                    adminName: session?.user?.name || 'אדמין',
+                    bookName: selectedBook.name,
+                    timestamp: new Date().toISOString(),
+                    isPartial: isPartial
+                };
+                
+                setHistory(prev => [newHistoryItem, ...prev]);
+
+                setStatus({ 
+                    loading: false, 
+                    error: '', 
+                    success: `המיילים נשלחו בהצלחה ל-${recipients.length} משתמשים!` 
+                });
+
+            } catch (error) {
+                setStatus({ loading: false, error: error.message, success: '' });
+            }
+        };
+
+        if (history.length > 0 && history[0].bookName === selectedBook.name) {
+            const timeAgo = formatTimeAgo(history[0].timestamp);
             
-            setHistory(prev => [newHistoryItem, ...prev]);
-
-            setStatus({ 
-                loading: false, 
-                error: '', 
-                success: `המיילים נשלחו בהצלחה ל-${recipients.length} משתמשים!` 
-            });
-
-        } catch (error) {
-            setStatus({ loading: false, error: error.message, success: '' });
+            // שימוש ב-showConfirm החדש
+            showConfirm(
+                'כפילות שליחה',
+                `שים לב! התזכורת האחרונה שיצאה מהמערכת (${timeAgo}) הייתה גם היא עבור הספר "${selectedBook.name}".\nהאם אתה בטוח שברצונך לשלוח תזכורת נוספת לאותו ספר?`,
+                executeSend
+            );
+        } else {
+            executeSend();
         }
     };
 

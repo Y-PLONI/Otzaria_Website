@@ -45,6 +45,8 @@ export default function LibraryBooksPage() {
   const filteredBooks = useMemo(() => {
     let data = flatBooks;
 
+    data = data.filter(book => !book.isPrivate && !book.ownerId);
+
     // 1. סינון לפי טקסט (חיפוש)
     if (searchTerm) {
       data = data.filter(book => 

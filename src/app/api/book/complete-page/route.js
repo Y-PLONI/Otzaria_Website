@@ -52,6 +52,19 @@ export async function POST(request) {
         
         const userIdToReward = page.claimedBy._id || page.claimedBy; 
         await User.findByIdAndUpdate(userIdToReward, { $inc: { points: 10 } });
+
+        const book = await Book.findById(page.book);
+        
+        if (book && (book.ownerId || book.isPrivate)) {
+
+            if (book.totalPages > 0 && book.totalPages === book.completedPages) {
+                await Book.findByIdAndUpdate(book._id, {
+                    $unset: { ownerId: 1 },
+                    isPrivate: false,
+                    isHidden: false
+                });
+            }
+        }
     }
 
     return NextResponse.json({ 
@@ -73,4 +86,5 @@ export async function POST(request) {
     console.error('Complete Page Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
 }

@@ -471,6 +471,12 @@ export default function DashboardPage() {
                 <span className="material-symbols-outlined text-4xl text-primary">library_books</span>
                 <span className="font-medium text-on-surface">הספרייה</span>
               </Link>
+              
+              {/* כפתור חדש - הספרים שלי */}
+              <Link href="/library/dashboard/my-uploads" className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all">
+                <span className="material-symbols-outlined text-4xl text-primary">menu_book</span>
+                <span className="font-medium text-on-surface">הספרים שלי</span>
+              </Link>
 
               <Link href="/library/upload" className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all">
                 <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>

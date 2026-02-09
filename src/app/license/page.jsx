@@ -11,7 +11,7 @@ export default function LicensePage() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    fetch('https://raw.githubusercontent.com/Otzaria/otzaria-library/main/LICENSE')
+    fetch('/api/license')
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load')
         return res.text()
