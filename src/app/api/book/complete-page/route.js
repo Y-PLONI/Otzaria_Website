@@ -56,11 +56,8 @@ export async function POST(request) {
         const book = await Book.findById(page.book);
         
         if (book && (book.ownerId || book.isPrivate)) {
-            
-            const totalPages = await Page.countDocuments({ book: book._id });
-            const completedPagesCount = await Page.countDocuments({ book: book._id, status: 'completed' });
 
-            if (totalPages > 0 && totalPages === completedPagesCount) {
+            if (book.totalPages > 0 && book.totalPages === book.completedPages) {
                 await Book.findByIdAndUpdate(book._id, {
                     $unset: { ownerId: 1 },
                     isPrivate: false,
@@ -89,4 +86,5 @@ export async function POST(request) {
     console.error('Complete Page Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
 }
