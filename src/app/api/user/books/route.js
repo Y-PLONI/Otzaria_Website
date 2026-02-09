@@ -25,8 +25,8 @@ export async function GET() {
       category: book.category || 'אישי',
       totalPages: book.totalPages,
       completedPages: book.completedPages || 0,
-      inProgressPages: 0,
-      status: book.completedPages === book.totalPages ? 'completed' : 'available',
+      inProgressPages: book.totalPages - (book.completedPages || 0),
+      status: book.completedPages === book.totalPages ? 'completed' : 'in-progress',
       isHidden: book.isHidden,
       thumbnail: book.coverImage || null 
     }));
