@@ -22,7 +22,7 @@ export default function ContributeSection() {
     {
       icon: 'groups',
       title: 'שיתוף',
-      description: 'יצירת קהילה של לומדים ועורכים'
+      description: 'יצירת קהילה של עורכים'
     },
     {
       icon: 'check_circle',
