@@ -41,10 +41,15 @@ export default function AdminBooksPage() {
 
   const [hidePersonalBooks, setHidePersonalBooks] = useState(false)
 
-  useEffect(() => {
-    const saved = localStorage.getItem('admin_hide_personal_books')
-    if (saved !== null) {
-        setHidePersonalBooks(JSON.parse(saved))
+    useEffect(() => {
+    try {
+      const saved = localStorage.getItem('admin_hide_personal_books');
+      if (saved !== null) {
+          setHidePersonalBooks(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Failed to parse hidePersonalBooks from localStorage:', error);
+      localStorage.removeItem('admin_hide_personal_books');
     }
   }, [])
 
@@ -966,4 +971,5 @@ export default function AdminBooksPage() {
         />
     </>
   )
+
 }
