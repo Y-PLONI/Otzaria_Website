@@ -38,6 +38,9 @@ export default function EditPage() {
   const [activeTextarea, setActiveTextarea] = useState(null)
   const [textAlign, setTextAlign] = useState('right');
   const [selectedFont, setSelectedFont] = useState('Times New Roman')
+  
+  const [textZoom, setTextZoom] = useState(17)
+
   const allInstructions = useMemo(() => {
       const globalRawSections = globalInstructions?.sections || [];
       const globalData = {
@@ -127,6 +130,7 @@ export default function EditPage() {
     const savedOrientation = localStorage.getItem('layoutOrientation')
     const savedSwap = localStorage.getItem('swapPanels')
     const savedFont = localStorage.getItem('selectedFont')
+    const savedTextZoom = localStorage.getItem('textZoom')
     
     if (savedFont) setSelectedFont(savedFont)
     if (savedApiKey) setUserApiKey(savedApiKey)
@@ -136,6 +140,7 @@ export default function EditPage() {
     if (savedColumnWidth) setColumnWidth(parseFloat(savedColumnWidth))
     if (savedOrientation) setLayoutOrientation(savedOrientation)
     if (savedSwap) setSwapPanels(savedSwap === 'true')
+    if (savedTextZoom) setTextZoom(parseInt(savedTextZoom))
 
     if (status === 'authenticated') {
         fetch('/api/user/saved-searches')
@@ -175,6 +180,10 @@ export default function EditPage() {
       localStorage.setItem('selectedFont', selectedFont)
     }
   }, [selectedFont])
+
+  useEffect(() => {
+    localStorage.setItem('textZoom', textZoom.toString())
+  }, [textZoom])
 
   const toggleFullScreen = async () => {
     try {
@@ -1113,6 +1122,7 @@ export default function EditPage() {
               handleOCRSelection={handleOCR}
               isOcrProcessing={isOcrProcessing}
             />
+            {/* העברת כל הפרופס הרלוונטיים */}
             <TextEditor 
               ref={textEditorContainerRef}
               content={content} leftColumn={leftColumn} rightColumn={rightColumn}
@@ -1122,6 +1132,9 @@ export default function EditPage() {
               setActiveTextarea={setActiveTextarea} selectedFont={selectedFont}
               columnWidth={columnWidth} onColumnResizeStart={handleColumnResizeStart}
               textAlign={textAlign}
+              setTextAlign={setTextAlign}
+              textZoom={textZoom}
+              setTextZoom={setTextZoom}
             />
           </div>
           
@@ -1231,5 +1244,4 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
       </div>
     </div>
   )
-
 }

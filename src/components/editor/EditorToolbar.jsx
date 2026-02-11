@@ -33,9 +33,8 @@ export default function EditorToolbar({
   isCollapsed,
   setIsCollapsed,
   isFullScreen,
-  onToggleFullScreen,
-  textAlign,
-  setTextAlign
+  onToggleFullScreen
+  // הוסרו props של alignment ו-textZoom מכאן כי הם לא בשימוש בסרגל זה יותר
 }) {
   const preventFocusLoss = (e) => {
     e.preventDefault();
@@ -153,22 +152,7 @@ export default function EditorToolbar({
 
       <div className="w-px h-5 bg-gray-200"></div>
 
-      <div className="flex items-center gap-0 bg-gray-100 rounded-md p-0.5">
-        <button onClick={() => setTextAlign('right')} className={`w-7 h-7 rounded flex items-center justify-center ${textAlign === 'right' ? 'bg-white shadow-sm text-blue-600' : 'hover:bg-white text-gray-600'}`} title="יישור לימין">
-          <span className="material-symbols-outlined text-sm">format_align_right</span>
-        </button>
-        <button onClick={() => setTextAlign('center')} className={`w-7 h-7 rounded flex items-center justify-center ${textAlign === 'center' ? 'bg-white shadow-sm text-blue-600' : 'hover:bg-white text-gray-600'}`} title="מרכז">
-          <span className="material-symbols-outlined text-sm">format_align_center</span>
-        </button>
-        <button onClick={() => setTextAlign('left')} className={`w-7 h-7 rounded flex items-center justify-center ${textAlign === 'left' ? 'bg-white shadow-sm text-blue-600' : 'hover:bg-white text-gray-600'}`} title="יישור לשמאל">
-          <span className="material-symbols-outlined text-sm">format_align_left</span>
-        </button>
-        <button onClick={() => setTextAlign('justify')} className={`w-7 h-7 rounded flex items-center justify-center ${textAlign === 'justify' ? 'bg-white shadow-sm text-blue-600' : 'hover:bg-white text-gray-600'}`} title="יישור לשני הצדדים">
-          <span className="material-symbols-outlined text-sm">format_align_justify</span>
-        </button>
-      </div>
-
-      <div className="w-px h-5 bg-gray-200"></div>
+      {/* כפתורי היישור (Align) הוסרו מכאן */}
 
       <button onClick={() => setShowFindReplace(true)} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-gray-50 rounded-md border border-gray-200">
         <span className="material-symbols-outlined text-sm">find_replace</span>
