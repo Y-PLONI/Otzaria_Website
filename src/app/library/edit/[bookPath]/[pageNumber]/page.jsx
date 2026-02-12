@@ -40,6 +40,7 @@ export default function EditPage() {
   const [selectedFont, setSelectedFont] = useState('Times New Roman')
   
   const [textZoom, setTextZoom] = useState(17)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   const allInstructions = useMemo(() => {
       const globalRawSections = globalInstructions?.sections || [];
@@ -112,16 +113,9 @@ export default function EditPage() {
 
   const { save: debouncedSave, status: saveStatus } = useAutoSave()
 
+  // Load all settings from localStorage ONCE on mount
   useEffect(() => {
     const savedAlign = localStorage.getItem('textAlign');
-    if (savedAlign) setTextAlign(savedAlign);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('textAlign', textAlign);
-  }, [textAlign]);
-
-  useEffect(() => {
     const savedApiKey = localStorage.getItem('gemini_api_key')
     const savedPrompt = localStorage.getItem('gemini_prompt')
     const savedModel = localStorage.getItem('gemini_model')
@@ -131,7 +125,9 @@ export default function EditPage() {
     const savedSwap = localStorage.getItem('swapPanels')
     const savedFont = localStorage.getItem('selectedFont')
     const savedTextZoom = localStorage.getItem('textZoom')
+    const savedImageZoom = localStorage.getItem('imageZoom')
     
+    if (savedAlign) setTextAlign(savedAlign);
     if (savedFont) setSelectedFont(savedFont)
     if (savedApiKey) setUserApiKey(savedApiKey)
     if (savedPrompt) setCustomPrompt(savedPrompt)
@@ -141,7 +137,13 @@ export default function EditPage() {
     if (savedOrientation) setLayoutOrientation(savedOrientation)
     if (savedSwap) setSwapPanels(savedSwap === 'true')
     if (savedTextZoom) setTextZoom(parseInt(savedTextZoom))
+    if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
 
+    setSettingsLoaded(true);
+  }, []);
+
+  // Sync with server once authenticated
+  useEffect(() => {
     if (status === 'authenticated') {
         fetch('/api/user/saved-searches')
             .then(res => res.json())
@@ -175,15 +177,24 @@ export default function EditPage() {
     }
   }, [status, bookPath])
 
+  // Savers - only run if settings have been loaded to prevent overwriting with defaults
   useEffect(() => {
-    if (selectedFont) {
-      localStorage.setItem('selectedFont', selectedFont)
-    }
-  }, [selectedFont])
+    if (settingsLoaded) localStorage.setItem('textAlign', textAlign);
+  }, [textAlign, settingsLoaded]);
 
   useEffect(() => {
-    localStorage.setItem('textZoom', textZoom.toString())
-  }, [textZoom])
+    if (selectedFont && settingsLoaded) {
+      localStorage.setItem('selectedFont', selectedFont)
+    }
+  }, [selectedFont, settingsLoaded])
+
+  useEffect(() => {
+    if (settingsLoaded) localStorage.setItem('textZoom', textZoom.toString())
+  }, [textZoom, settingsLoaded])
+
+  useEffect(() => {
+    if (settingsLoaded) localStorage.setItem('imageZoom', imageZoom.toString())
+  }, [imageZoom, settingsLoaded])
 
   const toggleFullScreen = async () => {
     try {

@@ -49,6 +49,7 @@ export default function BookPage() {
   const [viewMode, setViewMode] = useState('single') 
   const [previewImage, setPreviewImage] = useState(null)
   const [activeFilter, setActiveFilter] = useState('all')
+  const [ownershipFilter, setOwnershipFilter] = useState('all')
 
   const loadBookData = useCallback(async () => {
     try {
@@ -458,8 +459,34 @@ export default function BookPage() {
 
         {/* Pages Grid Container */}
         <div className="glass-strong rounded-2xl p-6 border border-surface-variant/30">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-on-surface">עמודי הספר</h2>
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+                <h2 className="text-2xl font-bold text-on-surface">עמודי הספר</h2>
+                
+                {/* Ownership Filter Buttons */}
+                <div className="flex bg-surface-variant/30 rounded-lg p-1">
+                    <button 
+                        onClick={() => setOwnershipFilter('all')} 
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                            ownershipFilter === 'all' 
+                            ? 'bg-white shadow-sm text-primary' 
+                            : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'
+                        }`}
+                    >
+                        כל העמודים
+                    </button>
+                    <button 
+                        onClick={() => setOwnershipFilter('mine')} 
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                            ownershipFilter === 'mine' 
+                            ? 'bg-white shadow-sm text-primary' 
+                            : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'
+                        }`}
+                    >
+                        העמודים שלי
+                    </button>
+                </div>
+            </div>
             
             <div className="flex gap-2 bg-surface rounded-lg p-1">
               <button onClick={() => setViewMode('single')} className={`p-2 rounded transition-colors ${viewMode === 'single' ? 'bg-primary text-on-primary' : 'text-on-surface/60 hover:text-on-surface hover:bg-surface-variant'}`} title="עמוד אחד">
@@ -477,7 +504,21 @@ export default function BookPage() {
               : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4'
           }>
             {pages
-              .filter(page => activeFilter === 'all' || page.status === activeFilter)
+              .filter(page => {
+                  const matchesStatus = activeFilter === 'all' || page.status === activeFilter;
+                  
+                  let matchesOwnership = true;
+                  if (ownershipFilter === 'mine') {
+                      if (!session?.user) return false;
+                      const userId = session.user._id || session.user.id;
+                      matchesOwnership = (
+                          page.claimedBy === session.user.name ||
+                          page.claimedById === userId
+                      );
+                  }
+
+                  return matchesStatus && matchesOwnership;
+              })
               .map((page) => (
               <div
                 key={page.id || page.number}
