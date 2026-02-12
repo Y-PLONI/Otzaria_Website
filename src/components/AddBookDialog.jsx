@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { validateRequired, validateFile } from '@/lib/validation-utils'
 import Modal from './Modal'
 
-export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
+export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories }) {
     const [bookName, setBookName] = useState('')
     const [file, setFile] = useState(null)
     const [isUploading, setIsUploading] = useState(false)
@@ -107,6 +107,24 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded }) {
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100"
                         placeholder="הכנס שם ספר..."
                     />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium mb-1">קטגוריה</label>
+                    <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        disabled={isUploading}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 bg-white"
+                    >
+                        {categories && categories.length > 0 ? (
+                            categories.map((cat, idx) => (
+                                <option key={idx} value={cat.name}>{cat.name}</option>
+                            ))
+                        ) : (
+                            <option value="כללי">כללי</option>
+                        )}
+                    </select>
                 </div>
 
                 <div>
