@@ -420,7 +420,7 @@ export default function AdminBooksPage() {
     <>
         <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
         <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-            <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="flex flex-col items-start gap-3 w-full md:w-auto">
                 <h2 className="text-2xl font-bold text-on-surface flex items-center gap-2 whitespace-nowrap">
                     <span className="material-symbols-outlined text-primary">menu_book</span>
                     ניהול ספרים
@@ -462,7 +462,7 @@ export default function AdminBooksPage() {
 
                 <button
                     onClick={() => setShowCategoriesDialog(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-xl hover:bg-pink-700 transition-all shadow-md w-full md:w-auto justify-center"
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-700 text-white rounded-xl hover:bg-indigo-800 transition-all shadow-md w-full md:w-auto justify-center"
                 >
                     <span className="material-symbols-outlined shrink-0">palette</span>
                     <div className="flex flex-col items-start leading-tight">

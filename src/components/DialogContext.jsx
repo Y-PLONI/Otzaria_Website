@@ -121,15 +121,14 @@ export function DialogProvider({ children }) {
   const isAlert = dialogConfig.type === 'alert';
 
   const wrapperClass = isAlert 
-    ? `fixed bottom-8 left-8 z-[9999] flex items-end justify-start transition-opacity duration-300 pointer-events-none ${isVisible ? 'opacity-100' : 'opacity-0'}`
+    ? `fixed bottom-8 left-0 right-0 z-[9999] flex items-end justify-center transition-opacity duration-300 pointer-events-none ${isVisible ? 'opacity-100' : 'opacity-0'}`
     : `fixed inset-0 z-[9999] bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4 transition-opacity duration-300 ease-in-out ${isVisible ? 'opacity-100' : 'opacity-0'}`;
 
   const boxClass = `glass-strong rounded-2xl shadow-2xl border border-surface-variant/50 relative overflow-hidden pointer-events-auto transition-all duration-300 ease-out 
     ${isAlert 
-      ? `w-80 p-5 ${isVisible ? 'translate-x-0' : '-translate-x-20'}` 
+      ? `w-80 p-5 ${isVisible ? 'translate-y-0 scale-100' : 'translate-y-8 scale-95'}` 
       : `max-w-sm w-full p-8 ${isVisible ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`
     }`;
-
   return (
     <DialogContext.Provider value={{ showAlert, showConfirm, closeDialog }}>
       <style>{`
