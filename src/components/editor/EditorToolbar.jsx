@@ -20,6 +20,7 @@ export default function EditorToolbar({
   twoColumns,
   toggleColumns,
   layoutOrientation,
+  openShortcuts,
   setLayoutOrientation,
   swapPanels,
   togglePanelOrder, 
@@ -33,9 +34,8 @@ export default function EditorToolbar({
   isCollapsed,
   setIsCollapsed,
   isFullScreen,
-  onToggleFullScreen,
-  textAlign,
-  setTextAlign
+  onToggleFullScreen
+  // הוסרו props של alignment ו-textZoom מכאן כי הם לא בשימוש בסרגל זה יותר
 }) {
   const preventFocusLoss = (e) => {
     e.preventDefault();
@@ -153,22 +153,7 @@ export default function EditorToolbar({
 
       <div className="w-px h-5 bg-gray-200"></div>
 
-      <div className="flex items-center gap-0 bg-gray-100 rounded-md p-0.5">
-        <button onClick={() => setTextAlign('right')} className={`w-7 h-7 rounded flex items-center justify-center ${textAlign === 'right' ? 'bg-white shadow-sm text-blue-600' : 'hover:bg-white text-gray-600'}`} title="יישור לימין">
-          <span className="material-symbols-outlined text-sm">format_align_right</span>
-        </button>
-        <button onClick={() => setTextAlign('center')} className={`w-7 h-7 rounded flex items-center justify-center ${textAlign === 'center' ? 'bg-white shadow-sm text-blue-600' : 'hover:bg-white text-gray-600'}`} title="מרכז">
-          <span className="material-symbols-outlined text-sm">format_align_center</span>
-        </button>
-        <button onClick={() => setTextAlign('left')} className={`w-7 h-7 rounded flex items-center justify-center ${textAlign === 'left' ? 'bg-white shadow-sm text-blue-600' : 'hover:bg-white text-gray-600'}`} title="יישור לשמאל">
-          <span className="material-symbols-outlined text-sm">format_align_left</span>
-        </button>
-        <button onClick={() => setTextAlign('justify')} className={`w-7 h-7 rounded flex items-center justify-center ${textAlign === 'justify' ? 'bg-white shadow-sm text-blue-600' : 'hover:bg-white text-gray-600'}`} title="יישור לשני הצדדים">
-          <span className="material-symbols-outlined text-sm">format_align_justify</span>
-        </button>
-      </div>
-
-      <div className="w-px h-5 bg-gray-200"></div>
+      {/* כפתורי היישור (Align) הוסרו מכאן */}
 
       <button onClick={() => setShowFindReplace(true)} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-gray-50 rounded-md border border-gray-200">
         <span className="material-symbols-outlined text-sm">find_replace</span>
@@ -250,41 +235,50 @@ export default function EditorToolbar({
   }
 
   return (
-    <div className={`bg-white border-b border-gray-200 z-30 shadow-sm transition-all sticky ${isFullScreen ? 'top-0' : 'top-[65px]'}`}>
-      <div className="w-full px-4 py-1.5">
-        <div className="flex items-center w-full">
-          
-          <div className="flex-1 flex items-center justify-center min-w-0 overflow-x-auto no-scrollbar px-2">
-            {swapPanels ? TextTools : ImageTools}
-          </div>
-
-          <div className="flex-none px-2 z-10 flex items-center justify-center">
-            <button
-              onClick={togglePanelOrder}
-              className={`p-1.5 rounded-full transition-all border shadow-sm ${
-                swapPanels
-                  ? 'bg-blue-100 text-blue-700 border-blue-300'
-                  : 'bg-white text-gray-500 hover:bg-gray-50 border-gray-200'
-              }`}
-              title="החלף צדדים (תמונה/טקסט)"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 17h-5" />
-                    <path d="M4 17h5" />
-                    <path d="m16 13 4 4-4 4" />
-                    <path d="m8 21-4-4 4-4" />
-                    <rect x="4" y="3" width="8" height="8" rx="2" />
-                    <rect x="12" y="3" width="8" height="8" rx="2" />
-                </svg>
-            </button>
-          </div>
-
-          <div className="flex-1 flex items-center justify-center min-w-0 overflow-x-auto no-scrollbar px-2">
-            {swapPanels ? ImageTools : TextTools}
-          </div>
-
+  <div className={`bg-white border-b border-gray-200 z-30 shadow-sm transition-all sticky ${isFullScreen ? 'top-0' : 'top-[65px]'}`}>
+    <div className="w-full px-4 py-1.5">
+      <div className="flex items-center w-full">
+        
+        <div className="flex-1 flex items-center justify-center min-w-0 overflow-x-auto no-scrollbar px-2">
+          {swapPanels ? TextTools : ImageTools}
         </div>
+
+        <div className="flex-none z-10 flex items-center justify-center gap-2">
+
+          <button
+            onClick={togglePanelOrder}
+            className={`w-9 h-9 flex items-center justify-center rounded-full transition-all border shadow-sm ${
+              swapPanels
+                ? 'bg-blue-50 text-blue-600 border-blue-200'
+                : 'bg-white text-gray-500 hover:bg-gray-50 border-gray-200'
+            }`}
+            title="החלף צדדים"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 17h-5" />
+              <path d="M4 17h5" />
+              <path d="m16 13 4 4-4 4" />
+              <path d="m8 21-4-4 4-4" />
+              <rect x="4" y="3" width="8" height="8" rx="2" />
+              <rect x="12" y="3" width="8" height="8" rx="2" />
+            </svg>
+          </button>
+
+          <button 
+            onClick={openShortcuts} 
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-gray-500 hover:bg-gray-50 border border-gray-200 shadow-sm transition-all" 
+            title="קיצורי מקלדת"
+          >
+            <span className="material-symbols-outlined !text-[25px]">keyboard</span>
+          </button>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center min-w-0 overflow-x-auto no-scrollbar px-2">
+          {swapPanels ? ImageTools : TextTools}
+        </div>
+
       </div>
     </div>
-  )
+  </div>
+)
 }
