@@ -275,8 +275,17 @@ export default function ImagePanel({
       } catch (err) { console.error('Download failed', err) }
   }, [getSelectionCanvas, pageNumber])
 
+  // --- Start of Updated Code ---
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        if (selectionRect && !isOcrProcessing) {
+          e.preventDefault()
+          e.stopPropagation()
+          handleOCRSelection()
+        }
+      }
+
       if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyC' || e.key === 'c')) {
         if (selectionRect) {
           e.preventDefault(); e.stopPropagation(); copySelectedArea()
@@ -285,7 +294,8 @@ export default function ImagePanel({
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectionRect, copySelectedArea])
+  }, [selectionRect, copySelectedArea, handleOCRSelection, isOcrProcessing]) // הוספנו תלויות חדשות
+  // --- End of Updated Code ---
 
   useEffect(() => {
     if (!isRotating) return

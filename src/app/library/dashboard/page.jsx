@@ -13,7 +13,6 @@ export default function DashboardPage() {
   const router = useRouter()
   const { showAlert, showConfirm } = useDialog()
   
-  // Stats State
   const [stats, setStats] = useState({
     myPages: 0,
     completedPages: 0,
@@ -23,28 +22,30 @@ export default function DashboardPage() {
   })
   const [loading, setLoading] = useState(true)
 
-  // Message Form State
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
   const [showMessageForm, setShowMessageForm] = useState(false)
   const [messageSubject, setMessageSubject] = useState('')
   const [messageText, setMessageText] = useState('')
   const [sendingMessage, setSendingMessage] = useState(false)
 
-  // My Messages State
   const [myMessages, setMyMessages] = useState([])
   const [showMyMessages, setShowMyMessages] = useState(false)
   const [replyingToMessageId, setReplyingToMessageId] = useState(null)
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
 
-  // Notifications Subscription State
   const [showNotifModal, setShowNotifModal] = useState(false)
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [loadingSub, setLoadingSub] = useState(false)
 
-  // --- Email Update State ---
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [updatingEmail, setUpdatingEmail] = useState(false)
+
+  const [showReminderModal, setShowReminderModal] = useState(false)
+  const [dismissingReminder, setDismissingReminder] = useState(false)
 
   useEffect(() => {
       update();
@@ -58,6 +59,7 @@ export default function DashboardPage() {
       loadUserStats(isFirstTime); 
       loadMyMessages();
       setNewEmail(session?.user?.email || '');
+      checkSubscriptionReminder();
     }
   }, [status, router, session]);
 
@@ -66,7 +68,7 @@ export default function DashboardPage() {
       if (isInitialLoad) setLoading(true);
       const response = await fetch('/api/user/stats');
       const result = await response.json();
-    
+      
       if (result.success) {
         setStats({
           myPages: result.stats?.myPages || 0,
@@ -110,6 +112,50 @@ export default function DashboardPage() {
       setLoadingSub(false)
     }
   }
+
+  const checkSubscriptionReminder = async () => {
+    try {
+      const response = await fetch('/api/user/notifications');
+      const data = await response.json();
+      
+      if (data.success) {
+        setIsSubscribed(data.isSubscribed);
+
+        if (data.isSubscribed) return;
+
+        const lastDismissed = data.lastDismissedAt ? new Date(data.lastDismissedAt) : null;
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        if (!lastDismissed || lastDismissed < oneWeekAgo) {
+            setShowReminderModal(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking subscription status:', error);
+    }
+  }
+
+  const handleDismissReminderServerSide = async () => {
+    try {
+        setDismissingReminder(true);
+        const response = await fetch('/api/user/notifications/dismiss', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            setShowReminderModal(false);
+        } else {
+            setShowReminderModal(false);
+        }
+    } catch (error) {
+        console.error('Error dismissing reminder:', error);
+        setShowReminderModal(false);
+    } finally {
+        setDismissingReminder(false);
+    }
+  };
 
   const toggleSubscription = async () => {
     try {
@@ -304,6 +350,47 @@ export default function DashboardPage() {
     return reply?.senderName || 'משתמש'
   }
 
+  const sortedActivity = [...stats.recentActivity].sort((a, b) => {
+    return (a.status === 'completed') - (b.status === 'completed');
+  });
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = sortedActivity.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(sortedActivity.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  const getPageNumbers = () => {
+    const result = [];
+    
+    const pages = new Set([
+      1, 
+      totalPages, 
+      currentPage, 
+      currentPage - 1, 
+      currentPage + 1
+    ]);
+
+    const sortedPages = Array.from(pages)
+      .filter(p => p >= 1 && p <= totalPages)
+      .sort((a, b) => a - b);
+
+    for (let i = 0; i < sortedPages.length; i++) {
+      const page = sortedPages[i];
+      const prevPage = sortedPages[i - 1];
+
+      if (i > 0) {
+        if (page - prevPage > 1) {
+           result.push('...');
+        }
+      }
+      result.push(page);
+    }
+
+    return result;
+  };
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -333,7 +420,6 @@ export default function DashboardPage() {
             ברוך הבא לאיזור האישי שלך
           </p>
 
-          {/* Stats Cards */}
           <div className="grid md:grid-cols-3 gap-6 mb-12">
             <div className="glass p-6 rounded-xl">
               <div className="flex items-center gap-4">
@@ -378,13 +464,18 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Quick Actions */}
           <div className="glass-strong p-8 rounded-2xl mb-8">
             <h2 className="text-2xl font-bold mb-6 text-on-surface">פעולות מהירות</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Link href="/library/books" className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all">
                 <span className="material-symbols-outlined text-4xl text-primary">library_books</span>
                 <span className="font-medium text-on-surface">הספרייה</span>
+              </Link>
+              
+              {/* כפתור חדש - הספרים שלי */}
+              <Link href="/library/dashboard/my-uploads" className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all">
+                <span className="material-symbols-outlined text-4xl text-primary">menu_book</span>
+                <span className="font-medium text-on-surface">הספרים שלי</span>
               </Link>
 
               <Link href="/library/upload" className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all">
@@ -442,7 +533,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Recent Activity */}
           <div className="glass-strong p-8 rounded-2xl mb-8">
             <h2 className="text-2xl font-bold mb-6 text-on-surface">העמודים שלי</h2>
             {loading ? (
@@ -452,39 +542,77 @@ export default function DashboardPage() {
                 </span>
               </div>
             ) : stats.recentActivity && stats.recentActivity.length > 0 ? (
-              <div className="space-y-4">
-                {[...stats.recentActivity].sort((a, b) => {
-                  return (a.status === 'completed') - (b.status === 'completed');
-                }).map((activity) => (
-                  <div key={`${activity.bookName}-${activity.pageNumber}`} className="flex items-center gap-4 p-4 bg-surface rounded-lg">
-                    <span className={`material-symbols-outlined ${
-                      activity.status === 'completed' ? 'text-green-600' : 'text-blue-600'
-                    }`}>
-                      {activity.status === 'completed' ? 'check_circle' : 'edit_note'}
-                    </span>
-                    <div className="flex-1">
-                      <p className="font-medium text-on-surface">
-                        {activity.bookName} - עמוד {activity.pageNumber}
-                      </p>
-                      <p className="text-sm text-on-surface/60">
-                        {activity.status === 'completed' ? 'הושלם' : 'בטיפול'} • {activity.date}
-                      </p>
-                    </div>
-                    {activity.bookPath && activity.bookPath !== '#' && activity.pageNumber !== null && activity.pageNumber !== undefined ? (
-                      <Link 
-                        href={`/library/edit/${encodeURIComponent(activity.bookPath)}/${activity.pageNumber}`}
-                        className="text-primary hover:text-accent"
-                      >
-                        <span className="material-symbols-outlined">arrow_back</span>
-                      </Link>
-                    ) : (
-                      <span className="text-on-surface/30 cursor-not-allowed" title="לא ניתן לפתוח עמוד זה (ספר חסר)">
-                        <span className="material-symbols-outlined">arrow_back</span>
+              <>
+                <div className="space-y-4">
+                  {currentItems.map((activity) => (
+                    <div key={`${activity.bookName}-${activity.pageNumber}`} className="flex items-center gap-4 p-4 bg-surface rounded-lg">
+                      <span className={`material-symbols-outlined ${
+                        activity.status === 'completed' ? 'text-green-600' : 'text-blue-600'
+                      }`}>
+                        {activity.status === 'completed' ? 'check_circle' : 'edit_note'}
                       </span>
-                    )}
+                      <div className="flex-1">
+                        <p className="font-medium text-on-surface">
+                          {activity.bookName} - עמוד {activity.pageNumber}
+                        </p>
+                        <p className="text-sm text-on-surface/60">
+                          {activity.status === 'completed' ? 'הושלם' : 'בטיפול'} • {activity.date}
+                        </p>
+                      </div>
+                      {activity.bookPath && activity.bookPath !== '#' && activity.pageNumber !== null && activity.pageNumber !== undefined ? (
+                        <Link 
+                          href={`/library/edit/${encodeURIComponent(activity.bookPath)}/${activity.pageNumber}`}
+                          className="text-primary hover:text-accent"
+                        >
+                          <span className="material-symbols-outlined">arrow_back</span>
+                        </Link>
+                      ) : (
+                        <span className="text-on-surface/30 cursor-not-allowed" title="לא ניתן לפתוח עמוד זה (ספר חסר)">
+                          <span className="material-symbols-outlined">arrow_back</span>
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex justify-center items-center gap-2 mt-8 select-none">
+                    <button
+                      onClick={() => paginate(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">chevron_right</span>
+                    </button>
+
+                    {getPageNumbers().map((page, index) => (
+                      page === '...' ? (
+                        <span key={`dots-${index}`} className="w-8 text-center text-on-surface/50">...</span>
+                      ) : (
+                        <button
+                          key={page}
+                          onClick={() => paginate(page)}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
+                            currentPage === page
+                              ? 'bg-primary text-white shadow-md'
+                              : 'bg-surface-variant text-on-surface hover:bg-primary/20'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    ))}
+
+                    <button
+                      onClick={() => paginate(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">chevron_left</span>
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12">
                 <span className="material-symbols-outlined text-6xl text-on-surface/20 mb-4 block">
@@ -502,7 +630,6 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Change Password Section */}
           <ChangePasswordForm />
         </div>
       </div>
@@ -587,7 +714,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* My Messages Modal */}
       {showMyMessages && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
@@ -597,7 +723,6 @@ export default function DashboardPage() {
             className="flex flex-col bg-white glass-strong rounded-2xl w-full max-w-4xl shadow-2xl max-h-[90vh] animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="p-6 border-b border-surface-variant flex items-center justify-between flex-shrink-0 bg-white/50 rounded-t-2xl">
               <h3 className="text-2xl font-bold text-on-surface flex items-center gap-3">
                 <span className="material-symbols-outlined text-3xl text-primary">inbox</span>
@@ -611,7 +736,6 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Scrollable Content */}
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
               {myMessages.length === 0 ? (
                 <div className="text-center py-12">
@@ -747,11 +871,9 @@ export default function DashboardPage() {
         </div>
       )}
       
-      {/* Notification Modal */}
       {showNotifModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="flex flex-col bg-white glass-strong rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
-            {/* Header */}
             <div className="p-6 border-b border-surface-variant bg-white/50 rounded-t-2xl flex justify-between items-center">
               <h3 className="text-xl font-bold text-on-surface flex items-center gap-3">
                 <span className="material-symbols-outlined text-2xl text-primary">notifications_active</span>
@@ -762,7 +884,6 @@ export default function DashboardPage() {
               </button>
             </div>
             
-            {/* Content */}
             <div className="p-8 text-center space-y-6">
               <div className={`inline-flex items-center justify-center p-4 rounded-full ${isSubscribed ? 'bg-green-100' : 'bg-gray-100'}`}>
                 <span className={`material-symbols-outlined text-5xl ${isSubscribed ? 'text-green-600' : 'text-gray-400'}`}>
@@ -809,11 +930,64 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Message Modal */}
+      {showReminderModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="bg-white glass-strong rounded-2xl w-full max-w-md shadow-2xl p-8 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-accent"></div>
+
+            <div className="text-center space-y-6">
+              <div className="inline-flex items-center justify-center p-4 bg-primary/10 rounded-full mb-2">
+                <span className="material-symbols-outlined text-5xl text-primary animate-pulse">
+                  mark_email_unread
+                </span>
+              </div>
+
+              <div>
+                <h3 className="text-2xl font-bold text-on-surface mb-3">
+                  פספסת משהו...
+                </h3>
+                <p className="text-on-surface/80 leading-relaxed">
+                  המערכת זיהתה שאינך רשום לקבלת עדכונים במייל.
+                  <br />
+                  רצינו להזכיר לך שכדאי להירשם כדי לא לפספס ספרים חדשים וחשובים שעולים לספרייה וזמינים לעריכה!
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-4">
+                <button
+                  onClick={async () => {
+                      await toggleSubscription(); 
+                      setShowReminderModal(false);
+                  }}
+                  disabled={loadingSub}
+                  className="w-full py-3 px-6 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
+                >
+                  {loadingSub ? (
+                    <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined">mark_email_read</span>
+                      רשום אותי עכשיו
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleDismissReminderServerSide}
+                  disabled={dismissingReminder}
+                  className="w-full py-2 px-6 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl text-sm font-medium transition-colors"
+                >
+                  {dismissingReminder ? 'מעדכן...' : 'לא מעוניין (הזכר לי שוב בעוד שבוע)'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showMessageForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="flex flex-col bg-white glass-strong rounded-2xl w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200">
-            {/* Header */}
             <div className="p-6 border-b border-surface-variant bg-white/50 rounded-t-2xl">
               <h3 className="text-2xl font-bold text-on-surface flex items-center gap-3">
                 <span className="material-symbols-outlined text-3xl text-primary">mail</span>
@@ -821,7 +995,6 @@ export default function DashboardPage() {
               </h3>
             </div>
             
-            {/* Content */}
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-on-surface mb-2">נושא</label>
@@ -848,7 +1021,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="flex gap-3 p-6 border-t border-surface-variant bg-gray-50/50 rounded-b-2xl">
               <button
                 onClick={handleSendMessage}

@@ -10,6 +10,7 @@ import { statusConfig } from '@/lib/library-data'
 export default function LibraryBooksPage() {
   const [treeData, setTreeData] = useState([])
   const [flatBooks, setFlatBooks] = useState([])
+  const [categories, setCategories] = useState([]) // State לקטגוריות
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('available')
@@ -17,16 +18,23 @@ export default function LibraryBooksPage() {
   useEffect(() => {
     const fetchData = async () => {
         try {
-            const [treeRes, listRes] = await Promise.all([
+            // הוספנו את טעינת הקטגוריות ל-Promise.all
+            const [treeRes, listRes, catsRes] = await Promise.all([
                 fetch('/api/library'),
-                fetch('/api/library/list')
+                fetch('/api/library/list'),
+                fetch('/api/admin/categories') 
             ]);
             
             const treeJson = await treeRes.json();
             const listJson = await listRes.json();
+            // טיפול בתוצאת הקטגוריות (במידה והבקשה נכשלה, נמשיך בלי צבעים)
+            let catsJson = { success: false, categories: [] };
+            try { catsJson = await catsRes.json(); } catch(e) {}
 
             if (treeJson.success) setTreeData(treeJson.data);
             if (listJson.success) setFlatBooks(listJson.books);
+            if (catsJson.success) setCategories(catsJson.categories);
+
         } catch (err) {
             console.error('Error fetching library data:', err);
         } finally {
@@ -44,6 +52,8 @@ export default function LibraryBooksPage() {
 
   const filteredBooks = useMemo(() => {
     let data = flatBooks;
+
+    data = data.filter(book => !book.isPrivate && !book.ownerId);
 
     // 1. סינון לפי טקסט (חיפוש)
     if (searchTerm) {
@@ -174,7 +184,7 @@ export default function LibraryBooksPage() {
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                             {filteredBooks.map(book => (
-                                <BookCard key={book.id || book.path} book={book} />
+                                <BookCard key={book.id || book.path} book={book} categories={categories} />
                             ))}
                         </div>
                     )}
@@ -186,16 +196,22 @@ export default function LibraryBooksPage() {
   )
 }
 
-function BookCard({ book }) {
+function BookCard({ book, categories }) {
   const total = book.totalPages || 0;
   const completed = book.completedPages || 0;
   const inProgress = book.inProgressPages || 0;
-  // available זה מה שנשאר
   const available = Math.max(0, total - completed - inProgress);
 
-  // חישוב אחוזים
   const completedPercent = total > 0 ? (completed / total) * 100 : 0;
   const inProgressPercent = total > 0 ? (inProgress / total) * 100 : 0;
+
+  const categoryData = categories?.find(c => c.name === (book.category || 'כללי'));
+  
+  const bgStyle = categoryData ? { backgroundColor: categoryData.color } : {};
+  
+  const bgClass = categoryData 
+      ? 'shadow-sm text-black' 
+      : 'bg-surface border border-surface-variant/50 text-black';
   
   return (
     <Link 
@@ -222,8 +238,12 @@ function BookCard({ book }) {
                 <h3 className="font-bold text-lg text-on-surface line-clamp-2 leading-tight mb-2 font-frank group-hover:text-primary transition-colors" title={book.name}>
                     {book.name}
                 </h3>
-                <span className="inline-flex items-center text-xs text-on-surface/60 bg-surface px-2 py-0.5 rounded-md border border-surface-variant/50">
-                    {book.category}
+                
+                <span 
+                    className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-bold ${bgClass}`}
+                    style={bgStyle}
+                >
+                    {book.category || 'כללי'}
                 </span>
             </div>
         </div>

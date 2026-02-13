@@ -149,18 +149,32 @@ export default function AboutPage() {
 
               {/* Terms of Use */}
               <div className="glass p-8 rounded-xl">
-                <h2 className="text-3xl font-bold mb-4 text-primary flex items-center gap-3">
+                <h2 className="text-3xl font-bold mb-6 text-primary flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">gavel</span>
                   תנאי השימוש במאגר
                 </h2>
-                <div className="space-y-4 text-lg text-on-surface/80 leading-relaxed">
+  
+                <div className="space-y-6 text-lg text-on-surface/80 leading-relaxed">
                   <p>
                     הטקסטים ניתנים לשימוש חופשי, עם זאת <strong className="text-accent">חלק מהטקסטים ניתנים ברישיון שאינו מאפשר שימוש מסחרי</strong>.
                   </p>
-                  <p className="flex items-center gap-2 text-primary">
-                    <span className="material-symbols-outlined">info</span>
-                    ניתן לראות את פרטי הרישיון לכל טקסט באתר ספריא
-                  </p>
+
+                  <div className="flex flex-col gap-4 border-r-2 border-primary/20 pr-4 mt-4">
+                    <div className="flex items-center gap-2 text-primary">
+                      <span className="material-symbols-outlined">info</span>
+                      <span>ניתן לראות את פרטי הרישיון לכל טקסט באתר ספריא</span>
+                    </div>
+
+                    <Link href="/license" className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
+                      <span className="material-symbols-outlined">description</span>
+                      לרישיון הכללי של מאגר אוצריא
+                    </Link>
+
+                    <Link href="/library/license" className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
+                      <span className="material-symbols-outlined">auto_stories</span>
+                      לרישיון הספרים הערוכים בספריית אוצריא
+                    </Link>
+                  </div>
                 </div>
               </div>
 
@@ -178,9 +192,9 @@ export default function AboutPage() {
                     <span className="material-symbols-outlined">people</span>
                     <span>צפה במשתמשים</span>
                   </Link>
-                  <Link href="/library/upload" className="flex items-center justify-center gap-2 px-6 py-3 bg-surface text-on-surface rounded-lg hover:bg-surface-variant transition-colors border border-outline">
+                  <Link href="/library/auth/login" className="flex items-center justify-center gap-2 px-6 py-3 bg-surface text-on-surface rounded-lg hover:bg-surface-variant transition-colors border border-outline">
                     <span className="material-symbols-outlined">add</span>
-                    <span>הוסף ספר חדש</span>
+                    <span>התחבר לקהילה</span>
                   </Link>
                 </div>
               </div>

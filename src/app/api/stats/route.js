@@ -11,7 +11,14 @@ export async function GET() {
     const [usersCount, booksCount, pagesStats] = await Promise.all([
         User.countDocuments(),
         
-        Book.countDocuments({ isHidden: { $ne: true } }), 
+        Book.countDocuments({ 
+            isHidden: { $ne: true },
+            $or: [
+                { ownerId: { $exists: false } },
+                { ownerId: null }
+            ],
+            isPrivate: { $ne: true }
+        }), 
         
         Page.aggregate([
             {

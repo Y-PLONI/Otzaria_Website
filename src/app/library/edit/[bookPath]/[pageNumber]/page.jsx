@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-
 import EditorHeader from '@/components/editor/EditorHeader'
 import EditorToolbar from '@/components/editor/EditorToolbar'
 import ImagePanel from '@/components/editor/ImagePanel'
@@ -12,11 +11,28 @@ import SettingsSidebar from '@/components/editor/SettingsSidebar'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 import SplitDialog from '@/components/editor/modals/SplitDialog'
 import InfoDialog from '@/components/editor/modals/InfoDialog'
+import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import { useDialog } from '@/components/DialogContext'
 import { useLoading } from '@/components/LoadingContext'
-
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useOCR } from '@/hooks/useOCR'
+
+// הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
+const DEFAULT_SHORTCUTS = {
+  'save': 'Ctrl+KeyS',
+  'ocr': 'Alt+KeyO',
+  'bold': 'Ctrl+KeyB',
+  'italic': 'Ctrl+KeyI',
+  'underline': 'Ctrl+KeyU',
+  'zoomIn': 'Ctrl+Equal',
+  'zoomOut': 'Ctrl+Minus',
+  'split': 'Alt+KeyS',
+  'rotateR': 'Alt+KeyR',
+  'togglePanel': 'Alt+KeyP',
+  'fullScreen': 'F11',
+  'shortcuts': 'Alt+KeyK',
+  'selectionMode': 'Alt+KeyV' 
+};
 
 export default function EditPage() {
   const { data: session, status } = useSession()
@@ -38,7 +54,12 @@ export default function EditPage() {
   const [rightColumn, setRightColumn] = useState('')
   const [twoColumns, setTwoColumns] = useState(false)
   const [activeTextarea, setActiveTextarea] = useState(null)
+  const [textAlign, setTextAlign] = useState('right');
   const [selectedFont, setSelectedFont] = useState('Times New Roman')
+  
+  const [textZoom, setTextZoom] = useState(17)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+
   const allInstructions = useMemo(() => {
       const globalRawSections = globalInstructions?.sections || [];
       const globalData = {
@@ -49,7 +70,6 @@ export default function EditPage() {
       const bookInfo = bookData?.editingInfo || {};
       const bookSections = bookInfo.sections || [];
       
-      // שינינו את השם כאן ל-bookInstData כדי למנוע התנגשות עם ה-state של bookData
       const bookInstData = {
           title: bookInfo.title || 'הנחיות עריכה לספר זה',
           sections: bookSections
@@ -59,7 +79,7 @@ export default function EditPage() {
           bookInstructions: bookInstData,
           globalInstructions: globalData
       };
-  }, [bookData, globalInstructions]); // מתעדכן אוטומטית כשהמידע משתנה
+  }, [bookData, globalInstructions]); 
    
   const [imageZoom, setImageZoom] = useState(100)
   const [rotation, setRotation] = useState(0)
@@ -109,9 +129,14 @@ export default function EditPage() {
   const [customPrompt, setCustomPrompt] = useState('The text is in Hebrew, written in Rashi script...') 
   const [showUploadDialog, setShowUploadDialog] = useState(false)
 
+  // Shortcuts State
+  const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
+  const [userShortcuts, setUserShortcuts] = useState(DEFAULT_SHORTCUTS);
+
   const { save: debouncedSave, status: saveStatus } = useAutoSave()
 
   useEffect(() => {
+    const savedAlign = localStorage.getItem('textAlign');
     const savedApiKey = localStorage.getItem('gemini_api_key')
     const savedPrompt = localStorage.getItem('gemini_prompt')
     const savedModel = localStorage.getItem('gemini_model')
@@ -120,7 +145,11 @@ export default function EditPage() {
     const savedOrientation = localStorage.getItem('layoutOrientation')
     const savedSwap = localStorage.getItem('swapPanels')
     const savedFont = localStorage.getItem('selectedFont')
+    const savedTextZoom = localStorage.getItem('textZoom')
+    const savedImageZoom = localStorage.getItem('imageZoom')
+    const savedShortcuts = localStorage.getItem('user_shortcuts')
     
+    if (savedAlign) setTextAlign(savedAlign);
     if (savedFont) setSelectedFont(savedFont)
     if (savedApiKey) setUserApiKey(savedApiKey)
     if (savedPrompt) setCustomPrompt(savedPrompt)
@@ -129,7 +158,20 @@ export default function EditPage() {
     if (savedColumnWidth) setColumnWidth(parseFloat(savedColumnWidth))
     if (savedOrientation) setLayoutOrientation(savedOrientation)
     if (savedSwap) setSwapPanels(savedSwap === 'true')
+    if (savedTextZoom) setTextZoom(parseInt(savedTextZoom))
+    if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
+    
+    if (savedShortcuts) {
+      try {
+        const parsed = JSON.parse(savedShortcuts);
+        setUserShortcuts(parsed);
+      } catch (e) { console.error('Error loading shortcuts', e); }
+    }
 
+    setSettingsLoaded(true);
+  }, []);
+
+  useEffect(() => {
     if (status === 'authenticated') {
         fetch('/api/user/saved-searches')
             .then(res => res.json())
@@ -164,10 +206,22 @@ export default function EditPage() {
   }, [status, bookPath])
 
   useEffect(() => {
-    if (selectedFont) {
+    if (settingsLoaded) localStorage.setItem('textAlign', textAlign);
+  }, [textAlign, settingsLoaded]);
+
+  useEffect(() => {
+    if (selectedFont && settingsLoaded) {
       localStorage.setItem('selectedFont', selectedFont)
     }
-  }, [selectedFont])
+  }, [selectedFont, settingsLoaded])
+
+  useEffect(() => {
+    if (settingsLoaded) localStorage.setItem('textZoom', textZoom.toString())
+  }, [textZoom, settingsLoaded])
+
+  useEffect(() => {
+    if (settingsLoaded) localStorage.setItem('imageZoom', imageZoom.toString())
+  }, [imageZoom, settingsLoaded])
 
   const toggleFullScreen = async () => {
     try {
@@ -204,14 +258,36 @@ export default function EditPage() {
     try {
       setLoading(true)
       setError(null)
+    
       const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}`)
       const bookResult = await bookRes.json()
 
       if (bookResult.success) {
         setBookData(bookResult.book)
+      
         if (bookResult.pages && bookResult.pages.length > 0) {
            const foundPage = bookResult.pages.find(p => p.number === pageNumber);
-           if (foundPage) setPageData(foundPage);
+         
+           if (foundPage) {
+             
+               const currentUserId = session?.user?._id || session?.user?.id;
+               const isAdmin = session?.user?.role === 'admin';
+
+               const isClaimedByMe = foundPage.claimedById === currentUserId;
+             
+               const isAvailable = foundPage.status === 'available';
+
+               const canEnter = isAvailable || isClaimedByMe || isAdmin;
+
+               if (!canEnter) {
+                   const holderName = foundPage.claimedBy || 'משתמש אחר';
+                   setError(`אין לך הרשאה לערוך דף זה. הדף נמצא בטיפול על ידי ${holderName}.`);
+                   setLoading(false);
+                   return;
+               }
+
+               setPageData(foundPage);
+           }
         }
       } else {
         throw new Error(bookResult.error)
@@ -288,7 +364,52 @@ export default function EditPage() {
     saveSearchesToServer(savedSearches.filter(s => s.id !== id));
   };
 
-  const runAllSavedReplacements = () => {
+  const handleColumnChange = useCallback((column, newText) => {
+    if (column === 'left') {
+      setLeftColumn(newText)
+      handleAutoSaveWrapper(content, newText, rightColumn, twoColumns)
+    } else {
+      setRightColumn(newText)
+      handleAutoSaveWrapper(content, leftColumn, newText, twoColumns)
+    }
+  }, [content, leftColumn, rightColumn, twoColumns]); // handleAutoSaveWrapper added below
+
+  const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns) => {
+    debouncedSave({
+      bookPath, pageNumber, content: newContent, leftColumn: left, rightColumn: right,
+      twoColumns: two, isContentSplit, rightColumnName, leftColumnName
+    })
+  }, [debouncedSave, bookPath, pageNumber, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName]);
+
+  const updateTextWithHistory = useCallback((newText, column) => {
+    let el;
+    if (column === 'right') el = document.querySelector('textarea[data-column="right"]');
+    else if (column === 'left') el = document.querySelector('textarea[data-column="left"]');
+    else el = document.querySelector('.editor-container textarea');
+
+    if (el) {
+        const scrollTop = el.scrollTop;
+        
+        el.focus();
+        el.select();
+        const success = document.execCommand('insertText', false, newText);
+        
+        el.setSelectionRange(el.value.length, el.value.length);
+        el.scrollTop = scrollTop;
+
+        if (!success) {
+            if (column === 'right') handleColumnChange('right', newText);
+            else if (column === 'left') handleColumnChange('left', newText);
+            else { setContent(newText); handleAutoSaveWrapper(newText); }
+        }
+    } else {
+        if (column === 'right') handleColumnChange('right', newText);
+        else if (column === 'left') handleColumnChange('left', newText);
+        else { setContent(newText); handleAutoSaveWrapper(newText); }
+    }
+  }, [handleColumnChange, handleAutoSaveWrapper]);
+
+  const runAllSavedReplacements = useCallback(() => {
     if (savedSearches.length === 0) return;
     
     const processPattern = (str) => str.replaceAll('^13', '\n');
@@ -358,15 +479,15 @@ export default function EditPage() {
     } else {
       showAlert('לידיעתך', 'לא נמצאו שינויים לביצוע');
     }
-  };
+  }, [savedSearches, rightColumn, leftColumn, content, twoColumns, updateTextWithHistory, showAlert]);
 
-  const togglePanelOrder = () => {
+  const togglePanelOrder = useCallback(() => {
     const newState = !swapPanels
     setSwapPanels(newState)
     localStorage.setItem('swapPanels', newState.toString())
-  }
+  }, [swapPanels]);
 
-  const handleRemoveDigits = () => {
+  const handleRemoveDigits = useCallback(() => {
     showConfirm(
         'ניקוי ספרות',
         'האם אתה בטוח שברצונך למחוק את כל הספרות (0-9) מהטקסט?',
@@ -385,20 +506,57 @@ export default function EditPage() {
             }
         }
     )
-  };
-
-  const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns) => {
-    debouncedSave({
-      bookPath, pageNumber, content: newContent, leftColumn: left, rightColumn: right,
-      twoColumns: two, isContentSplit, rightColumnName, leftColumnName
-    })
-  }, [debouncedSave, bookPath, pageNumber, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName]);
+  }, [showConfirm, twoColumns, rightColumn, leftColumn, content, handleAutoSaveWrapper]);
 
   const handleFinishClick = useCallback(() => {
     if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת');
     handleAutoSaveWrapper(content, leftColumn, rightColumn, twoColumns);
     setShowUploadDialog(true);
   }, [session, content, leftColumn, rightColumn, twoColumns, handleAutoSaveWrapper, showAlert]);
+
+  const handleClaim = async () => {
+    if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת');
+    
+    showConfirm(
+      `עבודה על עמוד ${pageNumber}`,
+      `האם אתה מעוניין לעבוד על עמוד זה?\nהעמוד יסומן כ"בטיפול" ויוצמד אליך.`,
+      async () => {
+          startLoading('תופס עמוד...');
+          try {
+              const userId = session.user._id || session.user.id;
+              const response = await fetch(`/api/book/claim-page`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      bookPath,
+                      pageNumber,
+                      userId: userId, 
+                      userName: session.user.name
+                  })
+              });
+              
+              const result = await response.json();
+              stopLoading(); 
+
+              if (result.success) {
+                  setPageData(prev => ({
+                      ...prev, 
+                      status: 'in-progress', 
+                      claimedBy: session.user.name, 
+                      claimedById: userId
+                  }));
+                  showAlert('הצלחה', 'העמוד נתפס על ידך בהצלחה! כעת ניתן לערוך ולשמור.');
+              } else {
+                  showAlert('שגיאה', result.error || 'שגיאה בתפיסת העמוד');
+              }
+          } catch (error) {
+              stopLoading();
+              console.error('Error claiming page:', error);
+              showAlert('שגיאה', 'שגיאה בתפיסת העמוד');
+          }
+      }
+    );
+  };
 
   const completePageLogic = async () => {
     const safeBookId = bookData?.id || bookData?._id;
@@ -448,7 +606,7 @@ export default function EditPage() {
       stopLoading(); 
 
       if (result.success) {
-        showAlert('הצלחה', 'הטקסט הועלה בהצלחה! מסמן כהושלם.');
+        showAlert('הצלחה', 'הטקסט הועלה בהצלחה והעמוד סומן כהושלם!');
         await completePageLogic(); 
       } else {
         showAlert('שגיאה', `שגיאה בהעלאה: ${result.error || 'שגיאה לא ידועה'}`);
@@ -459,16 +617,6 @@ export default function EditPage() {
       showAlert('שגיאה', 'שגיאה בתהליך ההעלאה');
     }
   };
-
-  const handleColumnChange = useCallback((column, newText) => {
-    if (column === 'left') {
-      setLeftColumn(newText)
-      handleAutoSaveWrapper(content, newText, rightColumn, twoColumns)
-    } else {
-      setRightColumn(newText)
-      handleAutoSaveWrapper(content, leftColumn, newText, twoColumns)
-    }
-  }, [content, leftColumn, rightColumn, twoColumns, handleAutoSaveWrapper]);
 
   const handleResizeStart = (e) => {
     e.preventDefault()
@@ -524,7 +672,7 @@ export default function EditPage() {
     }
   }, [isResizing, isColumnResizing, handleMouseMove, handleMouseUp])
 
-  const toggleColumns = () => {
+  const toggleColumns = useCallback(() => {
     if (!twoColumns) setShowSplitDialog(true)
     else {
       const combined = rightColumn + leftColumn
@@ -532,7 +680,7 @@ export default function EditPage() {
       setTwoColumns(false)
       handleAutoSaveWrapper(combined, leftColumn, rightColumn, false)
     }
-  }
+  }, [twoColumns, rightColumn, leftColumn, handleAutoSaveWrapper]);
 
   const handleDownloadImage = async () => {
     if (!pageData?.thumbnail) return showAlert('שגיאה', 'אין תמונה להורדה');
@@ -562,36 +710,111 @@ export default function EditPage() {
     handleAutoSaveWrapper(content, '', content, true)
   }
   
-  // השתמשנו בdocument.execCommand כדי לשמור את ההסטורריה לצורך ביטולים
-  const updateTextWithHistory = (newText, column) => {
-    let el;
-    if (column === 'right') el = document.querySelector('textarea[data-column="right"]');
-    else if (column === 'left') el = document.querySelector('textarea[data-column="left"]');
-    else el = document.querySelector('.editor-container textarea');
+  const getActiveTextarea = () => {
+    let activeEl = null;
+    if (activeTextarea === 'left') activeEl = document.querySelector('textarea[data-column="left"]');
+    else if (activeTextarea === 'right') activeEl = document.querySelector('textarea[data-column="right"]');
+    else activeEl = document.querySelector('.editor-container textarea');
 
-    if (el) {
-        const scrollTop = el.scrollTop;
-        
-        el.focus();
-        el.select();
-        const success = document.execCommand('insertText', false, newText);
-        
-        el.setSelectionRange(el.value.length, el.value.length);
-        el.scrollTop = scrollTop;
-
-        if (!success) {
-            if (column === 'right') handleColumnChange('right', newText);
-            else if (column === 'left') handleColumnChange('left', newText);
-            else { setContent(newText); handleAutoSaveWrapper(newText); }
-        }
-    } else {
-        if (column === 'right') handleColumnChange('right', newText);
-        else if (column === 'left') handleColumnChange('left', newText);
-        else { setContent(newText); handleAutoSaveWrapper(newText); }
+    if (!activeEl) {
+        if (twoColumns) activeEl = document.querySelector('textarea[data-column="right"]');
+        else activeEl = document.querySelector('.editor-container textarea');
     }
+    return activeEl;
   }
 
-  const handleFindReplace = (replaceAll = false, overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
+  const handleFindNext = (textToFind, isRegexMode) => {
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
+
+    const activeEl = getActiveTextarea();
+    if (!activeEl) return;
+
+    const processPattern = (str) => str.replaceAll('^13', '\n');
+    const patternStr = processPattern(textToFind);
+    const text = activeEl.value;
+    const startPos = activeEl.selectionEnd;
+
+    let matchIndex = -1;
+    let matchLength = 0;
+
+    if (isRegexMode) {
+        try {
+            const regex = new RegExp(patternStr, 'g');
+            regex.lastIndex = startPos;
+            const match = regex.exec(text);
+            if (match) {
+                matchIndex = match.index;
+                matchLength = match[0].length;
+            } else {
+                regex.lastIndex = 0;
+                const matchFromStart = regex.exec(text);
+                if (matchFromStart) {
+                    matchIndex = matchFromStart.index;
+                    matchLength = matchFromStart[0].length;
+                    showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
+                }
+            }
+        } catch (e) {
+            return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
+        }
+    } else {
+        matchIndex = text.indexOf(patternStr, startPos);
+        if (matchIndex === -1) {
+            matchIndex = text.indexOf(patternStr, 0);
+            if (matchIndex !== -1) {
+                 showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
+            }
+        }
+        matchLength = patternStr.length;
+    }
+
+    if (matchIndex !== -1) {
+        activeEl.focus();
+        activeEl.setSelectionRange(matchIndex, matchIndex + matchLength);
+        
+        const lineHeight = 24; 
+        const lines = text.substr(0, matchIndex).split('\n').length;
+        const scrollPos = (lines - 5) * lineHeight; 
+        activeEl.scrollTop = scrollPos > 0 ? scrollPos : 0;
+    } else {
+        showAlert('חיפוש', 'לא נמצאו מופעים.');
+    }
+  };
+
+  const handleReplaceCurrent = (textToReplace, textToFind, isRegexMode) => {
+    const activeEl = getActiveTextarea();
+    if (!activeEl) return;
+
+    if (activeEl.selectionStart === activeEl.selectionEnd) {
+        handleFindNext(textToFind, isRegexMode);
+        return;
+    }
+
+    const processPattern = (str) => str.replaceAll('^13', '\n');
+    const replacement = processPattern(textToReplace || '');
+
+    activeEl.focus();
+    const success = document.execCommand('insertText', false, replacement);
+    
+    if (!success) {
+        const text = activeEl.value;
+        const before = text.substring(0, activeEl.selectionStart);
+        const after = text.substring(activeEl.selectionEnd);
+        const newText = before + replacement + after;
+        
+        const col = activeEl.getAttribute('data-column');
+        if (col === 'right') handleColumnChange('right', newText);
+        else if (col === 'left') handleColumnChange('left', newText);
+        else {
+            setContent(newText);
+            handleAutoSaveWrapper(newText);
+        }
+    }
+    
+    handleFindNext(textToFind, isRegexMode);
+  };
+
+  const handleReplaceAll = (overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
     const textToFind = overrideFind !== null ? overrideFind : findText;
     const textToReplace = overrideReplace !== null ? overrideReplace : replaceText;
     const isRegexMode = useRegexOverride !== null ? useRegexOverride : useRegex;
@@ -616,7 +839,7 @@ export default function EditPage() {
         }
     };
 
-    const regex = createRegex(replaceAll);
+    const regex = createRegex(true);
     if (!regex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
 
     const checkRegex = createRegex(true);
@@ -632,27 +855,13 @@ export default function EditPage() {
       
       if (count === 0) return text;
 
-      if (replaceAll) {
-        totalOccurrences += count;
-        return text.replace(regex, replacement);
-      } else {
-        if (regex.test(text)) {
-            totalOccurrences += 1;
-            return text.replace(regex, replacement);
-        }
-        return text;
-      }
+      totalOccurrences += count;
+      return text.replace(regex, replacement);
     };
 
     if (twoColumns) {
       const newRight = executeReplace(rightColumn);
-      let newLeft = leftColumn;
-      
-      if (!replaceAll && newRight === rightColumn) {
-          newLeft = executeReplace(leftColumn);
-      } else if (replaceAll) {
-          newLeft = executeReplace(leftColumn);
-      }
+      const newLeft = executeReplace(leftColumn);
 
       if (newRight !== rightColumn) {
           updateTextWithHistory(newRight, 'right');
@@ -685,8 +894,18 @@ export default function EditPage() {
     const end = activeEl.selectionEnd;
     const selected = activeEl.value.substring(start, end);
     
-    let insertion = `<${tag}>${selected}</${tag}>`
-    if (['h1', 'h2', 'h3'].includes(tag)) insertion = `\n<${tag}>${selected}</${tag}>\n`
+    const match = selected.match(/^(\s*)([\s\S]*?)(\s*)$/);
+    const preSpace = match[1] || '';
+    const content = match[2] || '';
+    const postSpace = match[3] || '';
+
+    let taggedContent = `<${tag}>${content}</${tag}>`;
+    
+    if (['h1', 'h2', 'h3'].includes(tag)) {
+        taggedContent = `\n<${tag}>${content}</${tag}>\n`;
+    }
+
+    const insertion = preSpace + taggedContent + postSpace;
     
     activeEl.focus();
     const success = document.execCommand('insertText', false, insertion);
@@ -735,48 +954,7 @@ export default function EditPage() {
     handlersRef.current = { insertTag, handleFinishClick };
   }, [insertTag, handleFinishClick]);
 
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      const isModKey = e.ctrlKey || e.metaKey;
-      if (!isModKey) return;
-
-      const { insertTag: currentInsertTag, handleFinishClick: currentHandleFinish } = handlersRef.current;
-
-      switch (e.code) {
-        case 'KeyB':
-          e.preventDefault();
-          currentInsertTag('b');
-          break;
-        case 'KeyI':
-          e.preventDefault();
-          currentInsertTag('i');
-          break;
-        case 'KeyU':
-          e.preventDefault();
-          currentInsertTag('u');
-          break;
-        case 'Equal':
-        case 'NumpadAdd':
-          e.preventDefault();
-          currentInsertTag('big');
-          break;
-        case 'Minus':
-        case 'NumpadSubtract':
-          e.preventDefault();
-          currentInsertTag('small');
-          break;
-        case 'KeyS':
-          e.preventDefault();
-          currentHandleFinish();
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  const handleOCR = async () => {
+  const handleOCR = useCallback(async () => {
     if (!selectionRect) return showAlert('שגיאה', 'בחר אזור')
     
     let isCancelled = false;
@@ -844,7 +1022,110 @@ export default function EditPage() {
             showAlert('שגיאה', 'שגיאה ב-OCR: ' + e.message)
         }
     }
-  }
+  }, [selectionRect, pageData, rotation, ocrMethod, userApiKey, selectedModel, customPrompt, performGeminiOCR, performOCRWin, performTesseractOCR, rightColumn, content, leftColumn, twoColumns, handleAutoSaveWrapper, startLoading, stopLoading, showAlert]);
+
+  const saveUserShortcuts = (newShortcuts) => {
+    setUserShortcuts(newShortcuts);
+    localStorage.setItem('user_shortcuts', JSON.stringify(newShortcuts));
+    showAlert('הצלחה', 'קיצורי המקלדת עודכנו בהצלחה');
+  };
+
+  const actionsMap = useMemo(() => ({
+    'save': { label: 'שמירה אוטומטית/ידנית', action: handleFinishClick },
+    'bold': { label: 'מודגש (B)', action: () => insertTag('b') },
+    'italic': { label: 'נטוי (I)', action: () => insertTag('i') },
+    'underline': { label: 'קו תחתון (U)', action: () => insertTag('u') },
+    'h1': { label: 'כותרת H1', action: () => insertTag('h1') },
+    'h2': { label: 'כותרת H2', action: () => insertTag('h2') },
+    'h3': { label: 'כותרת H3', action: () => insertTag('h3') },
+    'bigger': { label: 'הגדל גופן טקסט', action: () => insertTag('big') },
+    'smaller': { label: 'הקטן גופן טקסט', action: () => insertTag('small') },
+    
+    'ocr': { label: 'בצע OCR על בחירה', action: handleOCR },
+    'zoomIn': { label: 'זום אין תמונה', action: () => setImageZoom(z => Math.min(300, z + 10)) },
+    'zoomOut': { label: 'זום אאוט תמונה', action: () => setImageZoom(z => Math.max(25, z - 10)) },
+    'rotateR': { label: 'סובב תמונה ימינה', action: () => setRotation(r => r + 90) },
+    'rotateL': { label: 'סובב תמונה שמאלה', action: () => setRotation(r => r - 90) },
+    'selectionMode': { label: 'מצב בחירת אזור', action: () => setIsSelectionMode(prev => !prev) },
+
+    'split': { label: 'פיצול ל-2 טורים', action: toggleColumns },
+    'layout': { label: 'שנה כיוון פריסה', action: () => setLayoutOrientation(prev => prev === 'vertical' ? 'horizontal' : 'vertical') },
+    'togglePanel': { label: 'החלף צדדים (תמונה/טקסט)', action: togglePanelOrder },
+    'fullScreen': { label: 'מסך מלא', action: toggleFullScreen },
+    'findReplace': { label: 'פתח חיפוש והחלפה', action: () => setShowFindReplace(true) },
+    'settings': { label: 'פתח הגדרות', action: () => setShowSettings(true) },
+    'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
+    
+    'removeDigits': { label: 'ניקוי ספרות', action: handleRemoveDigits },
+    'runSavedSearches': { label: 'בצע חיפושים קבועים', action: runAllSavedReplacements },
+
+    'textZoomIn': { 
+      label: 'הגדל תצוגת טקסט', 
+      action: () => setTextZoom(z => Math.min(60, z + 2)) 
+    },
+    'textZoomOut': { 
+      label: 'הקטן תצוגת טקסט', 
+      action: () => setTextZoom(z => Math.max(10, z - 2)) 
+    },
+    'alignRight': { 
+      label: 'יישור טקסט לימין', 
+      action: () => setTextAlign('right') 
+    },
+    'alignCenter': { 
+      label: 'יישור טקסט למרכז', 
+      action: () => setTextAlign('center') 
+    },
+    'alignLeft': { 
+      label: 'יישור טקסט לשמאל', 
+      action: () => setTextAlign('left') 
+    },
+    'alignJustify': { 
+      label: 'יישור טקסט מלא (Justify)', 
+      action: () => setTextAlign('justify') 
+    },
+
+  }), [handleFinishClick, insertTag, handleOCR, toggleColumns, togglePanelOrder, toggleFullScreen, handleRemoveDigits, runAllSavedReplacements, setTextZoom, setTextAlign]); 
+
+  const availableActions = useMemo(() => {
+    return Object.entries(actionsMap).map(([id, def]) => ({
+      id,
+      label: def.label
+    }));
+  }, [actionsMap]);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      // אם אנחנו בתוך הדיאלוג של הקיצורים, אל תפעיל אותם
+      if (showShortcutsDialog) return;
+
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+
+      const modifiers = [];
+      if (e.ctrlKey) modifiers.push('Ctrl');
+      if (e.altKey) modifiers.push('Alt');
+      if (e.shiftKey) modifiers.push('Shift');
+      if (e.metaKey) modifiers.push('Meta');
+      
+      const code = e.code; // שימוש בקוד הפיזי (למשל KeyS)
+
+      const combination = [...modifiers, code].join('+');
+      
+      // בדיקה אם הקומבינציה קיימת אצל המשתמש
+      const foundActionId = Object.keys(userShortcuts).find(actionId => {
+          const savedCombo = userShortcuts[actionId];
+          return savedCombo === combination;
+      });
+
+      if (foundActionId && actionsMap[foundActionId]) {
+        e.preventDefault();
+        e.stopPropagation();
+        actionsMap[foundActionId].action();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true });
+  }, [userShortcuts, actionsMap, showShortcutsDialog]);
 
   const handleCloseInfoDialog = async (doNotShowAgain) => {
     setShowInfoDialog(false);
@@ -900,16 +1181,21 @@ export default function EditPage() {
         twoColumns={twoColumns} toggleColumns={toggleColumns}
         layoutOrientation={layoutOrientation} setLayoutOrientation={setLayoutOrientation}
         swapPanels={swapPanels}
+        textAlign={textAlign}
+        setTextAlign={setTextAlign}
         handleDownloadImage={handleDownloadImage}
         togglePanelOrder={togglePanelOrder}
         handleRemoveDigits={handleRemoveDigits}
-        handleFinish={handleFinishClick} 
+        handleFinish={handleFinishClick}
+        isPageAvailable={pageData?.status === 'available'}
+        onClaim={handleClaim}
         setShowInfoDialog={setShowInfoDialog} setShowSettings={setShowSettings}
         thumbnailUrl={pageData?.thumbnail}
         isCollapsed={isToolbarCollapsed}
         setIsCollapsed={setIsToolbarCollapsed}
         isFullScreen={isFullScreen}
         onToggleFullScreen={toggleFullScreen}
+        openShortcuts={() => setShowShortcutsDialog(true)}
       />
 
       <div className={`flex-1 flex flex-col overflow-hidden ${isFullScreen ? 'p-0' : 'p-6'}`}>
@@ -946,6 +1232,10 @@ export default function EditPage() {
               handleColumnChange={handleColumnChange}
               setActiveTextarea={setActiveTextarea} selectedFont={selectedFont}
               columnWidth={columnWidth} onColumnResizeStart={handleColumnResizeStart}
+              textAlign={textAlign}
+              setTextAlign={setTextAlign}
+              textZoom={textZoom}
+              setTextZoom={setTextZoom}
             />
           </div>
           
@@ -975,7 +1265,9 @@ export default function EditPage() {
         isOpen={showFindReplace} onClose={() => setShowFindReplace(false)}
         findText={findText} setFindText={setFindText}
         replaceText={replaceText} setReplaceText={setReplaceText}
-        handleFindReplace={handleFindReplace}
+        handleReplaceAll={handleReplaceAll}
+        handleFindNext={handleFindNext}
+        handleReplaceCurrent={handleReplaceCurrent}
         savedSearches={savedSearches}
         addSavedSearch={addSavedSearch}
         removeSavedSearch={removeSavedSearch}
@@ -999,6 +1291,17 @@ export default function EditPage() {
         isOpen={showInfoDialog} onClose={handleCloseInfoDialog}
         bookInstructions={allInstructions.bookInstructions}
         globalInstructions={allInstructions.globalInstructions}
+        examplePage={bookData?.examplePage}
+        bookPath={bookPath}
+      />
+      
+      <ShortcutsDialog 
+        isOpen={showShortcutsDialog}
+        onClose={() => setShowShortcutsDialog(false)}
+        availableActions={availableActions}
+        shortcuts={userShortcuts}
+        saveShortcuts={saveUserShortcuts}
+        resetToDefaults={() => setUserShortcuts(DEFAULT_SHORTCUTS)}
       />
 
       {showUploadDialog && (
@@ -1051,5 +1354,4 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
       </div>
     </div>
   )
-
 }

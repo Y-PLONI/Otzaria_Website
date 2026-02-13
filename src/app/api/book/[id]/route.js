@@ -8,9 +8,11 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 export async function GET(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session || !session.user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    const userId = session.user.id || session.user._id;
     const isAdmin = session?.user?.role === 'admin';
     
     await connectDB();
@@ -18,7 +20,6 @@ export async function GET(request, { params }) {
     const { id } = await params;
     const identifier = decodeURIComponent(id);
 
-    // 1. מציאת הספר - חיפוש גמיש (גם Slug וגם שם)
     const book = await Book.findOne({ 
         $or: [
             { slug: identifier }, 
@@ -30,26 +31,27 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: false, error: 'הספר לא נמצא' }, { status: 404 });
     }
 
-    if (!isAdmin && book.isHidden) {
+    const isOwner = book.ownerId && (book.ownerId.toString() === userId.toString());
+    
+    const isRestricted = book.isHidden || book.isPrivate;
+
+    if (isRestricted && !isAdmin && !isOwner) {
       return NextResponse.json({ success: false, error: 'אין הרשאות לצפייה בספר זה' }, { status: 403 });
     }
 
-    // 2. מציאת כל העמודים של הספר
     const pages = await Page.find({ book: book._id })
       .sort({ pageNumber: 1 })
-      .select('pageNumber status imagePath claimedBy claimedAt completedAt') // בחירת שדות אופטימלית
-      .populate('claimedBy', 'name email') // שליפת פרטי המשתמש
+      .select('pageNumber status imagePath claimedBy claimedAt completedAt') 
+      .populate('claimedBy', 'name email') 
       .lean();
 
-    // 3. עיבוד הנתונים לפורמט אחיד שמתאים לכל הקומפוננטות
     const formattedPages = pages.map(p => ({
       id: p._id,
       number: p.pageNumber,
       status: p.status,
-      // נתיב תמונה: אם הוא שמור כנתיב יחסי ב-DB, נשאיר אותו כך. ה-Client יציג אותו מ-public.
       thumbnail: p.imagePath, 
       claimedBy: p.claimedBy ? p.claimedBy.name : null,
-      claimedById: p.claimedBy ? p.claimedBy._id : null, // חשוב לזיהוי בעלות
+      claimedById: p.claimedBy ? p.claimedBy._id : null,
       claimedAt: p.claimedAt,
       completedAt: p.completedAt
     }));
@@ -59,13 +61,16 @@ export async function GET(request, { params }) {
       book: {
         id: book._id,
         name: book.name,
-        slug: book.slug, // משמש כ-path ב-Frontend
-        path: book.slug, // תאימות לאחור ל-Frontend הישן
+        slug: book.slug, 
+        path: book.slug,
         totalPages: book.totalPages,
         completedPages: book.completedPages,
         category: book.category,
         description: book.description,
-        editingInfo: book.editingInfo || null
+        editingInfo: book.editingInfo || null,
+        examplePage: book.examplePage || null,
+        isPrivate: book.isPrivate || false,
+        isOwner: isOwner
       },
       pages: formattedPages
     });

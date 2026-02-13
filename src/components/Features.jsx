@@ -11,22 +11,7 @@ export default function Features() {
     {
       icon: 'auto_stories',
       title: 'מאגר עצום',
-      description: 'אלפי ספרי קודש זמינים לעריכה ולקריאה'
-    },
-    {
-      icon: 'edit_note',
-      title: 'עריכה משותפת',
-      description: 'עבדו יחד עם עורכים אחרים בזמן אמת'
-    },
-    {
-      icon: 'search',
-      title: 'חיפוש מתקדם',
-      description: 'מצאו כל פסוק, מאמר או מושג בקלות'
-    },
-    {
-      icon: 'cloud_done',
-      title: 'גיבוי אוטומטי',
-      description: 'כל שינוי נשמר ומתועד באופן אוטומטי'
+      description: 'אלפי ספרי קודש זמינים לקריאה ולימוד'
     },
     {
       icon: 'verified',
@@ -34,9 +19,19 @@ export default function Features() {
       description: 'מערכת בקרת איכות מתקדמת לטקסטים מדויקים'
     },
     {
+      icon: 'search',
+      title: 'חיפוש מתקדם',
+      description: 'מצאו כל פסוק, מאמר או מושג בקלות'
+    },
+    {
+      icon: 'edit_note',
+      title: 'עריכה משותפת',
+      description: 'ספרים רבים נוספו על ידי הקהילה'
+    },
+    {
       icon: 'public',
       title: 'נגיש לכולם',
-      description: 'גישה חופשית ממכשיר כלשהו, בכל מקום'
+      description: 'זמין לכל מערכות ההפעלה בקלות'
     }
   ]
 
@@ -78,7 +73,7 @@ export default function Features() {
         </motion.div>
         
         <motion.div 
-          className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+          className="flex flex-wrap justify-center gap-6"
           variants={containerVariants}
           initial="hidden"
           animate={isInView ? "visible" : "hidden"}
@@ -92,7 +87,7 @@ export default function Features() {
                 y: -8,
                 transition: { type: "spring", stiffness: 300 }
               }}
-              className="glass p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow cursor-pointer group"
+              className="glass p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow cursor-pointer group w-full md:w-[calc(50%-12px)] lg:w-[calc(33.33%-16px)]"
             >
               <motion.span 
                 className="material-symbols-outlined text-6xl text-primary mb-4 block"

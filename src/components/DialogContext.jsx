@@ -44,7 +44,7 @@ export function DialogProvider({ children }) {
       title,
       message,
       onConfirm: null,
-      confirmText: 'הבנתי, סגור',
+      confirmText: '',
       timestamp: Date.now()
     })
   }, [clearAutoCloseTimer, clearCloseTimer])
@@ -83,15 +83,32 @@ export function DialogProvider({ children }) {
   }, [dialogConfig.onConfirm, closeDialog])
 
   useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (!dialogConfig.isOpen) return
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        if (dialogConfig.type === 'confirm') {
+          handleConfirm()
+        } else {
+          closeDialog()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [dialogConfig.isOpen, dialogConfig.type, handleConfirm, closeDialog])
+
+  useEffect(() => {
     if (dialogConfig.isOpen) {
       const animationTimer = setTimeout(() => setIsVisible(true), 10)
       
       if (dialogConfig.type === 'alert') {
         clearAutoCloseTimer()
-        
         timerRef.current = setTimeout(() => {
           closeDialog()
-        }, 2500)
+        }, 3000) 
       }
 
       return () => {
@@ -101,6 +118,17 @@ export function DialogProvider({ children }) {
     }
   }, [dialogConfig.isOpen, dialogConfig.type, dialogConfig.timestamp, closeDialog, clearAutoCloseTimer])
 
+  const isAlert = dialogConfig.type === 'alert';
+
+  const wrapperClass = isAlert 
+    ? `fixed bottom-8 left-0 right-0 z-[9999] flex items-end justify-center transition-opacity duration-300 pointer-events-none ${isVisible ? 'opacity-100' : 'opacity-0'}`
+    : `fixed inset-0 z-[9999] bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4 transition-opacity duration-300 ease-in-out ${isVisible ? 'opacity-100' : 'opacity-0'}`;
+
+  const boxClass = `glass-strong rounded-2xl shadow-2xl border border-surface-variant/50 relative overflow-hidden pointer-events-auto transition-all duration-300 ease-out 
+    ${isAlert 
+      ? `w-80 p-5 ${isVisible ? 'translate-y-0 scale-100' : 'translate-y-8 scale-95'}` 
+      : `max-w-sm w-full p-8 ${isVisible ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`
+    }`;
   return (
     <DialogContext.Provider value={{ showAlert, showConfirm, closeDialog }}>
       <style>{`
@@ -109,7 +137,7 @@ export function DialogProvider({ children }) {
           to { width: 0%; }
         }
         .animate-progress-bar {
-          animation: shrinkWidth 2.5s linear forwards;
+          animation: shrinkWidth 3s linear forwards;
         }
       `}</style>
 
@@ -117,42 +145,44 @@ export function DialogProvider({ children }) {
 
       {dialogConfig.isOpen && (
         <div 
-          className={`fixed inset-0 z-[9999] bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4 transition-opacity duration-300 ease-in-out ${
-            isVisible ? 'opacity-100' : 'opacity-0'
-          }`}
-          onClick={closeDialog}
+          className={wrapperClass}
+          onClick={!isAlert ? closeDialog : undefined}
         >
           <div 
-            className={`glass-strong p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-surface-variant/50 transform transition-all duration-300 ease-out relative overflow-hidden ${
-              isVisible ? 'scale-100 translate-y-0 opacity-100' : 'scale-95 translate-y-4 opacity-0'
-            }`}
-            onClick={e => e.stopPropagation()}
+            className={boxClass}
+            onClick={e => {
+              e.stopPropagation();
+              if (isAlert) closeDialog();
+            }}
           >
-            <div className="flex flex-col items-center text-center mb-6">
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 shadow-inner transition-transform duration-500 ${
-                isVisible ? 'scale-100 rotate-0' : 'scale-0 -rotate-180'
-              } ${
-                dialogConfig.type === 'confirm' 
+            {/* מבנה פנימי - Flex Row עבור Alert */}
+            <div className={`flex ${isAlert ? 'flex-row text-right items-start gap-4' : 'flex-col items-center text-center'} mb-${isAlert ? '2' : '6'}`}>
+              
+              <div className={`shrink-0 rounded-full flex items-center justify-center shadow-inner transition-transform duration-500 
+                ${isAlert ? 'w-10 h-10' : 'w-14 h-14 mb-4'} 
+                ${isVisible ? 'scale-100 rotate-0' : 'scale-0 -rotate-180'} 
+                ${dialogConfig.type === 'confirm' 
                   ? 'bg-primary/10 text-primary' 
                   : 'bg-secondary/10 text-secondary'
               }`}>
-                <span className="material-symbols-outlined text-[32px]">
+                <span className={`material-symbols-outlined ${isAlert ? 'text-[24px]' : 'text-[32px]'}`}>
                   {dialogConfig.type === 'confirm' ? 'help' : 'info'}
                 </span>
               </div>
               
-              <h3 className="text-xl font-frank font-bold text-on-surface mb-2 tracking-wide">
-                {dialogConfig.title}
-              </h3>
-              
-              <p className="text-on-surface/80 text-base leading-relaxed whitespace-pre-line">
-                {dialogConfig.message}
-              </p>
+              <div className="flex-1">
+                <h3 className={`${isAlert ? 'text-lg' : 'text-xl'} font-frank font-bold text-on-surface mb-1 tracking-wide`}>
+                  {dialogConfig.title}
+                </h3>
+                
+                <p className="text-on-surface/80 text-base leading-relaxed whitespace-pre-line">
+                  {dialogConfig.message}
+                </p>
+              </div>
             </div>
 
-            <div className="flex gap-3 justify-center mt-2 z-10 relative">
-              {dialogConfig.type === 'confirm' ? (
-                <>
+            {!isAlert && (
+              <div className="flex gap-3 justify-center mt-2 z-10 relative">
                   <button 
                     onClick={closeDialog}
                     className="px-5 py-2.5 rounded-xl border border-surface-variant text-on-surface/70 hover:bg-surface-variant/30 hover:text-on-surface font-medium transition-all duration-200"
@@ -165,18 +195,10 @@ export function DialogProvider({ children }) {
                   >
                     {dialogConfig.confirmText}
                   </button>
-                </>
-              ) : (
-                <button 
-                  onClick={closeDialog}
-                  className="px-6 py-2.5 rounded-xl text-on-primary font-medium shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 bg-secondary hover:bg-secondary/90"
-                >
-                  {dialogConfig.confirmText}
-                </button>
-              )}
-            </div>
+              </div>
+            )}
             
-            {dialogConfig.type === 'alert' && (
+            {isAlert && (
                <div className="absolute bottom-0 left-0 h-1 bg-secondary/30 w-full">
                   <div 
                     key={dialogConfig.timestamp} 

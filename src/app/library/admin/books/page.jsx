@@ -6,6 +6,7 @@ import Image from 'next/image'
 import AddBookDialog from '@/components/AddBookDialog'
 import EditBookInfoDialog from '@/components/EditBookInfoDialog'
 import EditGlobalInstructionsDialog from '@/components/EditGlobalInstructionsDialog'
+import EditCategoriesDialog from '@/components/EditCategoriesDialog'
 import { useDialog } from '@/components/DialogContext'
 
 export default function AdminBooksPage() {
@@ -19,6 +20,7 @@ export default function AdminBooksPage() {
 
   const [renamingBook, setRenamingBook] = useState(null)
   const [newName, setNewName] = useState('')
+  const [newCategory, setNewCategory] = useState('')
 
   const [showMergeDialog, setShowMergeDialog] = useState(false)
   const [selectedBooksToMerge, setSelectedBooksToMerge] = useState([]) 
@@ -39,6 +41,24 @@ export default function AdminBooksPage() {
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false)
   const [isSavingInstructions, setIsSavingInstructions] = useState(false)
 
+  const [hidePersonalBooks, setHidePersonalBooks] = useState(false)
+
+  const [showCategoriesDialog, setShowCategoriesDialog] = useState(false)
+  const [categoriesList, setCategoriesList] = useState([
+      { name: 'כללי', color: '#64748b' }
+  ])
+
+    useEffect(() => {
+    try {
+      const saved = localStorage.getItem('admin_hide_personal_books');
+      if (saved !== null) {
+          setHidePersonalBooks(JSON.parse(saved));
+      }
+    } catch (error) {
+      localStorage.removeItem('admin_hide_personal_books');
+    }
+  }, [])
+
   const loadBooks = async () => {
     try {
       setLoading(true)
@@ -48,15 +68,52 @@ export default function AdminBooksPage() {
         setBooks(data.books)
       }
     } catch (error) {
-      console.error('Error loading books:', error)
+      console.error(error)
     } finally {
       setLoading(false)
     }
   }
 
+  const loadCategories = async () => {
+      try {
+          const res = await fetch('/api/admin/categories');
+          const data = await res.json();
+          if (data.success && data.categories.length > 0) {
+              setCategoriesList(data.categories);
+          }
+      } catch (error) {
+          console.error(error);
+      }
+  }
+
   useEffect(() => {
     loadBooks()
+    loadCategories()
   }, [])
+
+  const handleSaveCategories = async (newCategories) => {
+    try {
+        const response = await fetch('/api/admin/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categories: newCategories })
+        });
+        
+        if (response.ok) {
+            setCategoriesList(newCategories);
+            showAlert('הצלחה', 'הקטגוריות עודכנו בהצלחה');
+        } else {
+            showAlert('שגיאה', 'שגיאה בשמירת הקטגוריות');
+        }
+    } catch (error) {
+        showAlert('שגיאה', 'תקלה בתקשורת');
+    }
+  };
+
+  const getCategoryColor = (catName) => {
+      const cat = categoriesList.find(c => c.name === catName);
+      return cat ? cat.color : '#64748b';
+  };
 
   const handleShowSubscribers = async () => {
     setShowSubscribersModal(true);
@@ -71,7 +128,6 @@ export default function AdminBooksPage() {
             setSubscribersList([]);
         }
     } catch (error) {
-        console.error('Error fetching subscribers:', error);
         showAlert('שגיאה', 'שגיאה בטעינת הרשימה');
     } finally {
         setIsLoadingSubscribers(false);
@@ -96,7 +152,6 @@ export default function AdminBooksPage() {
                 showAlert('שגיאה', result.error || 'שגיאה במחיקת המנוי');
             }
         } catch (error) {
-            console.error('Error deleting subscriber:', error);
             showAlert('שגיאה', 'שגיאה בתקשורת');
         }
     });
@@ -155,7 +210,6 @@ export default function AdminBooksPage() {
             showAlert('שגיאה', data.error || 'שגיאה בעדכון הסטטוס');
         }
     } catch (e) {
-        console.error(e)
         showAlert('שגיאה', 'תקלה בתקשורת');
     } finally {
         setIsUpdatingStatus(false)
@@ -173,18 +227,20 @@ export default function AdminBooksPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 bookId: renamingBook.id, 
-                name: newName 
+                name: newName,
+                category: newCategory
             })
         });
 
         if (response.ok) {
             setBooks(prev => prev.map(b => 
-                b.id === renamingBook.id ? { ...b, name: newName } : b
+                b.id === renamingBook.id ? { ...b, name: newName, category: newCategory } : b
             ));
             setRenamingBook(null);
             setNewName('');
+            setNewCategory('');
         } else {
-            showAlert('שגיאה', 'שגיאה בשינוי השם');
+            showAlert('שגיאה', 'שגיאה בשינוי הפרטים');
         }
     } catch (e) {
         showAlert('שגיאה', 'תקלה בתקשורת');
@@ -194,6 +250,7 @@ export default function AdminBooksPage() {
   const openRenameDialog = (book) => {
       setRenamingBook(book);
       setNewName(book.name);
+      setNewCategory(book.category || 'כללי');
   };
 
   const handleDownloadFullText = async (book) => {
@@ -217,7 +274,6 @@ export default function AdminBooksPage() {
             showAlert('שגיאה', 'שגיאה בהפקת הקובץ: ' + (result.error || 'נסה שוב מאוחר יותר'));
         }
     } catch (e) {
-        console.error('Download error:', e);
         showAlert('שגיאה', 'תקלה בתקשורת עם השרת');
     }
   };
@@ -327,7 +383,15 @@ export default function AdminBooksPage() {
     }
 };
 
+  const toggleHidePersonal = (checked) => {
+    setHidePersonalBooks(checked);
+    localStorage.setItem('admin_hide_personal_books', JSON.stringify(checked));
+  };
+
   const filteredBooks = books.filter(book => {  
+    const isPersonal = book.isPrivate || !!book.ownerId;
+    if (hidePersonalBooks && isPersonal) return false;
+
     const matchesSearch = book.name.toLowerCase().includes(searchTerm.toLowerCase());  
     if (!matchesSearch) return false;  
 
@@ -356,7 +420,7 @@ export default function AdminBooksPage() {
     <>
         <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
         <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-            <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="flex flex-col items-start gap-3 w-full md:w-auto">
                 <h2 className="text-2xl font-bold text-on-surface flex items-center gap-2 whitespace-nowrap">
                     <span className="material-symbols-outlined text-primary">menu_book</span>
                     ניהול ספרים
@@ -397,6 +461,17 @@ export default function AdminBooksPage() {
                 </button>
 
                 <button
+                    onClick={() => setShowCategoriesDialog(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-700 text-white rounded-xl hover:bg-indigo-800 transition-all shadow-md w-full md:w-auto justify-center"
+                >
+                    <span className="material-symbols-outlined shrink-0">palette</span>
+                    <div className="flex flex-col items-start leading-tight">
+                        <span className="font-bold">ניהול קטגוריות</span>
+                        <span className="text-[10px] opacity-80">צבעים ושמות</span>
+                    </div>
+                </button>
+
+                <button
                     onClick={() => setShowMergeDialog(true)}
                     className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all shadow-md w-full md:w-auto justify-center"
                 >
@@ -419,25 +494,37 @@ export default function AdminBooksPage() {
             </div>
         </div>
 
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {[
-            { id: 'all', label: 'כל הספרים' },
-            { id: 'in_progress', label: 'בטיפול' },
-            { id: 'hidden', label: 'מוסתרים' },
-            { id: 'completed', label: 'הושלמו' },
-        ].map(tab => (
-            <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                    activeTab === tab.id 
-                    ? 'bg-primary text-on-primary' 
-                    : 'bg-white/50 text-gray-600 hover:bg-white/80'
-                }`}
-            >
-                {tab.label}
-            </button>
-        ))}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+        <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 w-full md:w-auto">
+            {[
+                { id: 'all', label: 'כל הספרים' },
+                { id: 'in_progress', label: 'בטיפול' },
+                { id: 'hidden', label: 'מוסתרים' },
+                { id: 'completed', label: 'הושלמו' },
+            ].map(tab => (
+                <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                        activeTab === tab.id 
+                        ? 'bg-primary text-on-primary' 
+                        : 'bg-white/50 text-gray-600 hover:bg-white/80'
+                    }`}
+                >
+                    {tab.label}
+                </button>
+            ))}
+        </div>
+
+        <label className="flex items-center gap-2 cursor-pointer select-none whitespace-nowrap bg-white/40 px-3 py-2 rounded-lg border border-transparent hover:border-gray-200 transition-all">
+            <input 
+                type="checkbox" 
+                checked={hidePersonalBooks}
+                onChange={(e) => toggleHidePersonal(e.target.checked)}
+                className="w-4 h-4 text-primary rounded focus:ring-primary border-gray-300"
+            />
+            <span className="text-sm font-medium text-gray-700">אל תציג ספרים אישיים</span>
+        </label>
       </div>
 
         {books.length === 0 ? (
@@ -454,6 +541,10 @@ export default function AdminBooksPage() {
             {filteredBooks.map(book => {
                 const isHidden = book.isHidden === true;
                 const progress = book.totalPages > 0 ? Math.round((book.completedPages / book.totalPages) * 100) : 0;
+                
+                const isPersonal = book.isPrivate || !!book.ownerId;
+                const ownerName = book.ownerName || 'משתמש פרטי';
+
                 return (
                     <div key={book.id || book.path} className={`group glass p-0 rounded-xl border transition-all hover:shadow-lg overflow-hidden flex flex-col ${isHidden ? 'border-amber-200 bg-amber-50/30' : 'border-white/50'}`}>
                     <div className="bg-gradient-to-b from-primary/5 to-transparent p-4 flex items-start justify-between relative">
@@ -474,10 +565,19 @@ export default function AdminBooksPage() {
                             <div>
                                 <h3 className="font-bold text-on-surface line-clamp-1 text-lg" title={book.name}>{book.name}</h3>
                                 <div className="flex flex-wrap gap-2 items-center">
-                                    <span className="text-xs text-gray-500 bg-white/50 px-2 py-0.5 rounded-full border border-gray-100">
+                                    <span 
+                                        className="text-xs text-black px-2 py-0.5 rounded-full font-medium shadow-sm"
+                                        style={{ backgroundColor: getCategoryColor(book.category || 'כללי') }}
+                                    >
                                         {book.category || 'כללי'}
                                     </span>
-                                    {isHidden && (
+                                    
+                                    {isPersonal ? (
+                                         <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[12px]">person</span>
+                                            {ownerName}
+                                        </span>
+                                    ) : isHidden && (
                                         <span className="bg-amber-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[12px]">visibility_off</span>
                                             מוסתר
@@ -516,65 +616,86 @@ export default function AdminBooksPage() {
                         <div className="mt-auto space-y-2">
                             {progress === 100 ? (
                                 <button
-                                     onClick={() => handleDownloadFullText(book)}
-                                     className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-bold transition-all mb-1 shadow-sm"
-                                     title="הורד את כל דפי הספר כקובץ טקסט אחד"
+                                    onClick={() => handleDownloadFullText(book)}
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-bold transition-all mb-1 shadow-sm"
+                                    title="הורד את כל דפי הספר כקובץ טקסט אחד"
                                 >
-                                     <span className="material-symbols-outlined text-sm">download</span>
-                                     הורד טקסט מאוחד
+                                    <span className="material-symbols-outlined text-sm">download</span>
+                                    הורד טקסט מאוחד
                                 </button>
                             ) : (
                                 <button
-                                     onClick={() => handleDownloadFullText(book)}
-                                     className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100/50 rounded text-xs transition-all mb-1"
-                                     title="הורד את הטקסט הקיים (חלקי)"
-                                 >
-                                     <span className="material-symbols-outlined text-[16px]">download</span>
-                                     <span>הורד טקסט חלקי</span>
+                                    onClick={() => handleDownloadFullText(book)}
+                                    className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100/50 rounded text-xs transition-all mb-1"
+                                    title="הורד את הטקסט הקיים (חלקי)"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">download</span>
+                                    <span>הורד טקסט חלקי</span>
                                 </button>
-                             )}
+                            )}
 
-                            <div className="grid grid-cols-2 gap-2">
-                                <Link
-                                    href={`/library/book/${encodeURIComponent(book.path)}`}
-                                    className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
-                                >
-                                    <span className="material-symbols-outlined text-sm">visibility</span>
-                                    צפה
-                                </Link>
-                                <button
-                                    onClick={() => setEditingBookInfo(book)}
-                                    className="flex items-center justify-center gap-1 px-3 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
-                                >
-                                    <span className="material-symbols-outlined text-sm">edit_note</span>
-                                    פרטים
-                                </button>
-                            </div>
+                            {isPersonal ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Link
+                                        href={`/library/book/${encodeURIComponent(book.path)}`}
+                                        className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">visibility</span>
+                                        צפה
+                                    </Link>
+                                    <button
+                                        onClick={() => handleDeleteBook(book.id)}
+                                        className="flex items-center justify-center gap-1 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm transition-colors font-medium"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                        <span>מחק</span>
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Link
+                                            href={`/library/book/${encodeURIComponent(book.path)}`}
+                                            className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">visibility</span>
+                                            צפה
+                                        </Link>
+                                        <button
+                                            onClick={() => setEditingBookInfo(book)}
+                                            className="flex items-center justify-center gap-1 px-3 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">edit_note</span>
+                                            פרטים
+                                        </button>
+                                    </div>
 
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => handleVisibilityClick(book)}
-                                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                                        isHidden 
-                                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' 
-                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
-                                    }`}
-                                    title={isHidden ? "הפוך לספר גלוי לכולם" : "הסתר ספר מהציבור"}
-                                >
-                                    <span className="material-symbols-outlined text-sm">
-                                        {isHidden ? 'visibility_off' : 'visibility'}
-                                    </span>
-                                    <span>{isHidden ? 'מוסתר' : 'גלוי'}</span>
-                                </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => handleVisibilityClick(book)}
+                                            className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                                                isHidden 
+                                                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' 
+                                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+                                            }`}
+                                            title={isHidden ? "הפוך לספר גלוי לכולם" : "הסתר ספר מהציבור"}
+                                        >
+                                            <span className="material-symbols-outlined text-sm">
+                                                {isHidden ? 'visibility_off' : 'visibility'}
+                                            </span>
+                                            <span>{isHidden ? 'מוסתר' : 'גלוי'}</span>
+                                        </button>
 
-                                <button
-                                    onClick={() => handleDeleteBook(book.id)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm transition-colors font-medium"
-                                >
-                                    <span className="material-symbols-outlined text-sm">delete</span>
-                                    <span>מחק</span>
-                                </button>
-                            </div>
+                                        <button
+                                            onClick={() => handleDeleteBook(book.id)}
+                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm transition-colors font-medium"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">delete</span>
+                                            <span>מחק</span>
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                     </div>
@@ -587,6 +708,7 @@ export default function AdminBooksPage() {
             isOpen={showAddBook}
             onClose={() => setShowAddBook(false)}
             onBookAdded={loadBooks}
+            categories={categoriesList}
         />
 
         {editingBookInfo && (
@@ -612,14 +734,43 @@ export default function AdminBooksPage() {
                     </div>
                     
                     <div className="p-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">שם הספר החדש</label>
-                        <input 
-                            type="text" 
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-base"
-                            autoFocus
-                        />
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">שם הספר החדש</label>
+                            <input 
+                                type="text" 
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-base"
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="mb-6">
+                            <div className="flex justify-between mb-2">
+                                <label className="block text-sm font-medium text-gray-700">קטגוריה</label>
+                                {(renamingBook.isPrivate || renamingBook.ownerId) && (
+                                    <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full border border-red-100 flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[10px]">lock</span>
+                                        ספר אישי - לא ניתן לשינוי
+                                    </span>
+                                )}
+                            </div>
+                            
+                            <select
+                                value={newCategory}
+                                onChange={(e) => setNewCategory(e.target.value)}
+                                disabled={renamingBook.isPrivate || renamingBook.ownerId}
+                                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary outline-none bg-white disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                            >
+                                {categoriesList && categoriesList.length > 0 ? (
+                                    categoriesList.map((cat, idx) => (
+                                        <option key={idx} value={cat.name}>{cat.name}</option>
+                                    ))
+                                ) : (
+                                    <option value="כללי">כללי</option>
+                                )}
+                            </select>
+                        </div>
                         
                         <div className="flex justify-end gap-3 mt-8">
                             <button 
@@ -631,7 +782,10 @@ export default function AdminBooksPage() {
                             <button 
                                 onClick={handleRenameSubmit}
                                 className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={!newName.trim() || newName === renamingBook.name}
+                                disabled={
+                                    !newName.trim() || 
+                                    (newName === renamingBook.name && newCategory === (renamingBook.category || 'כללי'))
+                                }
                             >
                                 שמור שינויים
                             </button>
@@ -903,6 +1057,13 @@ export default function AdminBooksPage() {
             initialData={globalInstructionsData}
             onSave={handleSaveGlobalInstructions}
             isSaving={isSavingInstructions}
+        />
+
+        <EditCategoriesDialog
+            isOpen={showCategoriesDialog}
+            onClose={() => setShowCategoriesDialog(false)}
+            existingCategories={categoriesList}
+            onSave={handleSaveCategories}
         />
     </>
   )

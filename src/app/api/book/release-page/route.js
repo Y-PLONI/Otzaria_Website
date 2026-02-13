@@ -13,26 +13,39 @@ export async function POST(request) {
     const { pageId } = await request.json();
     await connectDB();
 
-    // קודם נבדוק מה היה הסטטוס הקודם
     const pageBefore = await Page.findOne({ _id: pageId, claimedBy: session.user._id });
     
-    if (!pageBefore) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!pageBefore) {
+        return NextResponse.json({ error: 'העמוד לא נמצא או שאינו משויך אליך' }, { status: 404 });
+    }
+
+    const parentBook = await Book.findById(pageBefore.book);
+    
+    if (parentBook && (parentBook.isPrivate || parentBook.ownerId)) {
+        return NextResponse.json({ 
+            success: false, 
+            error: 'לא ניתן לשחרר עמודים בספר אישי' 
+        }, { status: 400 });
+    }
 
     const wasCompleted = pageBefore.status === 'completed';
 
-    // איפוס הדף
     await Page.findByIdAndUpdate(pageId, {
         status: 'available',
         $unset: { claimedBy: "", claimedAt: "", completedAt: "" }
     });
 
-    // אם הדף היה גמור, צריך להקטין את המונה בספר
     if (wasCompleted) {
         await Book.findByIdAndUpdate(pageBefore.book, { $inc: { completedPages: -1 } });
     }
 
-    return NextResponse.json({ success: true, message: 'הדף שוחרר' });
+    return NextResponse.json({ 
+        success: true,
+        message: 'העמוד שוחרר בהצלחה'
+    });
+
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Release Page Error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
