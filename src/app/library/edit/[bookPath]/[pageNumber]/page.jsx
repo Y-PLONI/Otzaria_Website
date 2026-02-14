@@ -791,16 +791,32 @@ export default function EditPage() {
     }
 
     const processPattern = (str) => str.replaceAll('^13', '\n');
+    const patternStr = processPattern(textToFind);
     const replacement = processPattern(textToReplace || '');
 
+    let finalReplacement = replacement;
+
+    if (isRegexMode) {
+        try {
+            const selectedText = activeEl.value.substring(activeEl.selectionStart, activeEl.selectionEnd);
+            
+            const regex = new RegExp(patternStr);
+            
+            finalReplacement = selectedText.replace(regex, replacement);
+        } catch (e) {
+            console.error("Regex replacement error:", e);
+            return showAlert('שגיאה', 'ביטוי רגולרי לא תקין בהחלפה');
+        }
+    }
+
     activeEl.focus();
-    const success = document.execCommand('insertText', false, replacement);
+    const success = document.execCommand('insertText', false, finalReplacement);
     
     if (!success) {
         const text = activeEl.value;
         const before = text.substring(0, activeEl.selectionStart);
         const after = text.substring(activeEl.selectionEnd);
-        const newText = before + replacement + after;
+        const newText = before + finalReplacement + after;
         
         const col = activeEl.getAttribute('data-column');
         if (col === 'right') handleColumnChange('right', newText);
