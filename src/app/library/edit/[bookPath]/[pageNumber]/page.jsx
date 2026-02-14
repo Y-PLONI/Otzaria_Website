@@ -782,6 +782,8 @@ export default function EditPage() {
   };
 
   const handleReplaceCurrent = (textToReplace, textToFind, isRegexMode) => {
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
+
     const activeEl = getActiveTextarea();
     if (!activeEl) return;
 
@@ -799,13 +801,12 @@ export default function EditPage() {
     if (isRegexMode) {
         try {
             const selectedText = activeEl.value.substring(activeEl.selectionStart, activeEl.selectionEnd);
-            
             const regex = new RegExp(patternStr);
             
             finalReplacement = selectedText.replace(regex, replacement);
         } catch (e) {
             console.error("Regex replacement error:", e);
-            return showAlert('שגיאה', 'ביטוי רגולרי לא תקין בהחלפה');
+            return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
         }
     }
 
