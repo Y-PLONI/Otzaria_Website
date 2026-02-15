@@ -31,7 +31,8 @@ const DEFAULT_SHORTCUTS = {
   'togglePanel': 'Alt+KeyP',
   'fullScreen': 'F11',
   'shortcuts': 'Alt+KeyK',
-  'selectionMode': 'Alt+KeyV' 
+  'selectionMode': 'Alt+KeyV',
+  'finish': 'Ctrl+Enter'
 };
 
 export default function EditPage() {
@@ -1057,6 +1058,7 @@ export default function EditPage() {
     'h3': { label: 'כותרת H3', action: () => insertTag('h3') },
     'bigger': { label: 'הגדל גופן טקסט', action: () => insertTag('big') },
     'smaller': { label: 'הקטן גופן טקסט', action: () => insertTag('small') },
+    'finish': { label: 'סיים והעלה (פתח חלונית)', action: handleFinishClick },
     
     'ocr': { label: 'בצע OCR על בחירה', action: handleOCR },
     'zoomIn': { label: 'זום אין תמונה', action: () => setImageZoom(z => Math.min(300, z + 10)) },
@@ -1333,6 +1335,23 @@ export default function EditPage() {
 }
 
 function UploadDialog({ pageNumber, onConfirm, onCancel }) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onConfirm();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onConfirm, onCancel]);
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
