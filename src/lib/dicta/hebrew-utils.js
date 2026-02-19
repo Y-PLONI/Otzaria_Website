@@ -5,67 +5,17 @@ export function toHebrew(num) {
   if (num <= 0) return "";
   let remaining = num;
   let result = "";
+  const values = [400, 300, 200, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+  const letters = ["ת", "ש", "ר", "ק", "צ", "פ", "ע", "ס", "נ", "מ", "ל", "כ", "י", "ט", "ח", "ז", "ו", "ה", "ד", "ג", "ב", "א"];
 
-  const hundreds = [
-    [400, "ת"],
-    [300, "ש"],
-    [200, "ר"],
-    [100, "ק"],
-  ];
-
-  const tens = [
-    [90, "צ"],
-    [80, "פ"],
-    [70, "ע"],
-    [60, "ס"],
-    [50, "נ"],
-    [40, "מ"],
-    [30, "ל"],
-    [20, "כ"],
-    [10, "י"],
-  ];
-
-  const ones = [
-    [9, "ט"],
-    [8, "ח"],
-    [7, "ז"],
-    [6, "ו"],
-    [5, "ה"],
-    [4, "ד"],
-    [3, "ג"],
-    [2, "ב"],
-    [1, "א"],
-  ];
-
-  for (const [value, letter] of hundreds) {
-    while (remaining >= value) {
-      result += letter;
-      remaining -= value;
+  for (let i = 0; i < values.length; i++) {
+    while (remaining >= values[i]) {
+      if (remaining === 15) { result += "טו"; remaining = 0; break; }
+      if (remaining === 16) { result += "טז"; remaining = 0; break; }
+      result += letters[i];
+      remaining -= values[i];
     }
   }
-
-  if (remaining === 15) {
-    result += "טו";
-    remaining = 0;
-  } else if (remaining === 16) {
-    result += "טז";
-    remaining = 0;
-  }
-
-  for (const [value, letter] of tens) {
-    while (remaining >= value) {
-      result += letter;
-      remaining -= value;
-    }
-  }
-
-  for (const [value, letter] of ones) {
-    while (remaining >= value) {
-      result += letter;
-      remaining -= value;
-    }
-  }
-
   return result;
 }
 
@@ -81,11 +31,10 @@ export function toNumber(text) {
   for (const ch of clean) {
     sum += LETTER_VALUES[ch] || 0;
   }
-
   return sum;
 }
 
-function stripTags(text, tags) {
+export function stripTags(text, tags) {
   let result = text;
   tags.forEach((tag) => {
     result = result.split(tag).join("");
@@ -93,7 +42,7 @@ function stripTags(text, tags) {
   return result;
 }
 
-function isGematria(text, end) {
+export function isGematria(text, end) {
   const remove = ["<b>", "</b>", "<big>", "</big>", ":", '"', ",", ";", "[", "]", "(", ")", "'", ".", "״", "‚"];
   const aa = ["ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק", "יה", "יו", "קיה", "קיו", "ריה", "ריו", "שיה", "שיו", "תיה", "תיו", "תקיה", "תקיו", "תריה", "תריו", "תשיה", "תשיו", "תתיה", "תתיו", "תתקיה", "תתקיו"];
   const bb = ["ם", "ן", "ץ", "ף", "ך"];

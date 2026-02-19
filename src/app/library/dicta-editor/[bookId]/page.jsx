@@ -145,7 +145,7 @@ export default function DictaEditorPage() {
           <Button
             icon="arrow_forward"
             variant="ghost"
-            onClick={() => router.push('/library/admin/dicta-books')}
+            onClick={() => router.push('/library/dicta-books')}
             label="חזרה"
           />
           <h1 className="text-2xl font-bold text-gray-800">{book.title}</h1>

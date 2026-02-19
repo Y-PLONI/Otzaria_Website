@@ -19,71 +19,85 @@ import {
 
 import { dictaSync } from "@/lib/dicta/github-sync";
 
-// מפת הכלים - קישור בין שם הפעולה לפונקציה המבצעת
 const toolHandlers = {
   "add-page-number": async (params) => {
-    return addPageNumberToHeadingDB(params.book_id, params.replace_with);
+    return addPageNumberToHeadingDB(
+      params.book_id || params.bookId, 
+      params.replace_with || params.replaceWith
+    );
   },
 
   "change-heading-level": async (params) => {
-    return changeHeadingLevelDB(params.book_id, params.current_level, params.new_level);
+    return changeHeadingLevelDB(
+      params.book_id || params.bookId, 
+      params.current_level || params.currentLevel, 
+      params.new_level || params.newLevel
+    );
   },
 
   "create-headers": async (params) => {
     return createHeadersDB(
-      params.book_id, 
-      params.find_word, 
-      Number(params.end), 
-      Number(params.level_num)
+      params.book_id || params.bookId, 
+      params.find_word || params.findWord, 
+      Number(params.end || params.endNumber || params.maxNum), 
+      Number(params.level_num || params.level)
     );
   },
 
   "create-single-letter-headers": async (params) => {
     return createSingleLetterHeadersDB(
-      params.book_id,
-      params.end_suffix,
-      Number(params.end),
-      Number(params.level_num),
+      params.book_id || params.bookId,
+      params.end_suffix || params.endSuffix,
+      Number(params.end || params.maxNum),
+      Number(params.level_num || params.level),
       Array.isArray(params.ignore) ? params.ignore : [],
-      params.start,
+      params.start || params.startChar,
       Array.isArray(params.remove) ? params.remove : [],
-      Boolean(params.bold_only)
+      params.bold_only !== undefined ? params.bold_only : params.boldOnly
     );
   },
 
   "create-page-b-headers": async (params) => {
-    return createPageBHeadersDB(params.book_id, Number(params.header_level));
+    return createPageBHeadersDB(
+      params.book_id || params.bookId, 
+      Number(params.header_level || params.level)
+    );
   },
 
   "replace-page-b-headers": async (params) => {
-    return replacePageBHeadersDB(params.book_id, params.replace_type);
+    return replacePageBHeadersDB(
+      params.book_id || params.bookId, 
+      params.replace_type || params.replaceType
+    );
   },
 
   "emphasize-and-punctuate": async (params) => {
     return emphasizeAndPunctuateDB(
-      params.book_id, 
-      params.add_ending, 
-      Boolean(params.emphasize_start)
+      params.book_id || params.bookId, 
+      params.add_ending || params.addEnding, 
+      params.emphasize_start !== undefined ? params.emphasize_start : params.emphasizeStart
     );
   },
 
   "text-cleaner": async (params) => {
-    return textCleanerDB(params.book_id, params.options || {});
+    return textCleanerDB(
+      params.book_id || params.bookId, 
+      params.options || {}
+    );
   },
 
   "header-error-checker": async (params) => {
     return headerErrorCheckerDB(
-      params.book_id,
-      params.re_start,
-      params.re_end,
-      Boolean(params.gershayim),
-      Boolean(params.is_shas)
+      params.book_id || params.bookId,
+      params.re_start || params.reStart,
+      params.re_end || params.reEnd,
+      params.gershayim !== undefined ? params.gershayim : params.isGershayim,
+      params.is_shas !== undefined ? params.is_shas : params.isShas
     );
   },
 
   "dicta-sync": async (params) => {
-    // ניתן להעביר נתיב תיקייה מותאם אישית, או להשתמש בברירת המחדל
-    return dictaSync(params.folder_path);
+    return dictaSync(params.folder_path || params.folderPath);
   }
 };
 
@@ -144,9 +158,11 @@ export async function POST(request) {
       return NextResponse.json({ detail: `כלי לא מוכר: ${tool}` }, { status: 400 });
     }
 
-    // 3. בדיקת הרשאות ספציפית לספר (אם נשלח ID)
-    if (params.book_id) {
-      const access = await checkBookAccess(params.book_id, userId, isAdmin);
+    // 3. בדיקת הרשאות ספציפית לספר (תמיכה בשני הפורמטים של ה-ID)
+    const currentBookId = params.book_id || params.bookId;
+    
+    if (currentBookId) {
+      const access = await checkBookAccess(currentBookId, userId, isAdmin);
       if (!access.allowed) {
         return NextResponse.json({ detail: access.error }, { status: 403 });
       }
@@ -160,7 +176,7 @@ export async function POST(request) {
     return NextResponse.json(result);
 
   } catch (err) {
-    console.error(`Error in tool ${request.body?.tool}:`, err);
+    console.error(`Error in tool execution:`, err);
     return NextResponse.json({ detail: err.message || "שגיאת שרת פנימית" }, { status: 500 });
   }
 }
