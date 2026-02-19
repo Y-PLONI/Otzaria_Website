@@ -3,14 +3,14 @@
 /**
  * Reusable form input component with label and error display
  * @param {Object} props
- * @param {string} props.label - Input label
- * @param {string} props.type - Input type (text, password, email, etc.)
- * @param {string} props.value - Input value
- * @param {Function} props.onChange - Change handler
- * @param {string} props.placeholder - Placeholder text
- * @param {string} props.error - Error message
- * @param {boolean} props.required - Mark as required
- * @param {string} props.icon - Material icon to show
+ * @param {string} [props.label] - Input label
+ * @param {string} [props.type] - Input type (text, password, email, etc.)
+ * @param {string} [props.value] - Input value
+ * @param {Function} [props.onChange] - Change handler
+ * @param {string} [props.placeholder] - Placeholder text
+ * @param {string} [props.error] - Error message
+ * @param {boolean} [props.required] - Mark as required
+ * @param {string} [props.icon] - Material icon to show
  */
 export default function FormInput({
   label,
