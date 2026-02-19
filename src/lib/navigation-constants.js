@@ -5,12 +5,14 @@
 export const LIBRARY_NAV_LINKS = [
   { href: '/', label: 'בית', icon: 'home' },
   { href: '/library/books', label: 'ספרייה', icon: 'library_books' },
+  { href: '/library/dicta-books', label: 'ספרי דיקטה', icon: 'edit_document' },
   { href: '/library/users', label: 'משתמשים', icon: 'people' },
   { href: '/library/upload', label: 'הוספת ספר', icon: 'upload' }
 ]
 
 export const MAIN_NAV_LINKS = [
   { href: '/library', label: 'ספריית אוצריא', highlight: true },
+  { href: '/library/dicta-books', label: 'עורך דיקטה', highlight: false },
   { href: '/#download', label: 'הורדה', highlight: false },
   { href: '/docs', label: 'מדריכים', highlight: false },
   { href: '/faq', label: 'שאלות נפוצות', highlight: false },
