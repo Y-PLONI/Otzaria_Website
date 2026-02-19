@@ -31,7 +31,8 @@ const DEFAULT_SHORTCUTS = {
   'togglePanel': 'Alt+KeyP',
   'fullScreen': 'F11',
   'shortcuts': 'Alt+KeyK',
-  'selectionMode': 'Alt+KeyV' 
+  'selectionMode': 'Alt+KeyV',
+  'finish': 'Ctrl+Enter'
 };
 
 export default function EditPage() {
@@ -782,6 +783,8 @@ export default function EditPage() {
   };
 
   const handleReplaceCurrent = (textToReplace, textToFind, isRegexMode) => {
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
+
     const activeEl = getActiveTextarea();
     if (!activeEl) return;
 
@@ -791,16 +794,31 @@ export default function EditPage() {
     }
 
     const processPattern = (str) => str.replaceAll('^13', '\n');
+    const patternStr = processPattern(textToFind);
     const replacement = processPattern(textToReplace || '');
 
+    let finalReplacement = replacement;
+
+    if (isRegexMode) {
+        try {
+            const selectedText = activeEl.value.substring(activeEl.selectionStart, activeEl.selectionEnd);
+            const regex = new RegExp(patternStr);
+            
+            finalReplacement = selectedText.replace(regex, replacement);
+        } catch (e) {
+            console.error("Regex replacement error:", e);
+            return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
+        }
+    }
+
     activeEl.focus();
-    const success = document.execCommand('insertText', false, replacement);
+    const success = document.execCommand('insertText', false, finalReplacement);
     
     if (!success) {
         const text = activeEl.value;
         const before = text.substring(0, activeEl.selectionStart);
         const after = text.substring(activeEl.selectionEnd);
-        const newText = before + replacement + after;
+        const newText = before + finalReplacement + after;
         
         const col = activeEl.getAttribute('data-column');
         if (col === 'right') handleColumnChange('right', newText);
@@ -1040,6 +1058,7 @@ export default function EditPage() {
     'h3': { label: 'כותרת H3', action: () => insertTag('h3') },
     'bigger': { label: 'הגדל גופן טקסט', action: () => insertTag('big') },
     'smaller': { label: 'הקטן גופן טקסט', action: () => insertTag('small') },
+    'finish': { label: 'סיים והעלה (פתח חלונית)', action: handleFinishClick },
     
     'ocr': { label: 'בצע OCR על בחירה', action: handleOCR },
     'zoomIn': { label: 'זום אין תמונה', action: () => setImageZoom(z => Math.min(300, z + 10)) },
@@ -1316,6 +1335,23 @@ export default function EditPage() {
 }
 
 function UploadDialog({ pageNumber, onConfirm, onCancel }) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onConfirm();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onConfirm, onCancel]);
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
