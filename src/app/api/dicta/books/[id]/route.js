@@ -61,6 +61,7 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: 'Book not found' }, { status: 404 });
     }
 
+    // פעולת תפיסה (Claim) - תמיד מותר אם הספר פנוי
     if (action === 'claim') {
       if (book.status !== 'available') {
         return NextResponse.json({ error: 'Book already claimed' }, { status: 400 });
@@ -72,32 +73,31 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ success: true, message: 'Book claimed' });
     }
 
-    if (action === 'release') {
-      if (!isAdmin && book.claimedBy?.toString() !== userId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-      book.status = 'available';
-      book.claimedBy = null;
-      book.claimedAt = null;
-      await book.save();
-      return NextResponse.json({ success: true, message: 'Book released' });
-    }
+    // בדיקת הרשאה לפעולות עריכה/ניהול
+    const isOwner = book.claimedBy?.toString() === userId;
 
-    if (action === 'complete') {
-      if (!isAdmin && book.claimedBy?.toString() !== userId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-      book.status = 'completed';
-      book.completedAt = new Date();
-      await book.save();
-      return NextResponse.json({ success: true, message: 'Book completed' });
-    }
-
+    // חסימת שמירה אם המשתמש אינו אדמין ואינו התופס
     if (content !== undefined) {
-      if (!isAdmin && book.claimedBy?.toString() !== userId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (!isAdmin && !isOwner) {
+        return NextResponse.json({ error: 'כדי לערוך יש לתפוס את הספר לעריכה' }, { status: 403 });
       }
       book.content = content;
+    }
+
+    // בדיקת הרשאה לשחרור או סיום
+    if (action === 'release' || action === 'complete') {
+      if (!isAdmin && !isOwner) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      
+      if (action === 'release') {
+        book.status = 'available';
+        book.claimedBy = null;
+        book.claimedAt = null;
+      } else if (action === 'complete') {
+        book.status = 'completed';
+        book.completedAt = new Date();
+      }
     }
     
     await book.save();
