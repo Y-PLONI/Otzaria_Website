@@ -3,12 +3,13 @@ import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
 import User from '@/models/User';
+import DictaBook from '@/models/DictaBook';
 
 export async function GET() {
   try {
     await connectDB();
 
-    const [usersCount, booksCount, pagesStats] = await Promise.all([
+    const [usersCount, booksCount, pagesStats, dictaBooksCount] = await Promise.all([
         User.countDocuments(),
         
         Book.countDocuments({ 
@@ -47,7 +48,9 @@ export async function GET() {
                     }
                 }
             }
-        ])
+        ]),
+        
+        DictaBook.countDocuments({ status: 'completed' })
     ]);
 
     const stats = pagesStats[0] || { totalPages: 0, completedPages: 0, inProgressPages: 0 };
@@ -60,7 +63,8 @@ export async function GET() {
             totalPages: stats.totalPages,
             completedPages: stats.completedPages,
             inProgressPages: stats.inProgressPages,
-            completionRate: stats.totalPages > 0 ? (stats.completedPages / stats.totalPages) * 100 : 0
+            completionRate: stats.totalPages > 0 ? (stats.completedPages / stats.totalPages) * 100 : 0,
+            dictaBooks: { completed: dictaBooksCount }
         }
     });
   } catch (error) {

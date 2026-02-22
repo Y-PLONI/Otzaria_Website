@@ -36,12 +36,13 @@ export default function StatsSection() {
     { label: 'משתמשים רשומים', value: stats.users?.total || 0, icon: 'group' },
     { label: 'ספרים הועלו', value: stats.books?.total || 0, icon: 'menu_book' },
     { label: 'עמודים הושלמו', value: stats.totalPages || 0, icon: 'description' },
+    ...(stats.dictaBooks?.completed >= 1 ? [{ label: 'ספרי דיקטה הומרו', value: stats.dictaBooks?.completed || 0, icon: 'auto_stories' }] : []),
   ]
 
   return (
     <section className="py-16 bg-transparent">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className={`grid grid-cols-1 ${items.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-8`}>
           {items.map((item, i) => (
             <motion.div 
               key={i} 
