@@ -67,15 +67,16 @@ export default function DictaBooksPublicPage() {
     )
   }
 
-  // פונקציה חדשה לשחרור הספר
   const handleRelease = (bookId) => {
     showConfirm(
       'שחרור ספר',
       'האם אתה בטוח שברצונך לשחרר את הספר? משתמשים אחרים יוכלו לתפוס אותו לעריכה במקומך.',
       async () => {
         try {
-          const res = await fetch(`/api/dicta/books/${bookId}/release`, {
-            method: 'POST',
+          const res = await fetch(`/api/dicta/books/${bookId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'release' })
           })
           if (res.ok) {
             fetchBooks()
@@ -85,6 +86,56 @@ export default function DictaBooksPublicPage() {
           }
         } catch (error) {
           console.error('Error releasing book:', error)
+          showAlert('שגיאה', 'אירעה שגיאה בתקשורת מול השרת.')
+        }
+      }
+    )
+  }
+
+  const handleComplete = (bookId) => {
+    showConfirm(
+      'סיום עריכה',
+      'האם אתה בטוח שסיימת לערוך את הספר? לאחר האישור הספר יסומן כ"הושלם".',
+      async () => {
+        try {
+          const res = await fetch(`/api/dicta/books/${bookId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'complete' })
+          })
+          if (res.ok) {
+            fetchBooks()
+            showAlert('הצלחה', 'הספר סומן כהושלם בהצלחה!')
+          } else {
+            showAlert('שגיאה', 'אירעה בעיה בסיום עריכת הספר.')
+          }
+        } catch (error) {
+          console.error('Error completing book:', error)
+          showAlert('שגיאה', 'אירעה שגיאה בתקשורת מול השרת.')
+        }
+      }
+    )
+  }
+
+  const handleCancelCompletion = (bookId) => {
+    showConfirm(
+      'ביטול סיום',
+      'האם אתה בטוח שברצונך לבטל את סיום העריכה? הספר יחזור לסטטוס "בטיפול".',
+      async () => {
+        try {
+          const res = await fetch(`/api/dicta/books/${bookId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'uncomplete' })
+          })
+          if (res.ok) {
+            fetchBooks()
+            showAlert('הצלחה', 'סיום העריכה בוטל. הספר חזר להיות בטיפולך.')
+          } else {
+            showAlert('שגיאה', 'אירעה בעיה בביטול סיום העריכה.')
+          }
+        } catch (error) {
+          console.error('Error canceling completion:', error)
           showAlert('שגיאה', 'אירעה שגיאה בתקשורת מול השרת.')
         }
       }
@@ -197,7 +248,6 @@ export default function DictaBooksPublicPage() {
                           {isCompleted ? 'הושלם' : !book.claimedBy ? 'זמין לעריכה' : 'בטיפול'}
                         </div>
                         
-                        {/* אזור האייקונים - הוספנו כאן את לחצן ה-X לשחרור */}
                         <div className="flex items-center gap-2">
                           {isOwner && !isCompleted && (
                             <button
@@ -242,16 +292,26 @@ export default function DictaBooksPublicPage() {
                         </div>
 
                         {isCompleted ? (
-                          <Link 
-                            href={`/library/dicta-editor/${book._id}`}
-                            className="block w-full text-center bg-blue-50 text-blue-700 border border-blue-200 py-3 rounded-xl font-bold hover:bg-blue-100 transition-all shadow-sm"
-                          >
-                            צפה בספר
-                          </Link>
+                          <div className="flex gap-3">
+                            <Link 
+                              href={`/library/dicta-books/edit/${book._id}`}
+                              className="flex-[2] text-center bg-blue-50 text-blue-700 border border-blue-200 py-3 rounded-xl font-bold hover:bg-blue-100 transition-all shadow-sm"
+                            >
+                              צפה בספר
+                            </Link>
+                            {canEdit && (
+                              <button 
+                                onClick={() => handleCancelCompletion(book._id)}
+                                className="flex-1 text-center bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
+                              >
+                                בטל סיום
+                              </button>
+                            )}
+                          </div>
                         ) : !book.claimedBy ? (
                           <div className="flex gap-3">
                             <Link 
-                              href={`/library/dicta-editor/${book._id}`}
+                              href={`/library/dicta-books/edit/${book._id}`}
                               className="flex-1 text-center bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
                             >
                               הצצה
@@ -264,12 +324,20 @@ export default function DictaBooksPublicPage() {
                             </button>
                           </div>
                         ) : canEdit ? (
-                          <Link 
-                            href={`/library/dicta-editor/${book._id}`}
-                            className="block w-full text-center bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md"
-                          >
-                            פתח עורך טקסט
-                          </Link>
+                          <div className="flex gap-3">
+                            <Link 
+                              href={`/library/dicta-books/edit/${book._id}`}
+                              className="flex-[2] text-center bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md"
+                            >
+                              פתח עורך טקסט
+                            </Link>
+                            <button 
+                              onClick={() => handleComplete(book._id)}
+                              className="flex-1 text-center bg-emerald-50 text-emerald-700 border border-emerald-200 py-3 rounded-xl font-bold hover:bg-emerald-100 transition-all shadow-sm"
+                            >
+                              סיום
+                            </button>
+                          </div>
                         ) : (
                           <button 
                             disabled

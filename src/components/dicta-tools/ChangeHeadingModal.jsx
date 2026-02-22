@@ -74,16 +74,26 @@ export default function ChangeHeadingModal({ isOpen, onClose, bookId, onSuccess 
             label="רמה נוכחית"
             type="number"
             value={currentLevel}
-            onChange={(e) => setCurrentLevel(e.target.value)}
-            placeholder="2-6"
+            onChange={(e) => {
+              const val = parseInt(e.target.value) || 2;
+              setCurrentLevel(Math.min(Math.max(val, 1), 6).toString());
+            }}
+            min="1"
+            max="6"
+            placeholder="1-6"
           />
           
           <FormInput
             label="רמה חדשה"
             type="number"
             value={newLevel}
-            onChange={(e) => setNewLevel(e.target.value)}
-            placeholder="2-6"
+            onChange={(e) => {
+              const val = parseInt(e.target.value) || 3;
+              setNewLevel(Math.min(Math.max(val, 1), 6).toString());
+            }}
+            min="1"
+            max="6"
+            placeholder="1-6"
           />
         </div>
 
