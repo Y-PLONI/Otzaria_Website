@@ -124,7 +124,7 @@ export default function DictaTutorialPage() {
                         </div>
                         <div className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg mr-12">
                           <span className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</span>
-                          <span>דף ב' עמוד א'</span>
+                          <span>דף ב עמוד א</span>
                         </div>
                       </div>
                     </div>
@@ -138,11 +138,11 @@ export default function DictaTutorialPage() {
                         </div>
                         <div className="flex items-center gap-3 p-3 bg-blue-100 rounded-lg mr-6">
                           <span className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</span>
-                          <span>חלק א'</span>
+                          <span>חלק א</span>
                         </div>
                         <div className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg mr-12">
                           <span className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</span>
-                          <span>סימן א'</span>
+                          <span>סימן א</span>
                         </div>
                       </div>
                     </div>
@@ -183,7 +183,7 @@ export default function DictaTutorialPage() {
                     <div className="p-6 bg-surface-variant rounded-xl">
                       <h4 className="text-xl font-bold text-primary-dark mb-3">כותרת רמה 3</h4>
                       <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
-                        <code>&lt;h3&gt;סימן א'&lt;/h3&gt;</code>
+                        <code>&lt;h3&gt;סימן א&lt;/h3&gt;</code>
                       </pre>
                     </div>
                   </div>
@@ -220,15 +220,15 @@ export default function DictaTutorialPage() {
                       <p className="mb-3">השתמשו בעורך טקסט כמו Notepad++ או VS Code:</p>
                       <ul className="list-disc mr-6 space-y-2">
                         <li>פתחו את קובץ הטקסט</li>
-                        <li>חפשו את הכותרות (בדרך כלל הן בולטות בטקסט)</li>
+                        <li>חפשו את הכותרות</li>
                         <li>הוסיפו תגיות HTML מתאימות</li>
                         <li>שמרו את הקובץ</li>
                       </ul>
                     </div>
 
                     <div className="p-6 bg-surface-variant rounded-xl">
-                      <h4 className="text-xl font-bold text-primary mb-3">2. שימוש ב-Find & Replace</h4>
-                      <p className="mb-3">אם יש דפוס קבוע בכותרות, תוכלו להשתמש ב-Find & Replace:</p>
+                      <h4 className="text-xl font-bold text-primary mb-3">2. שימוש בחיפוש והחלפה</h4>
+                      <p className="mb-3">אם יש דפוס קבוע בכותרות, תוכלו להשתמש בחיפוש והחלפה:</p>
                       <ul className="list-disc mr-6 space-y-2">
                         <li>חפשו דפוס חוזר (למשל "פרק")</li>
                         <li>החליפו אותו ב-"{'<'}h2{'>'}פרק" ובסוף השורה הוסיפו "{'<'}/h2{'>'}"</li>
@@ -269,17 +269,14 @@ export default function DictaTutorialPage() {
                       <h4 className="text-xl font-bold text-red-600 mb-3">לפני העריכה:</h4>
                       <div className="p-4 bg-red-50 border-2 border-red-200 rounded-lg">
                         <pre className="text-sm whitespace-pre-wrap">
-שו"ת הרשב"א
-
-חלק ראשון
-
-סימן א
-שאלה: מה דין כהן שנטמא...
-תשובה: הנה התשובה...
-
-סימן ב
-שאלה: מה דין לוי שעבר...
-תשובה: כך נראה לי...
+                            <div>שו"ת הרשב"א</div>
+                            <div>חלק ראשון</div>
+                            <div>סימן א</div>
+                            <div>שאלה: מה דין כהן שנטמא...</div>
+                            <div>תשובה: הנה התשובה...</div>
+                            <div>סימן ב</div>
+                            <div>שאלה: מה דין לוי שעבר...</div>
+                            <div>תשובה: כך נראה לי...</div>
                         </pre>
                       </div>
                     </div>
@@ -288,17 +285,14 @@ export default function DictaTutorialPage() {
                       <h4 className="text-xl font-bold text-green-600 mb-3">אחרי העריכה:</h4>
                       <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg">
                         <pre className="text-sm whitespace-pre-wrap">
-&lt;h1&gt;שו"ת הרשב"א&lt;/h1&gt;
-
-&lt;h2&gt;חלק ראשון&lt;/h2&gt;
-
-&lt;h3&gt;סימן א&lt;/h3&gt;
-שאלה: מה דין כהן שנטמא...
-תשובה: הנה התשובה...
-
-&lt;h3&gt;סימן ב&lt;/h3&gt;
-שאלה: מה דין לוי שעבר...
-תשובה: כך נראה לי...
+                            <div>&lt;h1&gt;שו"ת הרשב"א&lt;/h1&gt;</div>
+                            <div>&lt;h2&gt;חלק ראשון&lt;/h2&gt;</div>
+                            <div>&lt;h3&gt;סימן א&lt;/h3&gt;</div>
+                            <div>שאלה: מה דין כהן שנטמא...</div>
+                            <div>תשובה: הנה התשובה...</div>
+                            <div>&lt;h3&gt;סימן ב&lt;/h3&gt;</div>
+                            <div>שאלה: מה דין לוי שעבר...</div>
+                            <div>תשובה: כך נראה לי...</div>
                         </pre>
                       </div>
                     </div>

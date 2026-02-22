@@ -279,7 +279,7 @@ export default function AdminDictaBooksPage() {
                         </button>
                       )}
                       <a
-                        href={`/library/dicta-editor/${book._id}`}
+                        href={`/library/dicta-books/edit/${book._id}`}
                         target="_blank"
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="פתח בעורך"

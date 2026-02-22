@@ -4,13 +4,26 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import Header from '@/components/Header'
 import Link from 'next/link'
+import { useDialog } from '@/components/DialogContext'
 
 export default function DictaBooksPublicPage() {
   const { data: session } = useSession()
+  const { showAlert, showConfirm } = useDialog()
+  
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+  
   const isAdmin = session?.user?.role === 'admin'
+  const currentUserId = session?.user?.id
+
+  const filters = [
+    { id: 'all', label: 'הכל' },
+    { id: 'available', label: 'זמין' },
+    { id: 'in-progress', label: 'בטיפול' },
+    { id: 'completed', label: 'הושלם' }
+  ]
 
   useEffect(() => {
     fetchBooks()
@@ -31,9 +44,118 @@ export default function DictaBooksPublicPage() {
     }
   }
 
-  const filteredBooks = books.filter(book => 
-    book.title?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const handleClaim = (bookId) => {
+    showConfirm(
+      'תפיסת ספר',
+      'האם אתה בטוח שברצונך לתפוס את הספר לעריכה?',
+      async () => {
+        try {
+          const res = await fetch(`/api/dicta/books/${bookId}/claim`, {
+            method: 'POST',
+          })
+          if (res.ok) {
+            fetchBooks()
+            showAlert('הצלחה', 'הספר נתפס בהצלחה וכעת תוכל להתחיל לערוך אותו!')
+          } else {
+            showAlert('שגיאה', 'אירעה בעיה בתפיסת הספר. ייתכן שהוא נתפס על ידי משתמש אחר.')
+          }
+        } catch (error) {
+          console.error('Error claiming book:', error)
+          showAlert('שגיאה', 'אירעה שגיאה בתקשורת מול השרת.')
+        }
+      }
+    )
+  }
+
+  const handleRelease = (bookId) => {
+    showConfirm(
+      'שחרור ספר',
+      'האם אתה בטוח שברצונך לשחרר את הספר? משתמשים אחרים יוכלו לתפוס אותו לעריכה במקומך.',
+      async () => {
+        try {
+          const res = await fetch(`/api/dicta/books/${bookId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'release' })
+          })
+          if (res.ok) {
+            fetchBooks()
+            showAlert('בוצע', 'הספר שוחרר בהצלחה והוחזר למאגר הפנויים.')
+          } else {
+            showAlert('שגיאה', 'אירעה בעיה בשחרור הספר.')
+          }
+        } catch (error) {
+          console.error('Error releasing book:', error)
+          showAlert('שגיאה', 'אירעה שגיאה בתקשורת מול השרת.')
+        }
+      }
+    )
+  }
+
+  const handleComplete = (bookId) => {
+    showConfirm(
+      'סיום עריכה',
+      'האם אתה בטוח שסיימת לערוך את הספר? לאחר האישור הספר יסומן כ"הושלם".',
+      async () => {
+        try {
+          const res = await fetch(`/api/dicta/books/${bookId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'complete' })
+          })
+          if (res.ok) {
+            fetchBooks()
+            showAlert('הצלחה', 'הספר סומן כהושלם בהצלחה!')
+          } else {
+            showAlert('שגיאה', 'אירעה בעיה בסיום עריכת הספר.')
+          }
+        } catch (error) {
+          console.error('Error completing book:', error)
+          showAlert('שגיאה', 'אירעה שגיאה בתקשורת מול השרת.')
+        }
+      }
+    )
+  }
+
+  const handleCancelCompletion = (bookId) => {
+    showConfirm(
+      'ביטול סיום',
+      'האם אתה בטוח שברצונך לבטל את סיום העריכה? הספר יחזור לסטטוס "בטיפול".',
+      async () => {
+        try {
+          const res = await fetch(`/api/dicta/books/${bookId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'uncomplete' })
+          })
+          if (res.ok) {
+            fetchBooks()
+            showAlert('הצלחה', 'סיום העריכה בוטל. הספר חזר להיות בטיפולך.')
+          } else {
+            showAlert('שגיאה', 'אירעה בעיה בביטול סיום העריכה.')
+          }
+        } catch (error) {
+          console.error('Error canceling completion:', error)
+          showAlert('שגיאה', 'אירעה שגיאה בתקשורת מול השרת.')
+        }
+      }
+    )
+  }
+
+  const filteredBooks = books.filter(book => {
+    const matchesSearch = book.title?.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    let matchesStatus = true
+    if (filterStatus === 'available') {
+      matchesStatus = !book.claimedBy && book.status !== 'completed'
+    } else if (filterStatus === 'in-progress') {
+      matchesStatus = !!book.claimedBy && book.status !== 'completed'
+    } else if (filterStatus === 'completed') {
+      matchesStatus = book.status === 'completed'
+    }
+
+    return matchesSearch && matchesStatus
+  })
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
@@ -41,39 +163,65 @@ export default function DictaBooksPublicPage() {
       
       <main className="container mx-auto px-4 py-12">
         <div className="max-w-6xl mx-auto">
-          {/* Header Section */}
+          
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
             <div>
               <h1 className="text-4xl font-bold font-frank text-slate-900 mb-2">עריכת ספרי דיקטה</h1>
               <p className="text-slate-600 text-lg">בחר ספר שהועלה מהסריקות של דיקטה והשתתף בסידור הטקסט לצורך הכנסה לאוצריא.</p>
             </div>
             
-            {isAdmin && (
+            <div className="flex flex-wrap items-center gap-3 md:justify-end">
               <Link 
-                href="/library/admin/dicta-books" 
+                href="/docs/dicta" 
                 className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm"
               >
-                <span className="material-symbols-outlined text-primary">security</span>
-                ממשק ניהול וסנכרון
+                <span className="material-symbols-outlined text-primary">help_outline</span>
+                מדריך לטיפול בספרי דיקטה
               </Link>
-            )}
+
+              {isAdmin && (
+                <Link 
+                  href="/library/admin/dicta-books" 
+                  className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-primary">security</span>
+                  ממשק ניהול וסנכרון
+                </Link>
+              )}
+            </div>
           </div>
 
-          {/* Search Bar */}
-          <div className="relative mb-8">
-            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5">
-              search
-            </span>
-            <input 
-              type="text"
-              placeholder="חיפוש ספר לפי שם..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-2xl py-4 pr-12 pl-4 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-lg"
-            />
+          <div className="flex flex-col md:flex-row gap-4 mb-8">
+            <div className="relative flex-1">
+              <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5">
+                search
+              </span>
+              <input 
+                type="text"
+                placeholder="חיפוש ספר לפי שם..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-2xl py-3 pr-12 pl-4 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-lg"
+              />
+            </div>
+
+            <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 self-start md:self-stretch items-center shadow-inner overflow-x-auto">
+              {filters.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setFilterStatus(f.id)}
+                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+                    filterStatus === f.id 
+                      ? 'bg-white text-slate-800 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Books Grid */}
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3, 4, 5, 6].map(i => (
@@ -83,52 +231,128 @@ export default function DictaBooksPublicPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredBooks.length > 0 ? (
-                filteredBooks.map((book) => (
-                  <div key={book._id} className="group bg-white rounded-2xl border border-slate-200 p-6 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5 transition-all flex flex-col h-full">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
-                        book.status === 'available' 
-                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-                          : 'bg-amber-50 text-amber-600 border border-amber-100'
-                      }`}>
-                        {book.status === 'available' ? 'זמין לעריכה' : 'בטיפול'}
+                filteredBooks.map((book) => {
+                  const isOwner = currentUserId && book.claimedBy?._id === currentUserId
+                  const canEdit = isOwner || isAdmin
+                  const isCompleted = book.status === 'completed'
+
+                  return (
+                    <div key={book._id} className={`group bg-white rounded-2xl border border-slate-200 p-6 transition-all flex flex-col h-full ${isCompleted ? 'opacity-80' : 'hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5'}`}>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+                          isCompleted ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                          !book.claimedBy 
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                            : 'bg-amber-50 text-amber-600 border border-amber-100'
+                        }`}>
+                          {isCompleted ? 'הושלם' : !book.claimedBy ? 'זמין לעריכה' : 'בטיפול'}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {isOwner && !isCompleted && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleRelease(book._id);
+                              }}
+                              className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-md transition-colors flex items-center justify-center cursor-pointer"
+                              title="שחרר ספר"
+                            >
+                              <span className="material-symbols-outlined text-xl">close</span>
+                            </button>
+                          )}
+                          <span className={`material-symbols-outlined transition-colors ${isCompleted ? 'text-blue-300' : 'text-slate-300 group-hover:text-primary'}`}>
+                            {isCompleted ? 'task_alt' : 'menu_book'}
+                          </span>
+                        </div>
                       </div>
-                      <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">
-                        menu_book
-                      </span>
-                    </div>
 
-                    <h3 className="text-xl font-bold text-slate-800 mb-2 font-frank leading-tight line-clamp-2">
-                      {book.title}
-                    </h3>
+                      <h3 className="text-xl font-bold text-slate-800 mb-2 font-frank leading-tight line-clamp-2">
+                        {book.title}
+                      </h3>
 
-                    <div className="mt-auto pt-6">
-                      <div className="flex flex-col gap-2 mb-6">
-                        {book.claimedBy ? (
-                          <div className="flex items-center gap-2 text-sm text-slate-500">
-                            <span className="material-symbols-outlined text-base">person</span>
-                            <span>נערך על ידי {book.claimedBy.name || 'משתמש'}</span>
+                      <div className="mt-auto pt-6">
+                        <div className="flex flex-col gap-2 mb-6">
+                          {isCompleted ? (
+                            <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
+                              <span className="material-symbols-outlined text-base">verified</span>
+                              <span>העריכה הושלמה</span>
+                            </div>
+                          ) : book.claimedBy ? (
+                            <div className="flex items-center gap-2 text-sm text-slate-500">
+                              <span className="material-symbols-outlined text-base">person</span>
+                              <span>נערך על ידי {book.claimedBy.name || 'משתמש'}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
+                              <span className="material-symbols-outlined text-base">check_circle</span>
+                              <span>פנוי לתפיסה</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {isCompleted ? (
+                          <div className="flex gap-3">
+                            <Link 
+                              href={`/library/dicta-books/edit/${book._id}`}
+                              className="flex-[2] text-center bg-blue-50 text-blue-700 border border-blue-200 py-3 rounded-xl font-bold hover:bg-blue-100 transition-all shadow-sm"
+                            >
+                              צפה בספר
+                            </Link>
+                            {canEdit && (
+                              <button 
+                                onClick={() => handleCancelCompletion(book._id)}
+                                className="flex-1 text-center bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
+                              >
+                                בטל סיום
+                              </button>
+                            )}
+                          </div>
+                        ) : !book.claimedBy ? (
+                          <div className="flex gap-3">
+                            <Link 
+                              href={`/library/dicta-books/edit/${book._id}`}
+                              className="flex-1 text-center bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
+                            >
+                              הצצה
+                            </Link>
+                            <button 
+                              onClick={() => handleClaim(book._id)}
+                              className="flex-[2] text-center bg-primary text-white py-3 rounded-xl font-bold hover:bg-primary/90 transition-all shadow-md"
+                            >
+                              תפוס לעריכה
+                            </button>
+                          </div>
+                        ) : canEdit ? (
+                          <div className="flex gap-3">
+                            <Link 
+                              href={`/library/dicta-books/edit/${book._id}`}
+                              className="flex-[2] text-center bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md"
+                            >
+                              פתח עורך טקסט
+                            </Link>
+                            <button 
+                              onClick={() => handleComplete(book._id)}
+                              className="flex-1 text-center bg-emerald-50 text-emerald-700 border border-emerald-200 py-3 rounded-xl font-bold hover:bg-emerald-100 transition-all shadow-sm"
+                            >
+                              סיום
+                            </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 text-sm text-slate-400 italic">
-                            <span className="material-symbols-outlined text-base">schedule</span>
-                            <span>טרם התחילו בעריכה</span>
-                          </div>
+                          <button 
+                            disabled
+                            className="block w-full text-center bg-slate-100 text-slate-400 py-3 rounded-xl font-bold cursor-not-allowed border border-slate-200"
+                          >
+                            נעול לעריכה
+                          </button>
                         )}
                       </div>
-
-                      <Link 
-                        href={`/library/dicta-editor/${book._id}`}
-                        className="block w-full text-center bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-primary transition-all shadow-md"
-                      >
-                        פתח עורך טקסט
-                      </Link>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="col-span-full text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
-                  <p className="text-slate-400 text-lg">לא נמצאו ספרים התואמים את החיפוש שלך.</p>
+                  <p className="text-slate-400 text-lg">לא נמצאו ספרים התואמים לסינון הנוכחי.</p>
                 </div>
               )}
             </div>

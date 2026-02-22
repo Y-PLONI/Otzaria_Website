@@ -92,8 +92,13 @@ export default function CreateHeadersModal({ isOpen, onClose, bookId, onSuccess 
             label="רמת כותרת"
             type="number"
             value={level}
-            onChange={(e) => setLevel(parseInt(e.target.value) || 2)}
-            placeholder="2-6"
+            onChange={(e) => {
+              const val = parseInt(e.target.value) || 2;
+              setLevel(Math.min(Math.max(val, 1), 6));
+            }}
+            min="1"
+            max="6"
+            placeholder="1-6"
           />
         </div>
 
