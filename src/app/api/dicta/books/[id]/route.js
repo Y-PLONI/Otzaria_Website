@@ -84,8 +84,8 @@ export async function PUT(req, { params }) {
       book.content = content;
     }
 
-    // בדיקת הרשאה לשחרור או סיום
-    if (action === 'release' || action === 'complete') {
+    // בדיקת הרשאה לשחרור, סיום או ביטול סיום
+    if (action === 'release' || action === 'complete' || action === 'uncomplete') {
       if (!isAdmin && !isOwner) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
@@ -97,6 +97,9 @@ export async function PUT(req, { params }) {
       } else if (action === 'complete') {
         book.status = 'completed';
         book.completedAt = new Date();
+      } else if (action === 'uncomplete') {
+        book.status = 'in-progress';
+        book.completedAt = undefined;
       }
     }
     
