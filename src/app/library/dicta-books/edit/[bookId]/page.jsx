@@ -41,7 +41,7 @@ export default function DictaEditorPage() {
   useEffect(() => {
     if (status === 'loading') return
     if (status === 'unauthenticated') {
-      router.push('/signin')
+      router.push('/library/auth/login')
       return
     }
     
