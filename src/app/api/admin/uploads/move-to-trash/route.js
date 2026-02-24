@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import Upload from '@/models/Upload';
 import { getServerSession } from 'next-auth';
@@ -19,9 +18,7 @@ export async function PUT(request) {
     }
 
     await connectDB();
-    
-    console.log('Moving to trash:', uploadId);
-    
+       
     const result = await Upload.findByIdAndUpdate(
       uploadId,
       { 
@@ -32,7 +29,6 @@ export async function PUT(request) {
     );
     
     if (!result) {
-      console.log('Upload not found:', uploadId);
       return NextResponse.json({ error: 'Upload not found' }, { status: 404 });
     }
     
