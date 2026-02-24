@@ -351,13 +351,37 @@ export default function AdminUploadsPage() {
                                           <>
                                               <button 
                                                 onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    // הורדת כל הקבצים של הספר
-                                                    bookUploads.forEach((upload, index) => {
-                                                        setTimeout(() => {
-                                                            handleDownload(upload.id, upload.originalFileName)
-                                                        }, index * 500)
-                                                    })
+                                                                                                        e.stopPropagation();
+                                                    showConfirm(
+                                                        'הורדת קבצי ספר',
+                                                        `האם להוריד את כל ${bookUploads.length} ההעלאות של "${bookName}" כקובץ מאוחד?`,
+                                                        async () => {
+                                                            const contents = [];
+                                                            for (const upload of bookUploads) {
+                                                                try {
+                                                                    const response = await fetch(`/api/download/${upload.id}`);
+                                                                    if (response.ok) {
+                                                                        const text = await response.text();
+                                                                        contents.push(`--- ${upload.originalFileName} ---\n\n${text}`);
+                                                                    }
+                                                                } catch (error) {
+                                                                    console.error(`Error downloading ${upload.originalFileName}:`, error);
+                                                                }
+                                                            }
+                                                            
+                                                            const combinedContent = contents.join('\n\n\n');
+                                                            const blob = new Blob([combinedContent], { type: 'text/plain;charset=utf-8' });
+                                                            const url = URL.createObjectURL(blob);
+                                                            const a = document.createElement('a');
+                                                            a.href = url;
+                                                            a.download = `${bookName}_uploads.txt`;
+                                                            document.body.appendChild(a);
+                                                            a.click();
+                                                            document.body.removeChild(a);
+                                                            URL.revokeObjectURL(url);
+                                                            showAlert('הצלחה', 'הקובץ המאוחד הורד בהצלחה');
+                                                        }
+                                                    );
                                                 }}
                                                 className="flex items-center gap-1 px-3 py-1.5 text-amber-700 hover:bg-amber-100 rounded-lg text-sm transition-colors"
                                               >
