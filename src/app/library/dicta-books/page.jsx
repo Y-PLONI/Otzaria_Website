@@ -181,7 +181,10 @@ export default function DictaBooksPublicPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
             <div>
               <h1 className="text-4xl font-bold font-frank text-slate-900 mb-2">עריכת ספרי דיקטה</h1>
-              <p className="text-slate-600 text-lg">בחר ספר שהועלה מהסריקות של דיקטה והשתתף בסידור הטקסט לצורך הכנסה לאוצריא.</p>
+              <p className="text-slate-600 text-lg">
+                {loading ? 'טוען...' : `${filteredBooks.length} ספרים מוצגים`}
+                {!loading && filteredBooks.length !== books.length && ` (מתוך ${books.length} סה"כ)`}
+              </p>
             </div>
             
             <div className="flex flex-wrap items-center gap-3 md:justify-end">
