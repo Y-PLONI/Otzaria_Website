@@ -14,6 +14,7 @@ export default function DictaBooksPublicPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [filterCategory, setFilterCategory] = useState('all')
   
   const isAdmin = session?.user?.role === 'admin'
   const currentUserId = session?.user?.id
@@ -142,6 +143,13 @@ export default function DictaBooksPublicPage() {
     )
   }
 
+  // חילוץ רשימת קטגוריות ייחודיות מהספרים
+  const categories = [...new Set(
+    books
+      .map(book => book.title?.split('/')[0]?.trim())
+      .filter(Boolean)
+  )].sort()
+
   const filteredBooks = books.filter(book => {
     const matchesSearch = book.title?.toLowerCase().includes(searchTerm.toLowerCase())
     
@@ -154,7 +162,13 @@ export default function DictaBooksPublicPage() {
       matchesStatus = book.status === 'completed'
     }
 
-    return matchesSearch && matchesStatus
+    let matchesCategory = true
+    if (filterCategory !== 'all') {
+      const bookCategory = book.title?.split('/')[0]?.trim()
+      matchesCategory = bookCategory === filterCategory
+    }
+
+    return matchesSearch && matchesStatus && matchesCategory
   })
 
   return (
@@ -205,6 +219,21 @@ export default function DictaBooksPublicPage() {
               />
             </div>
 
+            <div className="min-w-[200px]">
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="w-full h-full px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-lg cursor-pointer"
+              >
+                <option value="all">כל הקטגוריות</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 self-start md:self-stretch items-center shadow-inner overflow-x-auto">
               {filters.map(f => (
                 <button
@@ -235,6 +264,8 @@ export default function DictaBooksPublicPage() {
                   const isOwner = currentUserId && book.claimedBy?._id === currentUserId
                   const canEdit = isOwner || isAdmin
                   const isCompleted = book.status === 'completed'
+                  const bookCategory = book.title?.split('/')[0]?.trim()
+                  const bookName = book.title?.split('/').slice(1).join('/').trim() || book.title
 
                   return (
                     <div key={book._id} className={`group bg-white rounded-2xl border border-slate-200 p-6 transition-all flex flex-col h-full ${isCompleted ? 'opacity-80' : 'hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5'}`}>
@@ -267,8 +298,16 @@ export default function DictaBooksPublicPage() {
                         </div>
                       </div>
 
+                      {bookCategory && (
+                        <div className="mb-2">
+                          <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">
+                            {bookCategory}
+                          </span>
+                        </div>
+                      )}
+
                       <h3 className="text-xl font-bold text-slate-800 mb-2 font-frank leading-tight line-clamp-2">
-                        {book.title}
+                        {bookName}
                       </h3>
 
                       <div className="mt-auto pt-6">
