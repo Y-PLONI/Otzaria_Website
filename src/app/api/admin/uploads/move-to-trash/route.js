@@ -22,29 +22,19 @@ export async function PUT(request) {
     
     console.log('Moving to trash:', uploadId);
     
-    // עדכון ישיר דרך MongoDB collection
-    const db = mongoose.connection.db;
-    const uploadsCollection = db.collection('uploads');
-    
-    const updateResult = await uploadsCollection.updateOne(
-      { _id: new mongoose.Types.ObjectId(uploadId) },
+    const result = await Upload.findByIdAndUpdate(
+      uploadId,
       { 
-        $set: {
-          isDeleted: true,
-          deletedAt: new Date()
-        }
-      }
+        isDeleted: true,
+        deletedAt: new Date()
+      },
+      { new: true }
     );
     
-    if (updateResult.matchedCount === 0) {
+    if (!result) {
       console.log('Upload not found:', uploadId);
       return NextResponse.json({ error: 'Upload not found' }, { status: 404 });
     }
-
-    // קריאה של המסמך המעודכן לאימות
-    const result = await uploadsCollection.findOne({ 
-      _id: new mongoose.Types.ObjectId(uploadId) 
-    });
     
     console.log('Successfully moved to trash:', {
       id: result._id,
