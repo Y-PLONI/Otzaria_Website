@@ -2,13 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import Link from 'next/link'
 import { useDialog } from '@/components/DialogContext'
 
+// משתנה זמני שנמחק ברענון
+let tempFilters = null
+
 export default function DictaBooksPublicPage() {
   const { data: session } = useSession()
   const { showAlert, showConfirm } = useDialog()
+  const router = useRouter()
   
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -28,7 +33,27 @@ export default function DictaBooksPublicPage() {
 
   useEffect(() => {
     fetchBooks()
+    
+    // טעינת סינונים מהמשתנה הזמני אם קיים
+    if (tempFilters) {
+      const { search, status, category } = tempFilters
+      if (search) setSearchTerm(search)
+      if (status) setFilterStatus(status)
+      if (category) setFilterCategory(category)
+      tempFilters = null // ניקוי אחרי שימוש
+    }
   }, [])
+
+  // פונקציה ליצירת URL לדף עריכה עם שמירת הסינונים
+  const getEditUrl = (bookId) => {
+    // שמירת הסינונים במשתנה זמני
+    tempFilters = {
+      search: searchTerm,
+      status: filterStatus,
+      category: filterCategory
+    }
+    return `/library/dicta-books/edit/${bookId}`
+  }
 
   const fetchBooks = async () => {
     try {
@@ -336,7 +361,7 @@ export default function DictaBooksPublicPage() {
                         {isCompleted ? (
                           <div className="flex gap-3">
                             <Link 
-                              href={`/library/dicta-books/edit/${book._id}`}
+                              href={getEditUrl(book._id)}
                               className="flex-[2] text-center bg-blue-50 text-blue-700 border border-blue-200 py-3 rounded-xl font-bold hover:bg-blue-100 transition-all shadow-sm"
                             >
                               צפה בספר
@@ -353,7 +378,7 @@ export default function DictaBooksPublicPage() {
                         ) : !book.claimedBy ? (
                           <div className="flex gap-3">
                             <Link 
-                              href={`/library/dicta-books/edit/${book._id}`}
+                              href={getEditUrl(book._id)}
                               className="flex-1 text-center bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
                             >
                               הצצה
@@ -368,7 +393,7 @@ export default function DictaBooksPublicPage() {
                         ) : canEdit ? (
                           <div className="flex gap-3">
                             <Link 
-                              href={`/library/dicta-books/edit/${book._id}`}
+                              href={getEditUrl(book._id)}
                               className="flex-[2] text-center bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md"
                             >
                               פתח עורך טקסט
