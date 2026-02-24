@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import Upload from '@/models/Upload';
 import { getServerSession } from 'next-auth';
