@@ -309,7 +309,7 @@ export default function DictaBooksPublicPage() {
                         </div>
                       )}
 
-                      <h3 className="text-xl font-bold text-slate-800 mb-2 font-frank leading-tight line-clamp-2">
+                      <h3 className="text-xl font-bold text-slate-800 mb-2 font-frank leading-tight line-clamp-2" title={book.title}>
                         {bookName}
                       </h3>
 
