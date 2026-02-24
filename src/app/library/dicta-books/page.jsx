@@ -40,7 +40,7 @@ export default function DictaBooksPublicPage() {
       const timestamp = parseInt(savedTimestamp, 10)
       
       // אם עברו פחות מ-5 שניות, זה כנראה ניווט חזרה ולא רענון
-      if (now - timestamp < 5000) {
+      if (!isNaN(timestamp) && now - timestamp < 5000) {
         try {
           const { search, status, category } = JSON.parse(savedFilters)
           if (search) setSearchTerm(search)
