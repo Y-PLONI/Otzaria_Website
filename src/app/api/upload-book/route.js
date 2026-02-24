@@ -34,6 +34,7 @@ export async function POST(request) {
                 content: content,
                 fileSize: file.size,
                 lineCount: content.split('\n').length,
+                uploadType: 'full_book', // זיהוי כספר שלם
                 status: 'pending',
                 updatedAt: new Date()
             },
@@ -73,6 +74,7 @@ export async function GET(request) {
                 id: u._id,
                 bookName: u.bookName,
                 uploadedAt: u.createdAt,
+                uploadType: u.uploadType || 'single_page',
                 status: u.status,
                 fileName: u.originalFileName
             }))

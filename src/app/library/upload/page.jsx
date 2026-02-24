@@ -52,7 +52,7 @@ export default function UploadPage() {
       const data = await res.json()
 
       if (data.success) {
-        setMessage({ type: 'success', text: 'הספר הועלה בהצלחה! הוא יופיע ברשימה לאחר אישור מנהל.' })
+        setMessage({ type: 'success', text: 'הספר הועלה בהצלחה!' })
         setFile(null)
         setBookName('')
       } else {
