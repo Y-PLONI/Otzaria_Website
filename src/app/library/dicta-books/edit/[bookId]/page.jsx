@@ -632,7 +632,7 @@ export default function DictaEditorPage() {
               <div
                 ref={contentRef}
                 className="max-w-4xl mx-auto prose prose-lg"
-                style={{ fontSize: `${fontSize}px`, textAlign: textAlign }}
+                style={{ fontSize: `${fontSize}px`, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
                 dangerouslySetInnerHTML={{ __html: content }}
               />
             </div>
