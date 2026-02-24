@@ -15,8 +15,6 @@ export async function GET() {
     .populate('uploader', 'name')
     .sort({ createdAt: -1 });
 
-  console.log(`Found ${uploads.length} uploads (not deleted)`);
-
   // התאמה ל-UI
   const formattedUploads = uploads.map(u => ({
       id: u._id,
