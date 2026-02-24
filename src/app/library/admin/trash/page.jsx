@@ -34,13 +34,9 @@ export default function AdminTrashPage() {
   // פונקציה לחילוץ שם הספר הבסיסי
   const extractBaseBookName = (bookName) => {
     if (!bookName) return ''
-    return bookName
-      .replace(/\s*עמוד\s*\d+\s*$/i, '')
-      .replace(/\s*_page_\d+\s*$/i, '')
-      .replace(/\s*page\s*\d+\s*$/i, '')
-      .replace(/\s*-\s*עמוד\s*\d+\s*$/i, '')
-      .replace(/\s*-\s*page\s*\d+\s*$/i, '')
-      .trim()
+    // Regex to remove various page number formats from the end of the string
+    const pagePattern = /(?:\s*עמוד\s*\d+\s*|\s*_page_\d+\s*|\s*page\s*\d+\s*|\s*-\s*עמוד\s*\d+\s*|\s*-\s*page\s*\d+\s*)$/i
+    return bookName.replace(pagePattern, '').trim()
   }
 
   // קיבוץ העלאות לפי ספרים

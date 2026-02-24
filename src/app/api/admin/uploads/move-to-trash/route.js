@@ -36,16 +36,6 @@ export async function PUT(request) {
       return NextResponse.json({ error: 'Upload not found' }, { status: 404 });
     }
     
-    console.log('Successfully moved to trash:', {
-      id: result._id,
-      isDeleted: result.isDeleted,
-      deletedAt: result.deletedAt,
-      updateResult: {
-        matchedCount: updateResult.matchedCount,
-        modifiedCount: updateResult.modifiedCount
-      }
-    });
-
     return NextResponse.json({ 
       success: true, 
       message: 'Upload moved to trash',

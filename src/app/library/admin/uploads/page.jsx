@@ -48,14 +48,9 @@ export default function AdminUploadsPage() {
   // פונקציה לחילוץ שם הספר הבסיסי (ללא מספר עמוד)
   const extractBaseBookName = (bookName) => {
     if (!bookName) return ''
-    // הסרת דפוסים כמו: "עמוד 193", "_page_146", "page 4", וכו'
-    return bookName
-      .replace(/\s*עמוד\s*\d+\s*$/i, '')
-      .replace(/\s*_page_\d+\s*$/i, '')
-      .replace(/\s*page\s*\d+\s*$/i, '')
-      .replace(/\s*-\s*עמוד\s*\d+\s*$/i, '')
-      .replace(/\s*-\s*page\s*\d+\s*$/i, '')
-      .trim()
+    // Regex to remove various page number formats from the end of the string
+    const pagePattern = /(?:\s*עמוד\s*\d+\s*|\s*_page_\d+\s*|\s*page\s*\d+\s*|\s*-\s*עמוד\s*\d+\s*|\s*-\s*page\s*\d+\s*)$/i
+    return bookName.replace(pagePattern, '').trim()
   }
 
   // קיבוץ העלאות לפי ספרים עם סינון חיפוש
@@ -178,23 +173,18 @@ export default function AdminUploadsPage() {
       `להוריד ${pending.length} קבצים כקובץ מאוחד?`,
       async () => {
         try {
-          // הורדת כל הקבצים ואיחודם
-          const contents = []
-          for (const upload of pending) {
-            try {
-              const response = await fetch(`/api/admin/uploads/download/${upload.id}`)
-              if (response.ok) {
-                const text = await response.text()
-                contents.push(text)
-              }
-            } catch (error) {
-              console.error(`Error downloading ${upload.originalFileName}:`, error)
-            }
+          const uploadIds = pending.map(u => u.id)
+          const response = await fetch('/api/download/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uploadIds })
+          })
+          
+          if (!response.ok) {
+            throw new Error('שגיאה בהורדת הקבצים')
           }
           
-          // יצירת קובץ מאוחד עם 2 מעברי שורות בין קבצים
-          const combinedContent = contents.join('\n\n')
-          const blob = new Blob([combinedContent], { type: 'text/plain;charset=utf-8' })
+          const blob = await response.blob()
           const url = URL.createObjectURL(blob)
           const a = document.createElement('a')
           a.href = url
@@ -206,7 +196,7 @@ export default function AdminUploadsPage() {
           
           showAlert('הצלחה', 'הקובץ המאוחד הורד בהצלחה')
         } catch (error) {
-          console.error('Error combining files:', error)
+          console.error('Error downloading files:', error)
           showAlert('שגיאה', 'אירעה שגיאה בהורדת הקבצים')
         }
       }
@@ -351,35 +341,37 @@ export default function AdminUploadsPage() {
                                           <>
                                               <button 
                                                 onClick={(e) => {
-                                                                                                        e.stopPropagation();
+                                                    e.stopPropagation();
                                                     showConfirm(
                                                         'הורדת קבצי ספר',
                                                         `האם להוריד את כל ${bookUploads.length} ההעלאות של "${bookName}" כקובץ מאוחד?`,
                                                         async () => {
-                                                            const contents = [];
-                                                            for (const upload of bookUploads) {
-                                                                try {
-                                                                    const response = await fetch(`/api/download/${upload.id}`);
-                                                                    if (response.ok) {
-                                                                        const text = await response.text();
-                                                                        contents.push(`--- ${upload.originalFileName} ---\n\n${text}`);
-                                                                    }
-                                                                } catch (error) {
-                                                                    console.error(`Error downloading ${upload.originalFileName}:`, error);
+                                                            try {
+                                                                const uploadIds = bookUploads.map(u => u.id);
+                                                                const response = await fetch('/api/download/batch', {
+                                                                    method: 'POST',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ uploadIds })
+                                                                });
+                                                                
+                                                                if (!response.ok) {
+                                                                    throw new Error('שגיאה בהורדת הקבצים');
                                                                 }
+                                                                
+                                                                const blob = await response.blob();
+                                                                const url = URL.createObjectURL(blob);
+                                                                const a = document.createElement('a');
+                                                                a.href = url;
+                                                                a.download = `${bookName}_uploads.txt`;
+                                                                document.body.appendChild(a);
+                                                                a.click();
+                                                                document.body.removeChild(a);
+                                                                URL.revokeObjectURL(url);
+                                                                showAlert('הצלחה', 'הקובץ המאוחד הורד בהצלחה');
+                                                            } catch (error) {
+                                                                console.error('Error downloading files:', error);
+                                                                showAlert('שגיאה', 'אירעה שגיאה בהורדת הקבצים');
                                                             }
-                                                            
-                                                            const combinedContent = contents.join('\n\n\n');
-                                                            const blob = new Blob([combinedContent], { type: 'text/plain;charset=utf-8' });
-                                                            const url = URL.createObjectURL(blob);
-                                                            const a = document.createElement('a');
-                                                            a.href = url;
-                                                            a.download = `${bookName}_uploads.txt`;
-                                                            document.body.appendChild(a);
-                                                            a.click();
-                                                            document.body.removeChild(a);
-                                                            URL.revokeObjectURL(url);
-                                                            showAlert('הצלחה', 'הקובץ המאוחד הורד בהצלחה');
                                                         }
                                                     );
                                                 }}
