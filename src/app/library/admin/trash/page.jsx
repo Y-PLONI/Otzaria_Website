@@ -255,21 +255,25 @@ export default function AdminTrashPage() {
                                                         'שחזור ספר',
                                                         `האם לשחזר את כל ${bookUploads.length} ההעלאות של "${bookName}"?`,
                                                         async () => {
-                                                            let successCount = 0
-                                                            for (const upload of bookUploads) {
-                                                                try {
-                                                                    const res = await fetch('/api/admin/uploads/restore', {
-                                                                        method: 'PUT',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ uploadId: upload.id })
-                                                                    })
-                                                                    if (res.ok) successCount++
-                                                                } catch (e) {
-                                                                    console.error('Error restoring:', e)
+                                                            try {
+                                                                const uploadIds = bookUploads.map(u => u.id)
+                                                                const res = await fetch('/api/admin/uploads/batch-restore', {
+                                                                    method: 'PUT',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ uploadIds })
+                                                                })
+                                                                
+                                                                if (res.ok) {
+                                                                    const data = await res.json()
+                                                                    setUploads(prev => prev.filter(u => !bookUploads.find(bu => bu.id === u.id)))
+                                                                    showAlert('הצלחה', `${data.modifiedCount} העלאות שוחזרו`)
+                                                                } else {
+                                                                    showAlert('שגיאה', 'שגיאה בשחזור')
                                                                 }
+                                                            } catch (e) {
+                                                                console.error('Error restoring:', e)
+                                                                showAlert('שגיאה', 'שגיאה בשחזור')
                                                             }
-                                                            setUploads(prev => prev.filter(u => !bookUploads.find(bu => bu.id === u.id)))
-                                                            showAlert('הצלחה', `${successCount} העלאות שוחזרו`)
                                                         },
                                                         'שחזר הכל',
                                                         'ביטול'
@@ -290,21 +294,25 @@ export default function AdminTrashPage() {
                                                         'מחיקה לצמיתות',
                                                         `האם למחוק לצמיתות את כל ${bookUploads.length} ההעלאות של "${bookName}"?\n\nפעולה זו אינה ניתנת לביטול!`,
                                                         async () => {
-                                                            let successCount = 0
-                                                            for (const upload of bookUploads) {
-                                                                try {
-                                                                    const res = await fetch('/api/admin/uploads/permanent-delete', {
-                                                                        method: 'DELETE',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ uploadId: upload.id })
-                                                                    })
-                                                                    if (res.ok) successCount++
-                                                                } catch (e) {
-                                                                    console.error('Error deleting:', e)
+                                                            try {
+                                                                const uploadIds = bookUploads.map(u => u.id)
+                                                                const res = await fetch('/api/admin/uploads/batch-permanent-delete', {
+                                                                    method: 'DELETE',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ uploadIds })
+                                                                })
+                                                                
+                                                                if (res.ok) {
+                                                                    const data = await res.json()
+                                                                    setUploads(prev => prev.filter(u => !bookUploads.find(bu => bu.id === u.id)))
+                                                                    showAlert('הצלחה', `${data.deletedCount} העלאות נמחקו לצמיתות`)
+                                                                } else {
+                                                                    showAlert('שגיאה', 'שגיאה במחיקה')
                                                                 }
+                                                            } catch (e) {
+                                                                console.error('Error deleting:', e)
+                                                                showAlert('שגיאה', 'שגיאה במחיקה')
                                                             }
-                                                            setUploads(prev => prev.filter(u => !bookUploads.find(bu => bu.id === u.id)))
-                                                            showAlert('הצלחה', `${successCount} העלאות נמחקו לצמיתות`)
                                                         },
                                                         'מחק הכל לצמיתות',
                                                         'ביטול'

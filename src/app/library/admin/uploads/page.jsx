@@ -398,19 +398,24 @@ export default function AdminUploadsPage() {
                                                         'העברה לאשפה',
                                                         `האם להעביר את כל ${bookUploads.length} ההעלאות של "${bookName}" לאשפה?`,
                                                         async () => {
-                                                            for (const upload of bookUploads) {
-                                                                try {
-                                                                    await fetch('/api/admin/uploads/move-to-trash', {
-                                                                        method: 'PUT',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ uploadId: upload.id })
-                                                                    })
-                                                                } catch (e) {
-                                                                    console.error('Error moving to trash:', e)
+                                                            try {
+                                                                const uploadIds = bookUploads.map(u => u.id)
+                                                                const res = await fetch('/api/admin/uploads/batch-move-to-trash', {
+                                                                    method: 'PUT',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ uploadIds })
+                                                                })
+                                                                
+                                                                if (res.ok) {
+                                                                    setUploads(prev => prev.filter(u => !bookUploads.find(bu => bu.id === u.id)))
+                                                                    showAlert('הצלחה', `${bookUploads.length} העלאות הועברו לאשפה`)
+                                                                } else {
+                                                                    showAlert('שגיאה', 'שגיאה בהעברה לאשפה')
                                                                 }
+                                                            } catch (e) {
+                                                                console.error('Error moving to trash:', e)
+                                                                showAlert('שגיאה', 'שגיאה בהעברה לאשפה')
                                                             }
-                                                            setUploads(prev => prev.filter(u => !bookUploads.find(bu => bu.id === u.id)))
-                                                            showAlert('הצלחה', `${bookUploads.length} העלאות הועברו לאשפה`)
                                                         },
                                                         'העבר הכל לאשפה',
                                                         'ביטול'
