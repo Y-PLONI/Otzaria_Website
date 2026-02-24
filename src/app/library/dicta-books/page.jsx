@@ -1,14 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import Link from 'next/link'
 import { useDialog } from '@/components/DialogContext'
-
-// משתנה זמני שנמחק ברענון
-let tempFilters = null
 
 export default function DictaBooksPublicPage() {
   const { data: session } = useSession()
@@ -34,25 +31,41 @@ export default function DictaBooksPublicPage() {
   useEffect(() => {
     fetchBooks()
     
-    // טעינת סינונים מהמשתנה הזמני אם קיים
-    if (tempFilters) {
-      const { search, status, category } = tempFilters
-      if (search) setSearchTerm(search)
-      if (status) setFilterStatus(status)
-      if (category) setFilterCategory(category)
-      tempFilters = null // ניקוי אחרי שימוש
+    // טעינת סינונים מ-sessionStorage
+    const savedFilters = sessionStorage.getItem('dictaBooksFilters')
+    const savedTimestamp = sessionStorage.getItem('dictaBooksTimestamp')
+    
+    if (savedFilters && savedTimestamp) {
+      const now = Date.now()
+      const timestamp = parseInt(savedTimestamp, 10)
+      
+      // אם עברו פחות מ-5 שניות, זה כנראה ניווט חזרה ולא רענון
+      if (now - timestamp < 5000) {
+        try {
+          const { search, status, category } = JSON.parse(savedFilters)
+          if (search) setSearchTerm(search)
+          if (status) setFilterStatus(status)
+          if (category) setFilterCategory(category)
+        } catch (e) {
+          console.error('Error loading filters:', e)
+        }
+      }
     }
+    
+    // ניקוי אחרי טעינה
+    sessionStorage.removeItem('dictaBooksFilters')
+    sessionStorage.removeItem('dictaBooksTimestamp')
   }, [])
 
-  // פונקציה ליצירת URL לדף עריכה עם שמירת הסינונים
-  const getEditUrl = (bookId) => {
-    // שמירת הסינונים במשתנה זמני
-    tempFilters = {
+  // פונקציה לשמירת הסינונים לפני ניווט
+  const saveFiltersBeforeNavigation = () => {
+    const filters = {
       search: searchTerm,
       status: filterStatus,
       category: filterCategory
     }
-    return `/library/dicta-books/edit/${bookId}`
+    sessionStorage.setItem('dictaBooksFilters', JSON.stringify(filters))
+    sessionStorage.setItem('dictaBooksTimestamp', Date.now().toString())
   }
 
   const fetchBooks = async () => {
@@ -168,33 +181,49 @@ export default function DictaBooksPublicPage() {
     )
   }
 
-  // חילוץ רשימת קטגוריות ייחודיות מהספרים
-  const categories = [...new Set(
-    books
-      .map(book => book.title?.split('/')[0]?.trim())
-      .filter(Boolean)
-  )].sort()
-
-  const filteredBooks = books.filter(book => {
-    const matchesSearch = book.title?.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    let matchesStatus = true
-    if (filterStatus === 'available') {
-      matchesStatus = !book.claimedBy && book.status !== 'completed'
-    } else if (filterStatus === 'in-progress') {
-      matchesStatus = !!book.claimedBy && book.status !== 'completed'
-    } else if (filterStatus === 'completed') {
-      matchesStatus = book.status === 'completed'
-    }
-
-    let matchesCategory = true
-    if (filterCategory !== 'all') {
+  // עיבוד מקדים של הספרים - הוספת bookCategory ו-bookName
+  const processedBooks = useMemo(() => {
+    return books.map(book => {
       const bookCategory = book.title?.split('/')[0]?.trim()
-      matchesCategory = bookCategory === filterCategory
-    }
+      const bookName = book.title?.split('/').slice(1).join('/').trim() || book.title
+      return {
+        ...book,
+        bookCategory,
+        bookName
+      }
+    })
+  }, [books])
 
-    return matchesSearch && matchesStatus && matchesCategory
-  })
+  // חילוץ רשימת קטגוריות ייחודיות מהספרים
+  const categories = useMemo(() => {
+    return [...new Set(
+      processedBooks
+        .map(book => book.bookCategory)
+        .filter(Boolean)
+    )].sort()
+  }, [processedBooks])
+
+  const filteredBooks = useMemo(() => {
+    return processedBooks.filter(book => {
+      const matchesSearch = book.title?.toLowerCase().includes(searchTerm.toLowerCase())
+      
+      let matchesStatus = true
+      if (filterStatus === 'available') {
+        matchesStatus = !book.claimedBy && book.status !== 'completed'
+      } else if (filterStatus === 'in-progress') {
+        matchesStatus = !!book.claimedBy && book.status !== 'completed'
+      } else if (filterStatus === 'completed') {
+        matchesStatus = book.status === 'completed'
+      }
+
+      let matchesCategory = true
+      if (filterCategory !== 'all') {
+        matchesCategory = book.bookCategory === filterCategory
+      }
+
+      return matchesSearch && matchesStatus && matchesCategory
+    })
+  }, [processedBooks, searchTerm, filterStatus, filterCategory])
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
@@ -292,8 +321,6 @@ export default function DictaBooksPublicPage() {
                   const isOwner = currentUserId && book.claimedBy?._id === currentUserId
                   const canEdit = isOwner || isAdmin
                   const isCompleted = book.status === 'completed'
-                  const bookCategory = book.title?.split('/')[0]?.trim()
-                  const bookName = book.title?.split('/').slice(1).join('/').trim() || book.title
 
                   return (
                     <div key={book._id} className={`group bg-white rounded-2xl border border-slate-200 p-6 transition-all flex flex-col h-full ${isCompleted ? 'opacity-80' : 'hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5'}`}>
@@ -326,16 +353,16 @@ export default function DictaBooksPublicPage() {
                         </div>
                       </div>
 
-                      {bookCategory && (
+                      {book.bookCategory && (
                         <div className="mb-2">
                           <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">
-                            {bookCategory}
+                            {book.bookCategory}
                           </span>
                         </div>
                       )}
 
                       <h3 className="text-xl font-bold text-slate-800 mb-2 font-frank leading-tight line-clamp-2" title={book.title}>
-                        {bookName}
+                        {book.bookName}
                       </h3>
 
                       <div className="mt-auto pt-6">
@@ -361,7 +388,8 @@ export default function DictaBooksPublicPage() {
                         {isCompleted ? (
                           <div className="flex gap-3">
                             <Link 
-                              href={getEditUrl(book._id)}
+                              href={`/library/dicta-books/edit/${book._id}`}
+                              onClick={saveFiltersBeforeNavigation}
                               className="flex-[2] text-center bg-blue-50 text-blue-700 border border-blue-200 py-3 rounded-xl font-bold hover:bg-blue-100 transition-all shadow-sm"
                             >
                               צפה בספר
@@ -378,7 +406,8 @@ export default function DictaBooksPublicPage() {
                         ) : !book.claimedBy ? (
                           <div className="flex gap-3">
                             <Link 
-                              href={getEditUrl(book._id)}
+                              href={`/library/dicta-books/edit/${book._id}`}
+                              onClick={saveFiltersBeforeNavigation}
                               className="flex-1 text-center bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
                             >
                               הצצה
@@ -393,7 +422,8 @@ export default function DictaBooksPublicPage() {
                         ) : canEdit ? (
                           <div className="flex gap-3">
                             <Link 
-                              href={getEditUrl(book._id)}
+                              href={`/library/dicta-books/edit/${book._id}`}
+                              onClick={saveFiltersBeforeNavigation}
                               className="flex-[2] text-center bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md"
                             >
                               פתח עורך טקסט

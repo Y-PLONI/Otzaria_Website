@@ -141,7 +141,7 @@ export default function DictaEditorPage() {
     setToc(tocItems)
   }, [content])
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     try {
       setSaving(true)
       const res = await fetch(`/api/dicta/books/${bookId}`, {
@@ -158,7 +158,7 @@ export default function DictaEditorPage() {
     } finally {
       setSaving(false)
     }
-  }
+  }, [bookId, content, showAlert])
 
   const saveUserShortcuts = useCallback((newShortcuts) => {
     setUserShortcuts(newShortcuts)

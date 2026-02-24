@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 export default function AdminUploadsPage() {
   const [uploads, setUploads] = useState([])
@@ -26,6 +26,30 @@ export default function AdminUploadsPage() {
   useEffect(() => {
     loadUploads()
   }, [])
+
+  // חישוב ספירות מאופטם עם useMemo
+  const { fullBookCount, singlePageCount } = useMemo(() => {
+    return uploads.reduce((counts, upload) => {
+      const type = upload.uploadType || 'single_page'
+      if (type === 'full_book') {
+        counts.fullBookCount++
+      } else {
+        counts.singlePageCount++
+      }
+      return counts
+    }, { fullBookCount: 0, singlePageCount: 0 })
+  }, [uploads])
+
+  // סינון מאופטם עם useMemo
+  const filteredUploads = useMemo(() => {
+    return filterType === 'all' 
+      ? uploads 
+      : uploads.filter(u => (u.uploadType || 'single_page') === filterType)
+  }, [uploads, filterType])
+
+  const pendingCount = useMemo(() => {
+    return filteredUploads.filter(u => u.status === 'pending').length
+  }, [filteredUploads])
 
   const handleUpdateStatus = async (uploadId, status) => {
     try {
@@ -103,12 +127,6 @@ export default function AdminUploadsPage() {
     </div>
   )
 
-  const filteredUploads = filterType === 'all' 
-    ? uploads 
-    : uploads.filter(u => (u.uploadType || 'single_page') === filterType)
-
-  const pendingCount = filteredUploads.filter(u => u.status === 'pending').length
-
   return (
     <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex justify-between items-center mb-6">
@@ -164,7 +182,7 @@ export default function AdminUploadsPage() {
           }`}
         >
           <span className="material-symbols-outlined text-sm">menu_book</span>
-          ספרים שלמים ({uploads.filter(u => (u.uploadType || 'single_page') === 'full_book').length})
+          ספרים שלמים ({fullBookCount})
         </button>
         <button
           onClick={() => setFilterType('single_page')}
@@ -175,7 +193,7 @@ export default function AdminUploadsPage() {
           }`}
         >
           <span className="material-symbols-outlined text-sm">description</span>
-          עמודים בודדים ({uploads.filter(u => (u.uploadType || 'single_page') === 'single_page').length})
+          עמודים בודדים ({singlePageCount})
         </button>
       </div>
       
