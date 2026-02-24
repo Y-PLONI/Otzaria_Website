@@ -47,9 +47,13 @@ export default function AdminUploadsPage() {
       : uploads.filter(u => (u.uploadType || 'single_page') === filterType)
   }, [uploads, filterType])
 
-  const pendingCount = useMemo(() => {
-    return filteredUploads.filter(u => u.status === 'pending').length
-  }, [filteredUploads])
+  // רשימת העלאות ממתינות מאופטמת
+  const pendingUploads = useMemo(() => 
+    filteredUploads.filter(u => u.status === 'pending'), 
+    [filteredUploads]
+  )
+  
+  const pendingCount = pendingUploads.length
 
   const handleUpdateStatus = async (uploadId, status) => {
     try {
@@ -83,7 +87,7 @@ export default function AdminUploadsPage() {
   }
 
   const handleApproveAllPending = async () => {
-    const pending = filteredUploads.filter(u => u.status === 'pending')
+    const pending = pendingUploads
     if (pending.length === 0) return alert('אין קבצים ממתינים לאישור')
     
     if (!confirm(`האם לאשר ${pending.length} קבצים?`)) return
@@ -109,7 +113,7 @@ export default function AdminUploadsPage() {
   }
 
   const handleDownloadAllPending = async () => {
-    const pending = filteredUploads.filter(u => u.status === 'pending')
+    const pending = pendingUploads
     if (pending.length === 0) return alert('אין קבצים להורדה')
 
     if (!confirm(`להוריד ${pending.length} קבצים?`)) return

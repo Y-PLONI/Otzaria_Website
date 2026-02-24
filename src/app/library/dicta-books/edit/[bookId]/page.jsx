@@ -160,6 +160,12 @@ export default function DictaEditorPage() {
     showAlert('הצלחה', 'קיצורי המקלדת עודכנו בהצלחה')
   }, [showAlert])
 
+  const resetShortcutsToDefaults = useCallback(() => {
+    setUserShortcuts(DEFAULT_SHORTCUTS)
+    localStorage.setItem('dicta_editor_shortcuts', JSON.stringify(DEFAULT_SHORTCUTS))
+    showAlert('הצלחה', 'קיצורי המקלדת אופסו')
+  }, [showAlert])
+
   const actionsMap = useMemo(() => ({
     'save': { label: 'שמירה', action: handleSave },
     'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: () => setEditMode(prev => !prev) },
@@ -723,11 +729,7 @@ export default function DictaEditorPage() {
         shortcuts={userShortcuts}
         availableActions={availableActions}
         saveShortcuts={saveUserShortcuts}
-        resetToDefaults={() => {
-          setUserShortcuts(DEFAULT_SHORTCUTS)
-          localStorage.setItem('dicta_editor_shortcuts', JSON.stringify(DEFAULT_SHORTCUTS))
-          showAlert('הצלחה', 'קיצורי המקלדת אופסו')
-        }}
+        resetToDefaults={resetShortcutsToDefaults}
       />
     </div>
   )
