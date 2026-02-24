@@ -251,24 +251,26 @@ export default function AdminTrashPage() {
                                                         'שחזור ספר',
                                                         `האם לשחזר את כל ${bookUploads.length} ההעלאות של "${bookName}"?`,
                                                         async () => {
+                                                            const uploadIds = bookUploads.map(u => u.id);
+                                                            setUploads(prev => prev.filter(u => !uploadIds.includes(u.id)));
                                                             try {
-                                                                const uploadIds = bookUploads.map(u => u.id)
                                                                 const res = await fetch('/api/admin/uploads/batch-restore', {
                                                                     method: 'PUT',
                                                                     headers: { 'Content-Type': 'application/json' },
                                                                     body: JSON.stringify({ uploadIds })
-                                                                })
+                                                                });
                                                                 
                                                                 if (res.ok) {
-                                                                    const data = await res.json()
-                                                                    setUploads(prev => prev.filter(u => !bookUploads.find(bu => bu.id === u.id)))
-                                                                    showAlert('הצלחה', `${data.modifiedCount} העלאות שוחזרו`)
+                                                                    const data = await res.json();
+                                                                    showAlert('הצלחה', `${data.modifiedCount} העלאות שוחזרו`);
                                                                 } else {
-                                                                    showAlert('שגיאה', 'שגיאה בשחזור')
+                                                                    showAlert('שגיאה', 'שגיאה בשחזור');
+                                                                    loadTrash();
                                                                 }
                                                             } catch (e) {
-                                                                console.error('Error restoring:', e)
-                                                                showAlert('שגיאה', 'שגיאה בשחזור')
+                                                                console.error('Error restoring:', e);
+                                                                showAlert('שגיאה', 'שגיאה בשחזור');
+                                                                loadTrash();
                                                             }
                                                         },
                                                         'שחזר הכל',
@@ -290,24 +292,26 @@ export default function AdminTrashPage() {
                                                         'מחיקה לצמיתות',
                                                         `האם למחוק לצמיתות את כל ${bookUploads.length} ההעלאות של "${bookName}"?\n\nפעולה זו אינה ניתנת לביטול!`,
                                                         async () => {
+                                                            const uploadIds = bookUploads.map(u => u.id);
+                                                            setUploads(prev => prev.filter(u => !uploadIds.includes(u.id)));
                                                             try {
-                                                                const uploadIds = bookUploads.map(u => u.id)
                                                                 const res = await fetch('/api/admin/uploads/batch-permanent-delete', {
                                                                     method: 'DELETE',
                                                                     headers: { 'Content-Type': 'application/json' },
                                                                     body: JSON.stringify({ uploadIds })
-                                                                })
+                                                                });
                                                                 
                                                                 if (res.ok) {
-                                                                    const data = await res.json()
-                                                                    setUploads(prev => prev.filter(u => !bookUploads.find(bu => bu.id === u.id)))
-                                                                    showAlert('הצלחה', `${data.deletedCount} העלאות נמחקו לצמיתות`)
+                                                                    const data = await res.json();
+                                                                    showAlert('הצלחה', `${data.deletedCount} העלאות נמחקו לצמיתות`);
                                                                 } else {
-                                                                    showAlert('שגיאה', 'שגיאה במחיקה')
+                                                                    showAlert('שגיאה', 'שגיאה במחיקה');
+                                                                    loadTrash();
                                                                 }
                                                             } catch (e) {
-                                                                console.error('Error deleting:', e)
-                                                                showAlert('שגיאה', 'שגיאה במחיקה')
+                                                                console.error('Error deleting:', e);
+                                                                showAlert('שגיאה', 'שגיאה במחיקה');
+                                                                loadTrash();
                                                             }
                                                         },
                                                         'מחק הכל לצמיתות',
