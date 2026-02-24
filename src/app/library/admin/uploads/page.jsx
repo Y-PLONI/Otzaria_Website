@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 export default function AdminUploadsPage() {
   const [uploads, setUploads] = useState([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
+  const [filterType, setFilterType] = useState('all') // all, full_book, single_page
 
   const loadUploads = async () => {
     try {
@@ -25,6 +26,34 @@ export default function AdminUploadsPage() {
   useEffect(() => {
     loadUploads()
   }, [])
+
+  // חישוב ספירות מאופטם עם useMemo
+  const { fullBookCount, singlePageCount } = useMemo(() => {
+    return uploads.reduce((counts, upload) => {
+      const type = upload.uploadType || 'single_page'
+      if (type === 'full_book') {
+        counts.fullBookCount++
+      } else {
+        counts.singlePageCount++
+      }
+      return counts
+    }, { fullBookCount: 0, singlePageCount: 0 })
+  }, [uploads])
+
+  // סינון מאופטם עם useMemo
+  const filteredUploads = useMemo(() => {
+    return filterType === 'all' 
+      ? uploads 
+      : uploads.filter(u => (u.uploadType || 'single_page') === filterType)
+  }, [uploads, filterType])
+
+  // רשימת העלאות ממתינות מאופטמת
+  const pendingUploads = useMemo(() => 
+    filteredUploads.filter(u => u.status === 'pending'), 
+    [filteredUploads]
+  )
+  
+  const pendingCount = pendingUploads.length
 
   const handleUpdateStatus = async (uploadId, status) => {
     try {
@@ -58,7 +87,7 @@ export default function AdminUploadsPage() {
   }
 
   const handleApproveAllPending = async () => {
-    const pending = uploads.filter(u => u.status === 'pending')
+    const pending = pendingUploads
     if (pending.length === 0) return alert('אין קבצים ממתינים לאישור')
     
     if (!confirm(`האם לאשר ${pending.length} קבצים?`)) return
@@ -84,7 +113,7 @@ export default function AdminUploadsPage() {
   }
 
   const handleDownloadAllPending = async () => {
-    const pending = uploads.filter(u => u.status === 'pending')
+    const pending = pendingUploads
     if (pending.length === 0) return alert('אין קבצים להורדה')
 
     if (!confirm(`להוריד ${pending.length} קבצים?`)) return
@@ -101,8 +130,6 @@ export default function AdminUploadsPage() {
         <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
     </div>
   )
-
-  const pendingCount = uploads.filter(u => u.status === 'pending').length
 
   return (
     <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -137,15 +164,51 @@ export default function AdminUploadsPage() {
             </div>
         )}
       </div>
+
+      {/* סינון לפי סוג העלאה */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setFilterType('all')}
+          className={`px-4 py-2 rounded-lg transition-colors ${
+            filterType === 'all' 
+              ? 'bg-primary text-on-primary' 
+              : 'bg-surface hover:bg-surface-variant text-on-surface'
+          }`}
+        >
+          הכל ({uploads.length})
+        </button>
+        <button
+          onClick={() => setFilterType('full_book')}
+          className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-1 ${
+            filterType === 'full_book' 
+              ? 'bg-purple-600 text-white' 
+              : 'bg-surface hover:bg-surface-variant text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">menu_book</span>
+          ספרים שלמים ({fullBookCount})
+        </button>
+        <button
+          onClick={() => setFilterType('single_page')}
+          className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-1 ${
+            filterType === 'single_page' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-surface hover:bg-surface-variant text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">description</span>
+          עמודים בודדים ({singlePageCount})
+        </button>
+      </div>
       
-      {uploads.length === 0 ? (
+      {filteredUploads.length === 0 ? (
           <div className="text-center py-16 text-gray-500">
             <span className="material-symbols-outlined text-6xl mb-2">folder_off</span>
             <p>אין העלאות במערכת</p>
           </div>
       ) : (
           <div className="space-y-4">
-              {uploads.map(upload => (
+              {filteredUploads.map(upload => (
                   <div key={upload.id} className="glass p-5 rounded-xl border border-white/40 hover:border-primary/30 transition-all">
                       <div className="flex items-start gap-4">
                           <div className={`p-3 rounded-lg ${
@@ -159,7 +222,14 @@ export default function AdminUploadsPage() {
                           <div className="flex-1">
                               <div className="flex justify-between items-start mb-2">
                                   <div>
-                                      <h3 className="text-lg font-bold text-gray-800">{upload.bookName}</h3>
+                                      <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                          {upload.bookName}
+                                          {upload.uploadType === 'full_book' && (
+                                              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full border border-purple-200 font-bold">
+                                                  ספר שלם
+                                              </span>
+                                          )}
+                                      </h3>
                                       <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                                           <span className="flex items-center gap-1">
                                             <span className="material-symbols-outlined text-sm">person</span>

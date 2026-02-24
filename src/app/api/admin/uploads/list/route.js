@@ -21,6 +21,7 @@ export async function GET() {
       fileName: u.originalFileName, // או נתיב להורדה
       uploadedBy: u.uploader?.name,
       uploadedAt: u.createdAt,
+      uploadType: u.uploadType || 'single_page', // ברירת מחדל לרשומות ישנות
       status: u.status,
       // כאן אפשר להוסיף תוכן אם רוצים תצוגה מקדימה
   }));

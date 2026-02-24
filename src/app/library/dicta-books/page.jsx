@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import Link from 'next/link'
 import { useDialog } from '@/components/DialogContext'
@@ -9,11 +10,13 @@ import { useDialog } from '@/components/DialogContext'
 export default function DictaBooksPublicPage() {
   const { data: session } = useSession()
   const { showAlert, showConfirm } = useDialog()
+  const router = useRouter()
   
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [filterCategory, setFilterCategory] = useState('all')
   
   const isAdmin = session?.user?.role === 'admin'
   const currentUserId = session?.user?.id
@@ -27,7 +30,43 @@ export default function DictaBooksPublicPage() {
 
   useEffect(() => {
     fetchBooks()
+    
+    // טעינת סינונים מ-sessionStorage
+    const savedFilters = sessionStorage.getItem('dictaBooksFilters')
+    const savedTimestamp = sessionStorage.getItem('dictaBooksTimestamp')
+    
+    if (savedFilters && savedTimestamp) {
+      const now = Date.now()
+      const timestamp = parseInt(savedTimestamp, 10)
+      
+      // אם עברו פחות מ-5 שניות, זה כנראה ניווט חזרה ולא רענון
+      if (!isNaN(timestamp) && now - timestamp < 5000) {
+        try {
+          const { search, status, category } = JSON.parse(savedFilters)
+          if (search) setSearchTerm(search)
+          if (status) setFilterStatus(status)
+          if (category) setFilterCategory(category)
+        } catch (e) {
+          console.error('Error loading filters:', e)
+        }
+      }
+    }
+    
+    // ניקוי אחרי טעינה
+    sessionStorage.removeItem('dictaBooksFilters')
+    sessionStorage.removeItem('dictaBooksTimestamp')
   }, [])
+
+  // פונקציה לשמירת הסינונים לפני ניווט
+  const saveFiltersBeforeNavigation = () => {
+    const filters = {
+      search: searchTerm,
+      status: filterStatus,
+      category: filterCategory
+    }
+    sessionStorage.setItem('dictaBooksFilters', JSON.stringify(filters))
+    sessionStorage.setItem('dictaBooksTimestamp', Date.now().toString())
+  }
 
   const fetchBooks = async () => {
     try {
@@ -142,20 +181,49 @@ export default function DictaBooksPublicPage() {
     )
   }
 
-  const filteredBooks = books.filter(book => {
-    const matchesSearch = book.title?.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    let matchesStatus = true
-    if (filterStatus === 'available') {
-      matchesStatus = !book.claimedBy && book.status !== 'completed'
-    } else if (filterStatus === 'in-progress') {
-      matchesStatus = !!book.claimedBy && book.status !== 'completed'
-    } else if (filterStatus === 'completed') {
-      matchesStatus = book.status === 'completed'
-    }
+  // עיבוד מקדים של הספרים - הוספת bookCategory ו-bookName
+  const processedBooks = useMemo(() => {
+    return books.map(book => {
+      const bookCategory = book.title?.split('/')[0]?.trim()
+      const bookName = book.title?.split('/').slice(1).join('/').trim() || book.title
+      return {
+        ...book,
+        bookCategory,
+        bookName
+      }
+    })
+  }, [books])
 
-    return matchesSearch && matchesStatus
-  })
+  // חילוץ רשימת קטגוריות ייחודיות מהספרים
+  const categories = useMemo(() => {
+    return [...new Set(
+      processedBooks
+        .map(book => book.bookCategory)
+        .filter(Boolean)
+    )].sort()
+  }, [processedBooks])
+
+  const filteredBooks = useMemo(() => {
+    return processedBooks.filter(book => {
+      const matchesSearch = book.title?.toLowerCase().includes(searchTerm.toLowerCase())
+      
+      let matchesStatus = true
+      if (filterStatus === 'available') {
+        matchesStatus = !book.claimedBy && book.status !== 'completed'
+      } else if (filterStatus === 'in-progress') {
+        matchesStatus = !!book.claimedBy && book.status !== 'completed'
+      } else if (filterStatus === 'completed') {
+        matchesStatus = book.status === 'completed'
+      }
+
+      let matchesCategory = true
+      if (filterCategory !== 'all') {
+        matchesCategory = book.bookCategory === filterCategory
+      }
+
+      return matchesSearch && matchesStatus && matchesCategory
+    })
+  }, [processedBooks, searchTerm, filterStatus, filterCategory])
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
@@ -167,7 +235,10 @@ export default function DictaBooksPublicPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
             <div>
               <h1 className="text-4xl font-bold font-frank text-slate-900 mb-2">עריכת ספרי דיקטה</h1>
-              <p className="text-slate-600 text-lg">בחר ספר שהועלה מהסריקות של דיקטה והשתתף בסידור הטקסט לצורך הכנסה לאוצריא.</p>
+              <p className="text-slate-600 text-lg">
+                {loading ? 'טוען...' : `${filteredBooks.length} ספרים מוצגים`}
+                {!loading && filteredBooks.length !== books.length && ` (מתוך ${books.length} סה"כ)`}
+              </p>
             </div>
             
             <div className="flex flex-wrap items-center gap-3 md:justify-end">
@@ -203,6 +274,21 @@ export default function DictaBooksPublicPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-2xl py-3 pr-12 pl-4 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-lg"
               />
+            </div>
+
+            <div className="min-w-[200px]">
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="w-full h-full px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-lg cursor-pointer"
+              >
+                <option value="all">כל הקטגוריות</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 self-start md:self-stretch items-center shadow-inner overflow-x-auto">
@@ -267,8 +353,16 @@ export default function DictaBooksPublicPage() {
                         </div>
                       </div>
 
-                      <h3 className="text-xl font-bold text-slate-800 mb-2 font-frank leading-tight line-clamp-2">
-                        {book.title}
+                      {book.bookCategory && (
+                        <div className="mb-2">
+                          <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">
+                            {book.bookCategory}
+                          </span>
+                        </div>
+                      )}
+
+                      <h3 className="text-xl font-bold text-slate-800 mb-2 font-frank leading-tight line-clamp-2" title={book.title}>
+                        {book.bookName}
                       </h3>
 
                       <div className="mt-auto pt-6">
@@ -295,6 +389,7 @@ export default function DictaBooksPublicPage() {
                           <div className="flex gap-3">
                             <Link 
                               href={`/library/dicta-books/edit/${book._id}`}
+                              onClick={saveFiltersBeforeNavigation}
                               className="flex-[2] text-center bg-blue-50 text-blue-700 border border-blue-200 py-3 rounded-xl font-bold hover:bg-blue-100 transition-all shadow-sm"
                             >
                               צפה בספר
@@ -312,6 +407,7 @@ export default function DictaBooksPublicPage() {
                           <div className="flex gap-3">
                             <Link 
                               href={`/library/dicta-books/edit/${book._id}`}
+                              onClick={saveFiltersBeforeNavigation}
                               className="flex-1 text-center bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
                             >
                               הצצה
@@ -327,6 +423,7 @@ export default function DictaBooksPublicPage() {
                           <div className="flex gap-3">
                             <Link 
                               href={`/library/dicta-books/edit/${book._id}`}
+                              onClick={saveFiltersBeforeNavigation}
                               className="flex-[2] text-center bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md"
                             >
                               פתח עורך טקסט

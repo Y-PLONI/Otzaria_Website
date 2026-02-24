@@ -26,6 +26,7 @@ export async function POST(request) {
                 uploader: session.user._id, 
                 originalFileName: file.name,
                 content: content,
+                uploadType: 'single_page', // זיהוי כעמוד בודד
                 status: 'pending',
                 createdAt: new Date() 
             },
