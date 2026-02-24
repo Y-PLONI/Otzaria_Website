@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Button from '@/components/Button'
@@ -14,6 +14,24 @@ import ReplacePageBModal from '@/components/dicta-tools/ReplacePageBModal'
 import HeaderErrorCheckerModal from '@/components/dicta-tools/HeaderErrorCheckerModal'
 import TextCleanerModal from '@/components/dicta-tools/TextCleanerModal'
 import AddPageNumberModal from '@/components/dicta-tools/AddPageNumberModal'
+import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
+
+const DEFAULT_SHORTCUTS = {
+  'save': 'Ctrl+KeyS',
+  'toggleEdit': 'Ctrl+KeyE',
+  'bold': 'Ctrl+KeyB',
+  'italic': 'Ctrl+KeyI',
+  'underline': 'Ctrl+KeyU',
+  'h1': 'Ctrl+Digit1',
+  'h2': 'Ctrl+Digit2',
+  'h3': 'Ctrl+Digit3',
+  'fontIncrease': 'Ctrl+Equal',
+  'fontDecrease': 'Ctrl+Minus',
+  'alignRight': 'Ctrl+KeyR',
+  'alignCenter': 'Ctrl+Shift+KeyC',
+  'alignLeft': 'Ctrl+KeyL',
+  'shortcuts': 'Alt+KeyK',
+}
 
 export default function DictaEditorPage() {
   const params = useParams()
@@ -36,7 +54,10 @@ export default function DictaEditorPage() {
   const [toc, setToc] = useState([])
   const [activeTool, setActiveTool] = useState(null)
   const [editMode, setEditMode] = useState(false)
+  const [showShortcutsDialog, setShowShortcutsDialog] = useState(false)
+  const [userShortcuts, setUserShortcuts] = useState(DEFAULT_SHORTCUTS)
   const contentRef = useRef(null)
+  const textareaRef = useRef(null)
 
   useEffect(() => {
     if (status === 'loading') return
@@ -63,6 +84,45 @@ export default function DictaEditorPage() {
     
     if (bookId) loadBook()
   }, [bookId, status, router, showAlert])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('dicta_editor_shortcuts')
+    if (saved) {
+      try {
+        setUserShortcuts(JSON.parse(saved))
+      } catch (e) {
+        console.error('Failed to parse shortcuts:', e)
+      }
+    }
+  }, [])
+
+  const insertTag = useCallback((tag) => {
+    if (!textareaRef.current) return
+    
+    const textarea = textareaRef.current
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selectedText = content.substring(start, end)
+    
+    let newText
+    if (selectedText) {
+      newText = content.substring(0, start) + 
+                `<${tag}>${selectedText}</${tag}>` + 
+                content.substring(end)
+    } else {
+      newText = content.substring(0, start) + 
+                `<${tag}></${tag}>` + 
+                content.substring(end)
+    }
+    
+    setContent(newText)
+    
+    setTimeout(() => {
+      const newPos = start + tag.length + 2 + selectedText.length
+      textarea.focus()
+      textarea.setSelectionRange(newPos, newPos)
+    }, 0)
+  }, [content])
 
   useEffect(() => {
     if (!content) return
@@ -99,6 +159,83 @@ export default function DictaEditorPage() {
       setSaving(false)
     }
   }
+
+  const saveUserShortcuts = useCallback((newShortcuts) => {
+    setUserShortcuts(newShortcuts)
+    localStorage.setItem('dicta_editor_shortcuts', JSON.stringify(newShortcuts))
+    showAlert('הצלחה', 'קיצורי המקלדת עודכנו בהצלחה')
+  }, [showAlert])
+
+  const actionsMap = useMemo(() => ({
+    'save': { label: 'שמירה', action: handleSave },
+    'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: () => setEditMode(prev => !prev) },
+    'fontIncrease': { label: 'הגדל גופן', action: () => setFontSize(prev => Math.min(32, prev + 2)) },
+    'fontDecrease': { label: 'הקטן גופן', action: () => setFontSize(prev => Math.max(12, prev - 2)) },
+    'alignRight': { label: 'יישור לימין', action: () => setTextAlign('right') },
+    'alignCenter': { label: 'יישור למרכז', action: () => setTextAlign('center') },
+    'alignLeft': { label: 'יישור לשמאל', action: () => setTextAlign('left') },
+    'alignJustify': { label: 'יישור מלא', action: () => setTextAlign('justify') },
+    'bold': { label: 'מודגש (B)', action: () => insertTag('b') },
+    'italic': { label: 'נטוי (I)', action: () => insertTag('i') },
+    'underline': { label: 'קו תחתון (U)', action: () => insertTag('u') },
+    'h1': { label: 'כותרת H1', action: () => insertTag('h1') },
+    'h2': { label: 'כותרת H2', action: () => insertTag('h2') },
+    'h3': { label: 'כותרת H3', action: () => insertTag('h3') },
+    'h4': { label: 'כותרת H4', action: () => insertTag('h4') },
+    'h5': { label: 'כותרת H5', action: () => insertTag('h5') },
+    'h6': { label: 'כותרת H6', action: () => insertTag('h6') },
+    'bigger': { label: 'הגדל גופן טקסט', action: () => insertTag('big') },
+    'smaller': { label: 'הקטן גופן טקסט', action: () => insertTag('small') },
+    'createHeaders': { label: 'יצירת כותרות', action: () => setActiveTool('createHeaders') },
+    'singleLetterHeaders': { label: 'כותרות אותיות', action: () => setActiveTool('singleLetterHeaders') },
+    'changeHeading': { label: 'שינוי רמת כותרת', action: () => setActiveTool('changeHeading') },
+    'punctuate': { label: 'הדגשה וניקוד', action: () => setActiveTool('punctuate') },
+    'pageBHeader': { label: 'כותרות עמוד ב', action: () => setActiveTool('pageBHeader') },
+    'replacePageB': { label: 'החלפת עמוד ב', action: () => setActiveTool('replacePageB') },
+    'addPageNumber': { label: 'מיזוג דף ועמוד', action: () => setActiveTool('addPageNumber') },
+    'headerCheck': { label: 'בדיקת שגיאות בכותרות', action: () => setActiveTool('headerCheck') },
+    'cleanText': { label: 'ניקוי טקסט', action: () => setActiveTool('cleanText') },
+    'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
+  }), [handleSave, insertTag])
+
+  const availableActions = useMemo(() => {
+    return Object.entries(actionsMap).map(([id, def]) => ({
+      id,
+      label: def.label
+    }))
+  }, [actionsMap])
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if (showShortcutsDialog) return
+
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
+
+      const modifiers = []
+      if (e.ctrlKey) modifiers.push('Ctrl')
+      if (e.altKey) modifiers.push('Alt')
+      if (e.shiftKey) modifiers.push('Shift')
+      if (e.metaKey) modifiers.push('Meta')
+      
+      const code = e.code
+
+      const combination = [...modifiers, code].join('+')
+      
+      const foundActionId = Object.keys(userShortcuts).find(actionId => {
+        const savedCombo = userShortcuts[actionId]
+        return savedCombo === combination
+      })
+
+      if (foundActionId && actionsMap[foundActionId]) {
+        e.preventDefault()
+        e.stopPropagation()
+        actionsMap[foundActionId].action()
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true })
+  }, [userShortcuts, actionsMap, showShortcutsDialog])
 
   const refreshContent = async () => {
     try {
@@ -226,13 +363,22 @@ export default function DictaEditorPage() {
         
         <div className="flex items-center gap-3">
           {canEdit && (
-            <Button
-              icon={editMode ? 'visibility' : 'edit'}
-              variant="ghost"
-              size="sm"
-              onClick={() => setEditMode(!editMode)}
-              label={editMode ? 'תצוגה' : 'עריכה'}
-            />
+            <>
+              <Button
+                icon="keyboard"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowShortcutsDialog(true)}
+                label="קיצורי מקשים"
+              />
+              <Button
+                icon={editMode ? 'visibility' : 'edit'}
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditMode(!editMode)}
+                label={editMode ? 'תצוגה' : 'עריכה'}
+              />
+            </>
           )}
 
           <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1 border border-gray-200 ml-2">
@@ -390,21 +536,106 @@ export default function DictaEditorPage() {
           </aside>
         )}
 
-        <main className="flex-1 overflow-auto p-6 bg-white">
+        <main className="flex-1 overflow-auto bg-white">
           {editMode && canEdit ? (
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="w-full h-full p-4 border rounded-lg font-mono resize-none focus:ring-2 focus:ring-blue-500 outline-none"
-              style={{ fontSize: `${fontSize}px`, direction: 'rtl', textAlign: textAlign }}
-            />
+            <div className="flex flex-col h-full">
+              <div className="bg-gray-50 border-b px-4 py-2 flex items-center gap-2 flex-wrap">
+                <Button
+                  icon="format_bold"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('b')}
+                  label="מודגש"
+                />
+                <Button
+                  icon="format_italic"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('i')}
+                  label="נטוי"
+                />
+                <Button
+                  icon="format_underlined"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('u')}
+                  label="קו תחתון"
+                />
+                
+                <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('h1')}
+                  label="H1"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('h2')}
+                  label="H2"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('h3')}
+                  label="H3"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('h4')}
+                  label="H4"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('h5')}
+                  label="H5"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('h6')}
+                  label="H6"
+                />
+                
+                <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                
+                <Button
+                  icon="text_increase"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('big')}
+                  label="גדול"
+                />
+                <Button
+                  icon="text_decrease"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertTag('small')}
+                  label="קטן"
+                />
+              </div>
+              
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                className="flex-1 p-6 border-0 font-mono resize-none focus:ring-0 outline-none"
+                style={{ fontSize: `${fontSize}px`, direction: 'rtl', textAlign: textAlign }}
+              />
+            </div>
           ) : (
-            <div
-              ref={contentRef}
-              className="max-w-4xl mx-auto prose prose-lg"
-              style={{ fontSize: `${fontSize}px`, textAlign: textAlign }}
-              dangerouslySetInnerHTML={{ __html: content }}
-            />
+            <div className="p-6">
+              <div
+                ref={contentRef}
+                className="max-w-4xl mx-auto prose prose-lg"
+                style={{ fontSize: `${fontSize}px`, textAlign: textAlign }}
+                dangerouslySetInnerHTML={{ __html: content }}
+              />
+            </div>
           )}
         </main>
 
@@ -490,6 +721,19 @@ export default function DictaEditorPage() {
         onClose={() => setActiveTool(null)}
         bookId={bookId}
         onSuccess={refreshContent}
+      />
+
+      <ShortcutsDialog
+        isOpen={showShortcutsDialog}
+        onClose={() => setShowShortcutsDialog(false)}
+        shortcuts={userShortcuts}
+        availableActions={availableActions}
+        saveShortcuts={saveUserShortcuts}
+        resetToDefaults={() => {
+          setUserShortcuts(DEFAULT_SHORTCUTS)
+          localStorage.setItem('dicta_editor_shortcuts', JSON.stringify(DEFAULT_SHORTCUTS))
+          showAlert('הצלחה', 'קיצורי המקלדת אופסו')
+        }}
       />
     </div>
   )
