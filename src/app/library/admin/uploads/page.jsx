@@ -186,7 +186,7 @@ export default function AdminUploadsPage() {
           }`}
         >
           <span className="material-symbols-outlined text-sm">menu_book</span>
-          ספרים שלמים ({fullBookCount})
+          ספרים שהועלו ({fullBookCount})
         </button>
         <button
           onClick={() => setFilterType('single_page')}
@@ -197,7 +197,7 @@ export default function AdminUploadsPage() {
           }`}
         >
           <span className="material-symbols-outlined text-sm">description</span>
-          עמודים בודדים ({singlePageCount})
+          עמודים שנערכו ({singlePageCount})
         </button>
       </div>
       
