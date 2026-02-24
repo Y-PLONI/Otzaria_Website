@@ -15,6 +15,9 @@ export default function AdminDictaBooksPage() {
   const [newBookTitle, setNewBookTitle] = useState('')
   const [newBookContent, setNewBookContent] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
+  
+  const [editingBook, setEditingBook] = useState(null)
+  const [editStatus, setEditStatus] = useState('')
 
   // 1. בדיקת הרשאות והפניה
   useEffect(() => {
@@ -143,6 +146,33 @@ export default function AdminDictaBooksPage() {
     }
   }
 
+  const handleEditStatus = (book) => {
+    setEditingBook(book)
+    setEditStatus(book.status)
+  }
+
+  const handleSaveStatus = async () => {
+    if (!editingBook) return
+    
+    try {
+      const response = await fetch(`/api/dicta/books/${editingBook._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: editStatus })
+      })
+      
+      if (response.ok) {
+        loadBooks()
+        setEditingBook(null)
+        alert('הסטטוס עודכן בהצלחה!')
+      } else {
+        alert('שגיאה בעדכון הסטטוס')
+      }
+    } catch (e) {
+      alert('שגיאה בעדכון הסטטוס')
+    }
+  }
+
   const getStatusBadge = (status) => {
     switch(status) {
       case 'available': return <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">פנוי</span>
@@ -163,7 +193,8 @@ export default function AdminDictaBooksPage() {
   if (session?.user?.role !== 'admin') return null;
 
   return (
-    <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <>
+      <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between mb-8 gap-4">
         <h2 className="text-2xl font-bold text-on-surface flex items-center gap-2">
           <span className="material-symbols-outlined text-primary">edit_document</span>
@@ -278,14 +309,13 @@ export default function AdminDictaBooksPage() {
                           <span className="material-symbols-outlined">lock_open</span>
                         </button>
                       )}
-                      <a
-                        href={`/library/dicta-books/edit/${book._id}`}
-                        target="_blank"
+                      <button
+                        onClick={() => handleEditStatus(book)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="פתח בעורך"
+                        title="ערוך סטטוס"
                       >
                         <span className="material-symbols-outlined">edit</span>
-                      </a>
+                      </button>
                       <button
                         onClick={() => handleDeleteBook(book._id, book.title)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -302,5 +332,59 @@ export default function AdminDictaBooksPage() {
         </div>
       )}
     </div>
+      
+    {editingBook && (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">
+        <div 
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative" 
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+            <h3 className="font-bold text-lg text-gray-800">עריכת סטטוס ספר</h3>
+            <button onClick={() => setEditingBook(null)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+              <span className="material-symbols-outlined text-xl">close</span>
+            </button>
+          </div>
+          
+          <div className="p-6">
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">שם הספר</label>
+              <div className="w-full p-3 bg-gray-50 rounded-lg text-gray-600 border border-gray-200">
+                {editingBook.title}
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">סטטוס</label>
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary outline-none bg-white"
+              >
+                <option value="available">פנוי</option>
+                <option value="in-progress">בעריכה</option>
+                <option value="completed">הושלם</option>
+              </select>
+            </div>
+            
+            <div className="flex justify-end gap-3 mt-8">
+              <button 
+                onClick={() => setEditingBook(null)}
+                className="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+              >
+                ביטול
+              </button>
+              <button 
+                onClick={handleSaveStatus}
+                className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium shadow-sm transition-colors"
+              >
+                שמור שינויים
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

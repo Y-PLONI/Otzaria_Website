@@ -209,9 +209,9 @@ export default function DictaBooksPublicPage() {
       
       let matchesStatus = true
       if (filterStatus === 'available') {
-        matchesStatus = !book.claimedBy && book.status !== 'completed'
+        matchesStatus = book.status === 'available'
       } else if (filterStatus === 'in-progress') {
-        matchesStatus = !!book.claimedBy && book.status !== 'completed'
+        matchesStatus = book.status === 'in-progress'
       } else if (filterStatus === 'completed') {
         matchesStatus = book.status === 'completed'
       }
@@ -326,12 +326,12 @@ export default function DictaBooksPublicPage() {
                     <div key={book._id} className={`group bg-white rounded-2xl border border-slate-200 p-6 transition-all flex flex-col h-full ${isCompleted ? 'opacity-80' : 'hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5'}`}>
                       <div className="flex justify-between items-start mb-4">
                         <div className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
-                          isCompleted ? 'bg-blue-50 text-blue-600 border border-blue-100' :
-                          !book.claimedBy 
+                          book.status === 'completed' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                          book.status === 'available' 
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
                             : 'bg-amber-50 text-amber-600 border border-amber-100'
                         }`}>
-                          {isCompleted ? 'הושלם' : !book.claimedBy ? 'זמין לעריכה' : 'בטיפול'}
+                          {book.status === 'completed' ? 'הושלם' : book.status === 'available' ? 'זמין לעריכה' : 'בטיפול'}
                         </div>
                         
                         <div className="flex items-center gap-2">
@@ -367,15 +367,15 @@ export default function DictaBooksPublicPage() {
 
                       <div className="mt-auto pt-6">
                         <div className="flex flex-col gap-2 mb-6">
-                          {isCompleted ? (
+                          {book.status === 'completed' ? (
                             <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
                               <span className="material-symbols-outlined text-base">verified</span>
                               <span>העריכה הושלמה</span>
                             </div>
-                          ) : book.claimedBy ? (
+                          ) : book.status === 'in-progress' ? (
                             <div className="flex items-center gap-2 text-sm text-slate-500">
                               <span className="material-symbols-outlined text-base">person</span>
-                              <span>נערך על ידי {book.claimedBy.name || 'משתמש'}</span>
+                              <span>נערך על ידי {book.claimedBy?.name || 'לא ידוע'}</span>
                             </div>
                           ) : (
                             <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
@@ -403,7 +403,7 @@ export default function DictaBooksPublicPage() {
                               </button>
                             )}
                           </div>
-                        ) : !book.claimedBy ? (
+                        ) : book.status === 'available' ? (
                           <div className="flex gap-3">
                             <Link 
                               href={`/library/dicta-books/edit/${book._id}`}

@@ -54,7 +54,7 @@ export async function PUT(req, { params }) {
     await connectDB();
     const { id } = await params;
     const body = await req.json();
-    const { content, action } = body;
+    const { content, action, status } = body;
 
     const book = await DictaBook.findById(id);
     if (!book) {
@@ -71,6 +71,22 @@ export async function PUT(req, { params }) {
       book.claimedAt = new Date();
       await book.save();
       return NextResponse.json({ success: true, message: 'Book claimed' });
+    }
+
+    // עדכון סטטוס ישיר (אדמין בלבד)
+    if (status !== undefined) {
+      if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+      }
+      book.status = status;
+      if (status === 'available') {
+        book.claimedBy = null;
+        book.claimedAt = null;
+      } else if (status === 'completed') {
+        book.completedAt = new Date();
+      }
+      await book.save();
+      return NextResponse.json({ success: true, book });
     }
 
     // בדיקת הרשאה לפעולות עריכה/ניהול
