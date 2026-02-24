@@ -104,24 +104,18 @@ export default function DictaEditorPage() {
     const end = textarea.selectionEnd
     const selectedText = content.substring(start, end)
     
-    let newText
-    if (selectedText) {
-      newText = content.substring(0, start) + 
-                `<${tag}>${selectedText}</${tag}>` + 
-                content.substring(end)
-    } else {
-      newText = content.substring(0, start) + 
-                `<${tag}></${tag}>` + 
-                content.substring(end)
-    }
+    const insertion = selectedText ? `<${tag}>${selectedText}</${tag}>` : `<${tag}></${tag}>`;
+    const newText = content.substring(0, start) + insertion + content.substring(end);
     
-    setContent(newText)
+    setContent(newText);
     
     setTimeout(() => {
-      const newPos = start + tag.length + 2 + selectedText.length
-      textarea.focus()
-      textarea.setSelectionRange(newPos, newPos)
-    }, 0)
+      // אם יש טקסט נבחר, מקם את הסמן אחרי התג הסוגר.
+      // אם לא, מקם את הסמן בתוך התג הריק.
+      const newPos = selectedText ? (start + insertion.length) : (start + tag.length + 2);
+      textarea.focus();
+      textarea.setSelectionRange(newPos, newPos);
+    }, 0);
   }, [content])
 
   useEffect(() => {
