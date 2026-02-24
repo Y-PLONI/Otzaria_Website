@@ -26,6 +26,9 @@ export async function POST(request) {
         const content = await file.text();
         await connectDB();
 
+        // קבלת סוג ההעלאה מה-FormData, ברירת מחדל: single_page
+        const uploadType = formData.get('uploadType') || 'single_page';
+
         // לוגיקת ה"דחיסה": עדכון אם קיים, אחרת יצירה (Upsert)
         const upload = await Upload.findOneAndUpdate(
             { uploader: session.user._id, bookName: bookName }, // חיפוש לפי משתמש ושם ספר/עמוד
@@ -34,7 +37,7 @@ export async function POST(request) {
                 content: content,
                 fileSize: file.size,
                 lineCount: content.split('\n').length,
-                uploadType: 'full_book', // זיהוי כספר שלם
+                uploadType: uploadType, // שימוש בערך שהתקבל או ברירת מחדל
                 status: 'pending',
                 updatedAt: new Date()
             },

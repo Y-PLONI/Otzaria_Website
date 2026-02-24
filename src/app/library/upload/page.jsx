@@ -41,6 +41,7 @@ export default function UploadPage() {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('bookName', bookName)
+    formData.append('uploadType', 'full_book') // זיהוי כספר שלם
 
     try {
       // שימוש ב-API החדש של ה-Rewrite
