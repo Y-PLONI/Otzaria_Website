@@ -81,7 +81,7 @@ export async function GET(request) {
                 uploadedAt: u.createdAt,
                 uploadType: u.uploadType || 'single_page',
                 status: u.status,
-                fileName: u.originalFileName
+                originalFileName: u.originalFileName
             }))
         });
 

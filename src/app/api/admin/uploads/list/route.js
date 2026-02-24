@@ -19,12 +19,11 @@ export async function GET() {
   const formattedUploads = uploads.map(u => ({
       id: u._id,
       bookName: u.bookName,
-      fileName: u.originalFileName, // או נתיב להורדה
+      originalFileName: u.originalFileName,
       uploadedBy: u.uploader?.name,
       uploadedAt: u.createdAt,
       uploadType: u.uploadType || 'single_page', // ברירת מחדל לרשומות ישנות
       status: u.status,
-      // כאן אפשר להוסיף תוכן אם רוצים תצוגה מקדימה
   }));
 
   return NextResponse.json({ success: true, uploads: formattedUploads });
