@@ -312,6 +312,11 @@ export default function AdminUploadsPage() {
                                                       ספר שלם
                                                   </span>
                                               )}
+                                              {firstUpload.uploadType === 'dicta' && (
+                                                  <span className="px-2 py-0.5 bg-purple-200 text-purple-900 text-xs rounded-full border border-purple-300 font-bold">
+                                                      דיקטה
+                                                  </span>
+                                              )}
                                           </h3>
                                           <div className="flex items-center gap-4 text-sm text-amber-800/80 mt-1">
                                               <span className="flex items-center gap-1">
