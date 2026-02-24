@@ -41,7 +41,7 @@ export default function StatsSection() {
 
   return (
     <section className="py-16 bg-transparent">
-      <div className="max-w-7xl mx-auto px-4">
+      <div className={`mx-auto px-4 ${items.length === 4 ? 'max-w-[1400px]' : 'max-w-7xl'}`}>
         <div className={`grid grid-cols-1 ${items.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-8`}>
           {items.map((item, i) => (
             <motion.div 

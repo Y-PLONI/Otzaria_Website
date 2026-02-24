@@ -39,6 +39,8 @@ export async function POST(request) {
                 lineCount: content.split('\n').length,
                 uploadType: uploadType, // שימוש בערך שהתקבל או ברירת מחדל
                 status: 'pending',
+                isDeleted: false, // הוצאה מהאשפה אם היה שם
+                deletedAt: null, // איפוס תאריך המחיקה
                 updatedAt: new Date()
             },
             { upsert: true, new: true } // upsert יוצר חדש אם לא נמצא דף תואם
@@ -79,7 +81,7 @@ export async function GET(request) {
                 uploadedAt: u.createdAt,
                 uploadType: u.uploadType || 'single_page',
                 status: u.status,
-                fileName: u.originalFileName
+                originalFileName: u.originalFileName
             }))
         });
 

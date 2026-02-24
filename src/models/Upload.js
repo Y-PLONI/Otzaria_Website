@@ -7,9 +7,11 @@ const UploadSchema = new mongoose.Schema({
   content: { type: String }, // תוכן הקובץ
   fileSize: { type: Number }, // גודל הקובץ בבתים
   lineCount: { type: Number }, // מספר שורות
-  uploadType: { type: String, enum: ['full_book', 'single_page'], default: 'single_page' }, // סוג ההעלאה
+  uploadType: { type: String, enum: ['full_book', 'single_page', 'dicta'], default: 'single_page' }, // סוג ההעלאה
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  isDeleted: { type: Boolean, default: false }, // האם הועבר לאשפה
+  deletedAt: { type: Date }, // תאריך העברה לאשפה
 }, { timestamps: true });
 
 export default mongoose.models.Upload || mongoose.model('Upload', UploadSchema);

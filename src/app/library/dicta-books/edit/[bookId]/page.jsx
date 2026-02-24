@@ -45,10 +45,12 @@ export default function DictaEditorPage() {
   
   const [book, setBook] = useState(null)
   const [content, setContent] = useState('')
+  const [savedContent, setSavedContent] = useState('') // תוכן שנשמר לאחרונה
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [claiming, setClaiming] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [fontSize, setFontSize] = useState(18)
   const [textAlign, setTextAlign] = useState('right')
   const [toc, setToc] = useState([])
@@ -58,6 +60,9 @@ export default function DictaEditorPage() {
   const [userShortcuts, setUserShortcuts] = useState(DEFAULT_SHORTCUTS)
   const contentRef = useRef(null)
   const textareaRef = useRef(null)
+
+  // בדיקה אם יש שינויים לא שמורים
+  const hasUnsavedChanges = content !== savedContent
 
   useEffect(() => {
     if (status === 'loading') return
@@ -74,6 +79,7 @@ export default function DictaEditorPage() {
         const data = await res.json()
         setBook(data)
         setContent(data.content || '')
+        setSavedContent(data.content || '') // שמירת התוכן המקורי
       } catch (error) {
         console.error('Error loading book:', error)
         showAlert('שגיאה', 'שגיאה בטעינת הספר')
@@ -135,7 +141,7 @@ export default function DictaEditorPage() {
     setToc(tocItems)
   }, [content])
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (silent = false) => {
     try {
       setSaving(true)
       const res = await fetch(`/api/dicta/books/${bookId}`, {
@@ -145,7 +151,10 @@ export default function DictaEditorPage() {
       })
       
       if (!res.ok) throw new Error('שגיאה בשמירה')
-      showAlert('הצלחה', 'הספר נשמר בהצלחה!')
+      setSavedContent(content) // עדכון התוכן השמור
+      if (!silent) {
+        showAlert('הצלחה', 'הספר נשמר בהצלחה!')
+      }
     } catch (error) {
       console.error('Error saving book:', error)
       showAlert('שגיאה', 'שגיאה בשמירת הספר')
@@ -277,31 +286,70 @@ export default function DictaEditorPage() {
   }
 
   const handleComplete = () => {
-    showConfirm(
-      'סיום עריכה',
-      'האם אתה בטוח שסיימת לערוך את הספר? לאחר האישור הספר יסומן כ"הושלם".',
-      async () => {
-        try {
-          setCompleting(true)
-          const res = await fetch(`/api/dicta/books/${bookId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'complete' })
-          })
-          if (res.ok) {
-            await refreshContent()
-            showAlert('הצלחה', 'הספר סומן כהושלם בהצלחה!')
-          } else {
-            showAlert('שגיאה', 'אירעה בעיה בסיום עריכת הספר.')
-          }
-        } catch (error) {
-          console.error('Error completing book:', error)
-          showAlert('שגיאה', 'אירעה שגיאה בתקשורת מול השרת.')
-        } finally {
-          setCompleting(false)
+    if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת')
+    
+    if (hasUnsavedChanges) {
+      showConfirm(
+        'שינויים לא שמורים',
+        'שים לב, ישנם שינויים לא שמורים. האם להמשיך ללא שמירה?',
+        () => {
+          setShowUploadDialog(true)
         }
+      )
+    } else {
+      setShowUploadDialog(true)
+    }
+  }
+
+  const handleUploadConfirm = async () => {
+    if (!content.trim()) return showAlert('שגיאה', 'הספר ריק')
+
+    try {
+      setCompleting(true)
+      
+      // יצירת קובץ טקסט
+      const cleanBookName = book.title.replace(/[^a-zA-Z0-9א-ת]/g, '_')
+      const fileName = `${cleanBookName}_dicta.txt`
+      const blob = new Blob([content], { type: 'text/plain' })
+      const file = new File([blob], fileName, { type: 'text/plain' })
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('bookName', book.title)
+      formData.append('userId', session.user._id || session.user.id)
+      formData.append('userName', session.user.name)
+      formData.append('uploadType', 'dicta') // תגית מיוחדת לדיקטה
+
+      const uploadResponse = await fetch('/api/upload-book', { method: 'POST', body: formData })
+      const uploadResult = await uploadResponse.json()
+
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'שגיאה בהעלאה')
       }
-    )
+
+      // סימון הספר כהושלם
+      const completeResponse = await fetch(`/api/dicta/books/${bookId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete' })
+      })
+
+      if (completeResponse.ok) {
+        setShowUploadDialog(false)
+        showAlert('הצלחה', 'הטקסט הועלה בהצלחה והספר סומן כהושלם!')
+        // חזרה לרשימת ספרי דיקטה
+        setTimeout(() => {
+          router.push('/library/dicta-books')
+        }, 1500)
+      } else {
+        showAlert('שגיאה', 'הטקסט הועלה אך אירעה בעיה בסימון הספר כהושלם.')
+      }
+    } catch (error) {
+      console.error('Error completing book:', error)
+      showAlert('שגיאה', error.message || 'אירעה שגיאה בתהליך ההעלאה')
+    } finally {
+      setCompleting(false)
+    }
   }
 
   const scrollToHeading = (index) => {
@@ -441,19 +489,19 @@ export default function DictaEditorPage() {
               />
               <Button
                 icon="save"
-                variant="primary"
+                variant={hasUnsavedChanges ? "primary" : "ghost"}
                 onClick={handleSave}
                 loading={saving}
-                label="שמירה"
+                label={hasUnsavedChanges ? "שמירה *" : "שמירה"}
               />
             </div>
           ) : canEdit && isCompleted ? (
             <Button
               icon="save"
-              variant="primary"
+              variant={hasUnsavedChanges ? "primary" : "ghost"}
               onClick={handleSave}
               loading={saving}
-              label="שמירה"
+              label={hasUnsavedChanges ? "שמירה *" : "שמירה"}
             />
           ) : null}
         </div>
@@ -632,7 +680,7 @@ export default function DictaEditorPage() {
               <div
                 ref={contentRef}
                 className="max-w-4xl mx-auto prose prose-lg"
-                style={{ fontSize: `${fontSize}px`, textAlign: textAlign }}
+                style={{ fontSize: `${fontSize}px`, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
                 dangerouslySetInnerHTML={{ __html: content }}
               />
             </div>
@@ -731,6 +779,72 @@ export default function DictaEditorPage() {
         saveShortcuts={saveUserShortcuts}
         resetToDefaults={resetShortcutsToDefaults}
       />
+
+      {showUploadDialog && (
+        <UploadDialog
+          bookTitle={book?.title}
+          onConfirm={handleUploadConfirm}
+          onCancel={() => setShowUploadDialog(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function UploadDialog({ bookTitle, onConfirm, onCancel }) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        onConfirm()
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onConfirm, onCancel])
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-4xl text-green-600">upload_file</span>
+          </div>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על {bookTitle}</h2>
+          <p className="text-on-surface/70">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
+        </div>
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
+            <div className="text-sm text-blue-800">
+              <p className="font-bold mb-1">מה יקרה?</p>
+              <ul className="space-y-1">
+                <li>• הטקסט שערכת יועלה כקובץ חדש</li>
+                <li>• הקובץ יסומן כ"דיקטה" ויישלח לאישור מנהל</li>
+                <li>• הספר יסומן כהושלם</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3">
+          <button onClick={onConfirm} className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold">
+            <span className="material-symbols-outlined">upload</span>
+            <span>כן, העלה את הטקסט</span>
+          </button>
+          <button
+            onClick={onCancel}
+            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors"
+          >
+            ביטול
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

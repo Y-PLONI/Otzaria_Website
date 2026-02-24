@@ -15,17 +15,17 @@ export default function DictaBooksPublicPage() {
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('available')
   const [filterCategory, setFilterCategory] = useState('all')
   
   const isAdmin = session?.user?.role === 'admin'
   const currentUserId = session?.user?.id
 
   const filters = [
-    { id: 'all', label: 'הכל' },
     { id: 'available', label: 'זמין' },
     { id: 'in-progress', label: 'בטיפול' },
-    { id: 'completed', label: 'הושלם' }
+    { id: 'completed', label: 'הושלם' },
+    { id: 'all', label: 'הכל' }
   ]
 
   useEffect(() => {

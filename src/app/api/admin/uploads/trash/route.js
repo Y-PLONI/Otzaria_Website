@@ -6,24 +6,25 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (session?.user?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (session?.user?.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   await connectDB();
   
-  // מציג רק העלאות שלא באשפה
-  const uploads = await Upload.find({ isDeleted: false })
+  // מציג רק העלאות שבאשפה
+  const uploads = await Upload.find({ isDeleted: true })
     .populate('uploader', 'name')
-    .sort({ createdAt: -1 });
+    .sort({ deletedAt: -1 });
 
-  // התאמה ל-UI
   const formattedUploads = uploads.map(u => ({
       id: u._id,
       bookName: u.bookName,
       originalFileName: u.originalFileName,
       uploadedBy: u.uploader?.name,
       uploadedAt: u.createdAt,
-      uploadType: u.uploadType || 'single_page', // ברירת מחדל לרשומות ישנות
-      status: u.status,
+      deletedAt: u.deletedAt,
+      uploadType: u.uploadType || 'single_page',
   }));
 
   return NextResponse.json({ success: true, uploads: formattedUploads });

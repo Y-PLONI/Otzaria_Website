@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { useDialog } from '@/components/DialogContext'
 
 export default function AdminDictaBooksPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { showAlert, showConfirm } = useDialog()
 
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true) // טעינת נתונים ראשונית
@@ -49,39 +51,45 @@ export default function AdminDictaBooksPage() {
 
   // 2. לוגיקת סנכרון מול GitHub
   const handleSync = async () => {
-    if (!confirm('האם לסנכרן ספרים מ-GitHub? הפעולה עשויה לקחת זמן.')) return
+    showConfirm(
+      'סנכרון ספרים',
+      'האם לסנכרן ספרים מ-GitHub? הפעולה עשויה לקחת זמן.',
+      async () => {
+        setSyncing(true)
+        try {
+          const response = await fetch('/api/dicta/tools', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tool: 'dicta-sync' })
+          })
 
-    setSyncing(true)
-    try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool: 'dicta-sync' }) // קריאה לכלי הסנכרון בצד שרת
-      })
+          const data = await response.json()
 
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        // הצגת סיכום הלוג בצורה קריאה
-        const summary = data.log.length > 0 
-            ? data.log.join('\n') 
-            : 'הסנכרון הסתיים, לא היו שינויים.';
-            
-        alert(`הסנכרון הושלם בהצלחה!\n\n${summary}`)
-        loadBooks() // רענון הרשימה
-      } else {
-        alert(`שגיאה בסנכרון: ${data.detail || data.error || 'שגיאה לא ידועה'}`)
+          if (response.ok && data.success) {
+            const summary = data.log.length > 0 
+                ? data.log.join('\n') 
+                : 'הסנכרון הסתיים, לא היו שינויים.'
+                
+            showAlert('הסנכרון הושלם', `${summary}`)
+            loadBooks()
+          } else {
+            showAlert('שגיאה', `שגיאה בסנכרון: ${data.detail || data.error || 'שגיאה לא ידועה'}`)
+          }
+        } catch (e) {
+          console.error(e)
+          showAlert('שגיאה', 'שגיאת תקשורת בעת ביצוע הסנכרון')
+        } finally {
+          setSyncing(false)
+        }
       }
-    } catch (e) {
-      console.error(e)
-      alert('שגיאת תקשורת בעת ביצוע הסנכרון')
-    } finally {
-      setSyncing(false)
-    }
+    )
   }
 
   const handleCreateBook = async () => {
-    if (!newBookTitle.trim()) return alert('נא להזין שם לספר')
+    if (!newBookTitle.trim()) {
+      showAlert('שגיאה', 'נא להזין שם לספר')
+      return
+    }
     
     try {
       const response = await fetch('/api/dicta/books', {
@@ -98,52 +106,62 @@ export default function AdminDictaBooksPage() {
         setNewBookContent('')
         setShowCreateForm(false)
         loadBooks()
-        alert('הספר נוצר בהצלחה!')
+        showAlert('הצלחה', 'הספר נוצר בהצלחה!')
       } else {
         const data = await response.json()
-        alert(data.error || 'שגיאה ביצירת הספר')
+        showAlert('שגיאה', data.error || 'שגיאה ביצירת הספר')
       }
     } catch (e) {
-      alert('שגיאה ביצירת הספר')
+      showAlert('שגיאה', 'שגיאה ביצירת הספר')
     }
   }
 
   const handleDeleteBook = async (bookId, bookTitle) => {
-    if (!confirm(`האם אתה בטוח שברצונך למחוק את הספר "${bookTitle}"?`)) return
-    
-    try {
-      const response = await fetch(`/api/dicta/books/${bookId}`, {
-        method: 'DELETE'
-      })
-      
-      if (response.ok) {
-        setBooks(prev => prev.filter(b => b._id !== bookId))
-        alert('הספר נמחק בהצלחה!')
-      } else {
-        alert('שגיאה במחיקת הספר')
+    showConfirm(
+      'מחיקת ספר',
+      `האם אתה בטוח שברצונך למחוק את הספר "${bookTitle}"?`,
+      async () => {
+        try {
+          const response = await fetch(`/api/dicta/books/${bookId}`, {
+            method: 'DELETE'
+          })
+          
+          if (response.ok) {
+            setBooks(prev => prev.filter(b => b._id !== bookId))
+            showAlert('הצלחה', 'הספר נמחק בהצלחה!')
+          } else {
+            showAlert('שגיאה', 'שגיאה במחיקת הספר')
+          }
+        } catch (e) {
+          showAlert('שגיאה', 'שגיאה במחיקת הספר')
+        }
       }
-    } catch (e) {
-      alert('שגיאה במחיקת הספר')
-    }
+    )
   }
 
-  const handleReleaseBook = async (bookId) => {
-    try {
-      const response = await fetch(`/api/dicta/books/${bookId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'release' })
-      })
-      
-      if (response.ok) {
-        loadBooks()
-        alert('הספר שוחרר בהצלחה!')
-      } else {
-        alert('שגיאה בשחרור הספר')
+  const handleReleaseBook = async (bookId, bookTitle) => {
+    showConfirm(
+      'שחרור ספר',
+      `האם אתה בטוח שברצונך לשחרר את הספר "${bookTitle}"? משתמשים אחרים יוכלו לתפוס אותו לעריכה.`,
+      async () => {
+        try {
+          const response = await fetch(`/api/dicta/books/${bookId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'release' })
+          })
+          
+          if (response.ok) {
+            loadBooks()
+            showAlert('הצלחה', 'הספר שוחרר בהצלחה!')
+          } else {
+            showAlert('שגיאה', 'שגיאה בשחרור הספר')
+          }
+        } catch (e) {
+          showAlert('שגיאה', 'שגיאה בשחרור הספר')
+        }
       }
-    } catch (e) {
-      alert('שגיאה בשחרור הספר')
-    }
+    )
   }
 
   const handleEditStatus = (book) => {
@@ -164,12 +182,12 @@ export default function AdminDictaBooksPage() {
       if (response.ok) {
         loadBooks()
         setEditingBook(null)
-        alert('הסטטוס עודכן בהצלחה!')
+        showAlert('הצלחה', 'הסטטוס עודכן בהצלחה!')
       } else {
-        alert('שגיאה בעדכון הסטטוס')
+        showAlert('שגיאה', 'שגיאה בעדכון הסטטוס')
       }
     } catch (e) {
-      alert('שגיאה בעדכון הסטטוס')
+      showAlert('שגיאה', 'שגיאה בעדכון הסטטוס')
     }
   }
 
@@ -302,7 +320,7 @@ export default function AdminDictaBooksPage() {
                     <div className="flex gap-2 justify-center">
                       {book.status === 'in-progress' && (
                         <button
-                          onClick={() => handleReleaseBook(book._id)}
+                          onClick={() => handleReleaseBook(book._id, book.title)}
                           className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                           title="שחרר ספר (בטל נעילה)"
                         >
