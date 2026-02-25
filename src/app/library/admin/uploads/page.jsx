@@ -275,13 +275,13 @@ export default function AdminUploadsPage() {
                   const firstUpload = bookUploads[0]
                   
                   return (
-                      <div key={bookName} className="bg-gradient-to-br from-amber-50/80 to-orange-50/60 backdrop-blur-sm p-5 rounded-xl border border-amber-200/50 hover:border-amber-300/70 transition-all shadow-sm hover:shadow-md">
+                      <div key={bookName} className="glass p-5 rounded-xl border border-blue-200 hover:border-blue-300 transition-all">
                           {/* כותרת הספר */}
                           <div 
                               className={`flex items-start gap-4 ${hasMultipleUploads ? 'cursor-pointer' : ''}`}
                               onClick={() => hasMultipleUploads && toggleBookExpansion(bookName)}
                           >
-                              <div className="p-3 rounded-lg bg-amber-100 text-amber-800 shadow-sm">
+                              <div className="p-3 rounded-lg bg-blue-100 text-blue-700">
                                   <span className="material-symbols-outlined text-3xl">
                                       {hasMultipleUploads ? 'folder' : 'description'}
                                   </span>
@@ -290,25 +290,25 @@ export default function AdminUploadsPage() {
                               <div className="flex-1">
                                   <div className="flex justify-between items-start mb-2">
                                       <div>
-                                          <h3 className="text-lg font-bold text-amber-950 flex items-center gap-2">
+                                          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                                               {bookName || 'ללא שם'}
                                               {hasMultipleUploads && (
-                                                  <span className="px-2 py-0.5 bg-amber-200 text-amber-900 text-xs rounded-full border border-amber-300 font-bold">
+                                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full border border-blue-200 font-bold">
                                                       {bookUploads.length} העלאות
                                                   </span>
                                               )}
                                               {firstUpload.uploadType === 'full_book' && (
-                                                  <span className="px-2 py-0.5 bg-orange-200 text-orange-900 text-xs rounded-full border border-orange-300 font-bold">
+                                                  <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full border border-green-200 font-bold">
                                                       ספר שלם
                                                   </span>
                                               )}
                                               {firstUpload.uploadType === 'dicta' && (
-                                                  <span className="px-2 py-0.5 bg-purple-200 text-purple-900 text-xs rounded-full border border-purple-300 font-bold">
+                                                  <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full border border-purple-200 font-bold">
                                                       דיקטה
                                                   </span>
                                               )}
                                           </h3>
-                                          <div className="flex items-center gap-4 text-sm text-amber-800/80 mt-1">
+                                          <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                                               <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-sm">person</span>
                                                 {firstUpload.uploadedBy || 'אורח'}
@@ -328,7 +328,7 @@ export default function AdminUploadsPage() {
                                       
                                       <div className="flex items-center gap-2">
                                           {hasMultipleUploads && (
-                                              <span className="material-symbols-outlined text-amber-600">
+                                              <span className="material-symbols-outlined text-gray-400">
                                                   {isExpanded ? 'expand_less' : 'expand_more'}
                                               </span>
                                           )}
@@ -336,7 +336,7 @@ export default function AdminUploadsPage() {
                                   </div>
                                   
                                   {/* כפתורי פעולה */}
-                                  <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-amber-200/50">
+                                  <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
                                       {hasMultipleUploads && (
                                           <>
                                               <button 
@@ -375,13 +375,13 @@ export default function AdminUploadsPage() {
                                                         }
                                                     );
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-amber-700 hover:bg-amber-100 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">download</span>
                                                   הורד הכל ({bookUploads.length})
                                               </button>
                                               
-                                              <div className="w-px h-6 bg-amber-300 mx-1"></div>
+                                              <div className="w-px h-6 bg-gray-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
@@ -428,13 +428,13 @@ export default function AdminUploadsPage() {
                                                     e.stopPropagation()
                                                     handleDownload(firstUpload.id, firstUpload.originalFileName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-amber-700 hover:bg-amber-100 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">download</span>
                                                   הורד קובץ
                                               </button>
                                               
-                                              <div className="w-px h-6 bg-amber-300 mx-1"></div>
+                                              <div className="w-px h-6 bg-gray-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
@@ -454,15 +454,15 @@ export default function AdminUploadsPage() {
                           
                           {/* רשימת העלאות מורחבת */}
                           {hasMultipleUploads && isExpanded && (
-                              <div className="mt-4 mr-16 space-y-3 border-r-2 border-amber-300 pr-4">
+                              <div className="mt-4 mr-16 space-y-3 border-r-2 border-blue-300 pr-4">
                                   {bookUploads.map(upload => (
-                                      <div key={upload.id} className="bg-white/70 backdrop-blur-sm p-4 rounded-lg border border-amber-200 shadow-sm">
+                                      <div key={upload.id} className="bg-white/50 p-4 rounded-lg border border-gray-200">
                                           <div className="flex justify-between items-start mb-2">
                                               <div className="flex-1">
-                                                  <h4 className="font-semibold text-amber-950">
+                                                  <h4 className="font-semibold text-gray-800">
                                                       {upload.bookName}
                                                   </h4>
-                                                  <div className="flex items-center gap-4 text-xs text-amber-800/70 mt-1">
+                                                  <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
                                                       <span className="flex items-center gap-1">
                                                         <span className="material-symbols-outlined text-xs">person</span>
                                                         {upload.uploadedBy || 'אורח'}
@@ -479,19 +479,19 @@ export default function AdminUploadsPage() {
                                               </div>
                                           </div>
                                           
-                                          <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-amber-200/50">
+                                          <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
                                               <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     handleDownload(upload.id, upload.originalFileName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-amber-700 hover:bg-amber-100 rounded-lg text-xs transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg text-xs transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-sm">download</span>
                                                   הורד
                                               </button>
                                               
-                                              <div className="w-px h-5 bg-amber-300 mx-1"></div>
+                                              <div className="w-px h-5 bg-gray-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
