@@ -52,11 +52,11 @@ export async function createHeadersDB(bookId, findWord, end, levelNum) {
 
 export async function createSingleLetterHeadersDB(
   bookId,
+  start,
   endSuffix,
   end,
   levelNum,
   ignore,
-  start,
   remove,
   boldOnly
 ) {
@@ -66,9 +66,12 @@ export async function createSingleLetterHeadersDB(
   let localIgnore = [...ignore];
 
   if (boldOnly) {
-    localEndSuffix += "</b>";
-    localStart = `<b>${localStart}`;
+    // כאשר מחפשים רק מודגש, אנחנו רוצים שהתגים יהיו חלק מהחיפוש
+    // אבל לא להתעלם מהם
+    localEndSuffix = endSuffix + "</b>";
+    localStart = "<b>" + start;
   } else {
+    // כאשר לא מחפשים רק מודגש, נתעלם מתגי ההדגשה
     localIgnore = localIgnore.concat(["<b>", "</b>"]);
   }
 
@@ -82,22 +85,31 @@ export async function createSingleLetterHeadersDB(
 
   const content = await getBookLines(bookId);
   const allLines = content.slice(0, 1);
+  
   for (const line of content.slice(1)) {
     const words = line.split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      allLines.push(line);
+      continue;
+    }
+    
     try {
+      const firstWord = words[0];
+      const strippedWord = stripHtml(firstWord, localIgnore);
+      
       if (
-        stripHtml(words[0], localIgnore).endsWith(localEndSuffix) &&
-        isGematria(words[0], end + 1) &&
-        stripHtml(words[0], localIgnore).startsWith(localStart)
+        strippedWord.startsWith(localStart) &&
+        strippedWord.endsWith(localEndSuffix) &&
+        isGematria(firstWord, end + 1)
       ) {
-        const headingLine = `<h${levelNum}>${stripHtml(words[0], remove)}<\/h${levelNum}>`;
+        const headingLine = `<h${levelNum}>${stripHtml(firstWord, remove)}<\/h${levelNum}>`;
         allLines.push(headingLine);
         if (words.slice(1).length) allLines.push(words.slice(1).join(" "));
         count += 1;
       } else {
         allLines.push(line);
       }
-    } catch {
+    } catch (error) {
       allLines.push(line);
     }
   }

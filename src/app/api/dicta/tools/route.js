@@ -47,11 +47,11 @@ const toolHandlers = {
   "create-single-letter-headers": async (params) => {
     return createSingleLetterHeadersDB(
       params.book_id || params.bookId,
-      params.end_suffix || params.endSuffix,
+      params.start !== undefined ? params.start : params.startChar,
+      params.end_suffix !== undefined ? params.end_suffix : params.endSuffix,
       Number(params.end || params.maxNum),
       Number(params.level_num || params.level),
       Array.isArray(params.ignore) ? params.ignore : [],
-      params.start || params.startChar,
       Array.isArray(params.remove) ? params.remove : [],
       params.bold_only !== undefined ? params.bold_only : params.boldOnly
     );
