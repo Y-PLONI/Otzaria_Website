@@ -259,40 +259,11 @@ export default function Home() {
                     </p>
                     
                     <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">
-                        {/* Windows */}
-                        <button onClick={() => setWindowsModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                            <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">desktop_windows</span>
-                            <h3 className="text-xl font-bold mb-1">Windows</h3>
-                            <p className="text-sm text-gray-500">10 / 11</p>
-                        </button>
-
-                        {/* Linux */}
-                        <button onClick={() => setLinuxModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                            <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">computer</span>
-                            <h3 className="text-xl font-bold mb-1">Linux</h3>
-                            <p className="text-sm text-gray-500">כל ההפצות</p>
-                        </button>
-
-                        {/* Android */}
-                        <button onClick={() => setAndroidModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                            <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">phone_android</span>
-                            <h3 className="text-xl font-bold mb-1">Android</h3>
-                            <p className="text-sm text-gray-500">Google Play / APK</p>
-                        </button>
-
-                        {/* iOS */}
-                        <button onClick={() => setIosModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                            <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">phone_iphone</span>
-                            <h3 className="text-xl font-bold mb-1">iOS</h3>
-                            <p className="text-sm text-gray-500">App Store</p>
-                        </button>
-
-                        {/* Mac */}
-                        <button onClick={() => setMacModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                            <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">laptop_mac</span>
-                            <h3 className="text-xl font-bold mb-1">macOS</h3>
-                            <p className="text-sm text-gray-500">Intel / Apple Silicon</p>
-                        </button>
+                        {renderPlatformButton('windows')}
+                        {renderPlatformButton('linux')}
+                        {renderPlatformButton('android')}
+                        {renderPlatformButton('ios')}
+                        {renderPlatformButton('macos')}
                     </div>
                     
                     {detectedPlatform && (
