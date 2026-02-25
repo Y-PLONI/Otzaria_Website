@@ -20,6 +20,8 @@ export default function AdminDictaBooksPage() {
   
   const [editingBook, setEditingBook] = useState(null)
   const [editStatus, setEditStatus] = useState('')
+  
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
 
   // 1. בדיקת הרשאות והפניה
   useEffect(() => {
@@ -30,13 +32,13 @@ export default function AdminDictaBooksPage() {
     } else if (session?.user?.role !== 'admin') {
       router.push('/library/dashboard')
     } else {
-      loadBooks()
+      loadBooks(true)
     }
   }, [status, session, router])
 
-  const loadBooks = async () => {
+  const loadBooks = async (showLoader = false) => {
     try {
-      // setLoading(true) - לא נאפס טעינה כדי לא להבהב במסך אם רק מרעננים רשימה
+      if (showLoader) setLoading(true)
       const response = await fetch('/api/dicta/books')
       if (response.ok) {
         const data = await response.json()
@@ -45,7 +47,7 @@ export default function AdminDictaBooksPage() {
     } catch (error) {
       console.error('Error loading dicta books:', error)
     } finally {
-      setLoading(false)
+      if (showLoader) setLoading(false)
     }
   }
 
@@ -191,6 +193,46 @@ export default function AdminDictaBooksPage() {
     }
   }
 
+  const handleSort = (key) => {
+    let direction = 'asc'
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc'
+    }
+    setSortConfig({ key, direction })
+  }
+
+  const getSortIcon = (columnName) => {
+    if (sortConfig.key !== columnName) return '↕'
+    return sortConfig.direction === 'asc' ? '↑' : '↓'
+  }
+
+  const sortedBooks = [...books].sort((a, b) => {
+    if (!sortConfig.key) return 0
+    
+    let aValue = a[sortConfig.key] || ''
+    let bValue = b[sortConfig.key] || ''
+    
+    // טיפול מיוחד בשדה claimedBy (שם המשתמש)
+    if (sortConfig.key === 'claimedBy') {
+      aValue = a.claimedBy?.name || ''
+      bValue = b.claimedBy?.name || ''
+    }
+    
+    // טיפול מיוחד בתאריך עדכון
+    if (sortConfig.key === 'updatedAt') {
+      aValue = new Date(a.updatedAt).getTime()
+      bValue = new Date(b.updatedAt).getTime()
+    }
+
+    if (aValue < bValue) {
+      return sortConfig.direction === 'asc' ? -1 : 1
+    }
+    if (aValue > bValue) {
+      return sortConfig.direction === 'asc' ? 1 : -1
+    }
+    return 0
+  })
+
   const getStatusBadge = (status) => {
     switch(status) {
       case 'available': return <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">פנוי</span>
@@ -201,7 +243,7 @@ export default function AdminDictaBooksPage() {
   }
 
   // מסך טעינה מלא במידה ועדיין בודקים הרשאות או טוענים נתונים ראשוניים
-  if (status === 'loading' || (loading && books.length === 0)) return (
+  if (status === 'loading' || loading) return (
     <div className="flex justify-center items-center h-64">
       <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
     </div>
@@ -298,15 +340,35 @@ export default function AdminDictaBooksPage() {
           <table className="w-full bg-white">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 text-sm">
-                <th className="text-right p-4 font-bold">שם הספר</th>
-                <th className="text-right p-4 font-bold">סטטוס</th>
-                <th className="text-right p-4 font-bold">נערך ע"י</th>
-                <th className="text-right p-4 font-bold">עדכון אחרון</th>
+                <th 
+                  onClick={() => handleSort('title')}
+                  className="text-right p-4 font-bold cursor-pointer hover:bg-gray-200 select-none"
+                >
+                  שם הספר {getSortIcon('title')}
+                </th>
+                <th 
+                  onClick={() => handleSort('status')}
+                  className="text-right p-4 font-bold cursor-pointer hover:bg-gray-200 select-none"
+                >
+                  סטטוס {getSortIcon('status')}
+                </th>
+                <th 
+                  onClick={() => handleSort('claimedBy')}
+                  className="text-right p-4 font-bold cursor-pointer hover:bg-gray-200 select-none"
+                >
+                  נערך ע"י {getSortIcon('claimedBy')}
+                </th>
+                <th 
+                  onClick={() => handleSort('updatedAt')}
+                  className="text-right p-4 font-bold cursor-pointer hover:bg-gray-200 select-none"
+                >
+                  עדכון אחרון {getSortIcon('updatedAt')}
+                </th>
                 <th className="text-center p-4 font-bold">פעולות</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {books.map(book => (
+              {sortedBooks.map(book => (
                 <tr key={book._id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-4 font-medium text-gray-900">{book.title}</td>
                   <td className="p-4">{getStatusBadge(book.status)}</td>
