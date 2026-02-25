@@ -14,16 +14,14 @@ export async function POST(request) {
         const file = formData.get('file');
         const bookName = formData.get('bookName'); // מכיל את שם הספר + מספר העמוד
 
-        if (file.type !== 'text/plain' && !file.name.toLowerCase().endsWith('.txt')) {
-            return NextResponse.json({ error: 'רק קבצי טקסט (.txt) מותרים' }, { status: 400 });
-        }
-
         const MAX_SIZE = 10 * 1024 * 1024;
         if (file.size > MAX_SIZE) {
             return NextResponse.json({ error: 'הקובץ גדול מדי (מקסימום 10MB)' }, { status: 400 });
         }
 
-        const content = await file.text();
+        // קריאת הקובץ כ-ArrayBuffer ללא המרה
+        const arrayBuffer = await file.arrayBuffer();
+        const content = Buffer.from(arrayBuffer);
         await connectDB();
 
         // קבלת סוג ההעלאה מה-FormData, ברירת מחדל: single_page
@@ -34,9 +32,9 @@ export async function POST(request) {
             { uploader: session.user._id, bookName: bookName }, // חיפוש לפי משתמש ושם ספר/עמוד
             { 
                 originalFileName: file.name,
-                content: content,
+                content: content, // שמירת הקובץ כ-Buffer ללא המרה
                 fileSize: file.size,
-                lineCount: content.split('\n').length,
+                lineCount: 0, // לא סופרים שורות כי זה לא בהכרח טקסט
                 uploadType: uploadType, // שימוש בערך שהתקבל או ברירת מחדל
                 status: 'pending',
                 isDeleted: false, // הוצאה מהאשפה אם היה שם
