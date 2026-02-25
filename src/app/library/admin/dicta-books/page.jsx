@@ -380,6 +380,13 @@ export default function AdminDictaBooksPage() {
                   </td>
                   <td className="p-4">
                     <div className="flex gap-2 justify-center">
+                      <button
+                        onClick={() => router.push(`/library/dicta-books/edit/${book._id}`)}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="פתח בעורך"
+                      >
+                        <span className="material-symbols-outlined">edit_note</span>
+                      </button>
                       {book.status === 'in-progress' && (
                         <button
                           onClick={() => handleReleaseBook(book._id, book.title)}
