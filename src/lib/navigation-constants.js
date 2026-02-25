@@ -17,7 +17,7 @@ export const MAIN_NAV_LINKS = [
   { href: '/docs', label: 'מדריכים', highlight: false },
   { href: '/faq', label: 'שאלות נפוצות', highlight: false },
   { href: '/donate', label: 'תרומות', highlight: false },
-  { href: 'https://forum.otzaria.org', label: 'פורום', external: true, highlight: false }
+  { href: '/forum', label: 'פורום', external: true, highlight: false }
 ]
 
 export const FOOTER_QUICK_LINKS = [

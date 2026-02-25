@@ -16,7 +16,7 @@ const frankRuehl = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "ספריית אוצריא",
+  title: "אוצריא",
   description: "פלטפורמה משותפת לעריכה ושיתוף",
   icons: {
     icon: [

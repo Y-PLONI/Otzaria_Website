@@ -15,6 +15,31 @@ export default function Home() {
   
   const [stableDownloads, setStableDownloads] = useState<any>(null)
   const [devDownloads, setDevDownloads] = useState<any>(null)
+  const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null)
+  const [showAllPlatforms, setShowAllPlatforms] = useState(false)
+
+  // זיהוי פלטפורמה אוטומטי
+  useEffect(() => {
+    const detectPlatform = () => {
+      const userAgent = navigator.userAgent.toLowerCase()
+      const platform = navigator.platform?.toLowerCase() || ''
+      
+      if (/android/.test(userAgent)) {
+        return 'android'
+      } else if (/iphone|ipad|ipod/.test(userAgent)) {
+        return 'ios'
+      } else if (/mac/.test(platform) || /macintosh/.test(userAgent)) {
+        return 'macos'
+      } else if (/win/.test(platform) || /windows/.test(userAgent)) {
+        return 'windows'
+      } else if (/linux/.test(platform) || /linux/.test(userAgent)) {
+        return 'linux'
+      }
+      return null
+    }
+    
+    setDetectedPlatform(detectPlatform())
+  }, [])
 
   // טעינת קישורי הורדה מ-GitHub
   useEffect(() => {
@@ -66,6 +91,90 @@ export default function Home() {
       description: 'התוכנה חינמית לחלוטין ותישאר כזו לעד'
     }
   ]
+
+  // פונקציה להחזרת שם הפלטפורמה בעברית
+  const getPlatformName = (platform: string) => {
+    const names: Record<string, string> = {
+      windows: 'Windows',
+      linux: 'Linux',
+      android: 'Android',
+      ios: 'iOS',
+      macos: 'macOS'
+    }
+    return names[platform] || platform
+  }
+
+  // פונקציה להצגת כפתור פלטפורמה
+  const renderPlatformButton = (platform: string, large: boolean = false) => {
+    const platformConfig: Record<string, any> = {
+      windows: {
+        icon: 'desktop_windows',
+        title: 'Windows',
+        subtitle: '10 / 11',
+        onClick: () => setWindowsModalOpen(true)
+      },
+      linux: {
+        icon: 'computer',
+        title: 'Linux',
+        subtitle: 'כל ההפצות',
+        onClick: () => setLinuxModalOpen(true)
+      },
+      android: {
+        icon: 'phone_android',
+        title: 'Android',
+        subtitle: 'Google Play / APK',
+        onClick: () => setAndroidModalOpen(true)
+      },
+      ios: {
+        icon: 'phone_iphone',
+        title: 'iOS',
+        subtitle: 'App Store',
+        onClick: () => setIosModalOpen(true)
+      },
+      macos: {
+        icon: 'laptop_mac',
+        title: 'macOS',
+        subtitle: 'Intel / Apple Silicon',
+        onClick: () => setMacModalOpen(true)
+      }
+    }
+
+    const config = platformConfig[platform]
+    if (!config) return null
+
+    if (large) {
+      return (
+        <button 
+          onClick={config.onClick}
+          className="flex items-center gap-6 p-8 bg-white border-2 border-primary rounded-2xl hover:shadow-2xl transition-all group w-full max-w-md"
+        >
+          <div className="w-20 h-20 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+            <span className="material-symbols-outlined text-5xl text-primary group-hover:scale-110 transition-transform">
+              {config.icon}
+            </span>
+          </div>
+          <div className="flex-1 text-right">
+            <h3 className="text-2xl font-bold mb-1">{config.title}</h3>
+            <p className="text-gray-500">{config.subtitle}</p>
+          </div>
+          <span className="material-symbols-outlined text-3xl text-primary">download</span>
+        </button>
+      )
+    }
+
+    return (
+      <button 
+        onClick={config.onClick}
+        className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full"
+      >
+        <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">
+          {config.icon}
+        </span>
+        <h3 className="text-xl font-bold mb-1">{config.title}</h3>
+        <p className="text-sm text-gray-500">{config.subtitle}</p>
+      </button>
+    )
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -125,44 +234,51 @@ export default function Home() {
         <section id="download" className="py-20 px-4">
             <div className="container mx-auto max-w-6xl">
                 <h2 className="text-4xl font-bold text-center mb-4 font-frank">הורדת התוכנה</h2>
-                <p className="text-center text-xl text-gray-600 mb-12">בחר את הפלטפורמה המתאימה לך</p>
                 
-                <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">
-                    {/* Windows */}
-                    <button onClick={() => setWindowsModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                        <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">desktop_windows</span>
-                        <h3 className="text-xl font-bold mb-1">Windows</h3>
-                        <p className="text-sm text-gray-500">10 / 11</p>
-                    </button>
-
-                    {/* Linux */}
-                    <button onClick={() => setLinuxModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                        <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">computer</span>
-                        <h3 className="text-xl font-bold mb-1">Linux</h3>
-                        <p className="text-sm text-gray-500">כל ההפצות</p>
-                    </button>
-
-                    {/* Android */}
-                    <button onClick={() => setAndroidModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                        <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">phone_android</span>
-                        <h3 className="text-xl font-bold mb-1">Android</h3>
-                        <p className="text-sm text-gray-500">Google Play / APK</p>
-                    </button>
-
-                    {/* iOS */}
-                    <button onClick={() => setIosModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                        <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">phone_iphone</span>
-                        <h3 className="text-xl font-bold mb-1">iOS</h3>
-                        <p className="text-sm text-gray-500">App Store</p>
-                    </button>
-
-                    {/* Mac */}
-                    <button onClick={() => setMacModalOpen(true)} className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full">
-                        <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">laptop_mac</span>
-                        <h3 className="text-xl font-bold mb-1">macOS</h3>
-                        <p className="text-sm text-gray-500">Intel / Apple Silicon</p>
-                    </button>
-                </div>
+                {/* הצגת כפתור הורדה לפלטפורמה שזוהתה */}
+                {detectedPlatform && !showAllPlatforms ? (
+                  <div className="max-w-2xl mx-auto">
+                    <p className="text-center text-xl text-gray-600 mb-8">זיהינו שאתה משתמש ב-{getPlatformName(detectedPlatform)}</p>
+                    
+                    <div className="flex flex-col items-center gap-4 mb-8">
+                      {renderPlatformButton(detectedPlatform, true)}
+                      
+                      <button 
+                        onClick={() => setShowAllPlatforms(true)}
+                        className="text-primary hover:underline text-sm font-medium flex items-center gap-1"
+                      >
+                        <span>הורד למערכת אחרת</span>
+                        <span className="material-symbols-outlined text-sm">expand_more</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-center text-xl text-gray-600 mb-12">
+                      {detectedPlatform ? 'בחר פלטפורמה' : 'לא הצלחנו לזהות את המערכת שלך - בחר פלטפורמה'}
+                    </p>
+                    
+                    <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">
+                        {renderPlatformButton('windows')}
+                        {renderPlatformButton('linux')}
+                        {renderPlatformButton('android')}
+                        {renderPlatformButton('ios')}
+                        {renderPlatformButton('macos')}
+                    </div>
+                    
+                    {detectedPlatform && (
+                      <div className="text-center mt-6">
+                        <button 
+                          onClick={() => setShowAllPlatforms(false)}
+                          className="text-primary hover:underline text-sm font-medium flex items-center gap-1 mx-auto"
+                        >
+                          <span className="material-symbols-outlined text-sm">expand_less</span>
+                          <span>חזור להורדה ל-{getPlatformName(detectedPlatform)}</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
             </div>
         </section>
 
