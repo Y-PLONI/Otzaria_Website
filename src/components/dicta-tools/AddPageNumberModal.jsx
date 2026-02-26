@@ -3,45 +3,69 @@
 import { useState } from 'react'
 import Modal from '@/components/Modal'
 
-export default function AddPageNumberModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function AddPageNumberModal({ isOpen, onClose, content, onContentChange }) {
   const [replaceWith, setReplaceWith] = useState('נקודה ונקודותיים')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'add-page-number',
-          book_id: bookId,
-          replace_with: replaceWith
-        })
-      })
+      let newContent = content
+      let count = 0
       
-      const data = await response.json()
+      // חיפוש דפוס של כותרת "דף X" ואחריה שורה עם "עמוד א/ב"
+      const lines = newContent.split('\n')
+      const processedLines = []
       
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        const nextLine = i < lines.length - 1 ? lines[i + 1] : ''
+        
+        // בדיקה אם זו כותרת דף
+        const pageMatch = line.match(/<h(\d+)>דף\s+([א-ת]+|\d+)<\/h\1>/)
+        
+        if (pageMatch && nextLine) {
+          // בדיקה אם השורה הבאה היא "עמוד א" או "עמוד ב"
+          const columnMatch = nextLine.match(/^\s*עמוד\s+([אב])\s*$/)
+          
+          if (columnMatch) {
+            const column = columnMatch[1]
+            let suffix = ''
+            
+            if (replaceWith === 'נקודה ונקודותיים') {
+              suffix = column === 'א' ? '.' : ':'
+            } else {
+              suffix = column === 'א' ? ' ע"א' : ' ע"ב'
+            }
+            
+            // החלפת הכותרת
+            const newHeader = line.replace(/<\/h(\d+)>$/, `${suffix}</h$1>`)
+            processedLines.push(newHeader)
+            i++ // דילוג על השורה הבאה
+            count++
+            continue
+          }
+        }
+        
+        processedLines.push(line)
       }
       
-      if (data.changed) {
-        setResult(data.message)
+      if (count > 0) {
+        newContent = processedLines.join('\n')
+        setResult(`בוצעו ${count} מיזוגים בהצלחה!`)
+        onContentChange(newContent)
         setTimeout(() => {
-          onSuccess()
           onClose()
           setResult('')
         }, 1500)
       } else {
-        setResult(data.message || 'לא בוצעו שינויים')
+        setResult('לא נמצאו דפוסים תואמים למיזוג')
       }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

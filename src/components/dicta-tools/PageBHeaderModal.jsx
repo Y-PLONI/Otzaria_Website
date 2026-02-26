@@ -4,41 +4,46 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
-export default function PageBHeaderModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function PageBHeaderModal({ isOpen, onClose, content, onContentChange }) {
   const [headerLevel, setHeaderLevel] = useState(2)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'create-page-b-headers',
-          book_id: bookId,
-          header_level: headerLevel
-        })
+      let newContent = content
+      let count = 0
+      
+      // חיפוש דפוסים של "עמוד ב" או "ע"ב"
+      const patterns = [
+        /עמוד ב(?![א-ת])/g,
+        /ע"ב(?![א-ת])/g,
+        /ע״ב(?![א-ת])/g
+      ]
+      
+      patterns.forEach(pattern => {
+        const matches = newContent.match(pattern)
+        if (matches) {
+          count += matches.length
+          newContent = newContent.replace(pattern, (match) => `<h${headerLevel}>${match}</h${headerLevel}>`)
+        }
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+      if (count > 0) {
+        setResult(`נוצרו ${count} כותרות "עמוד ב" בהצלחה!`)
+        onContentChange(newContent)
+        setTimeout(() => {
+          onClose()
+          setResult('')
+        }, 1500)
+      } else {
+        setResult('לא נמצאו אזכורים של "עמוד ב"')
       }
-      
-      setResult(`נוצרו ${data.count} כותרות "עמוד ב" בהצלחה!`)
-      setTimeout(() => {
-        onSuccess()
-        onClose()
-        setResult('')
-      }, 1500)
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

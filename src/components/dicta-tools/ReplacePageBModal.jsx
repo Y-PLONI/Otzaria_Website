@@ -3,41 +3,50 @@
 import { useState } from 'react'
 import Modal from '@/components/Modal'
 
-export default function ReplacePageBModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function ReplacePageBModal({ isOpen, onClose, content, onContentChange }) {
   const [replaceType, setReplaceType] = useState('נקודותיים')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'replace-page-b-headers',
-          book_id: bookId,
-          replace_type: replaceType
-        })
+      let newContent = content
+      let count = 0
+      
+      // חיפוש כותרות "עמוד ב" והחלפתן
+      const patterns = [
+        /<h\d+>עמוד ב<\/h\d+>/g,
+        /<h\d+>ע"ב<\/h\d+>/g,
+        /<h\d+>ע״ב<\/h\d+>/g
+      ]
+      
+      const replacement = replaceType === 'נקודותיים' ? ':' : 'ע"ב'
+      
+      patterns.forEach(pattern => {
+        const matches = newContent.match(pattern)
+        if (matches) {
+          count += matches.length
+          newContent = newContent.replace(pattern, (match) => {
+            return match.replace(/עמוד ב|ע"ב|ע״ב/, replacement)
+          })
+        }
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+      if (count > 0) {
+        setResult(`בוצעו ${count} החלפות בהצלחה!`)
+        onContentChange(newContent)
+        setTimeout(() => {
+          onClose()
+          setResult('')
+        }, 1500)
+      } else {
+        setResult('לא נמצאו כותרות "עמוד ב" להחלפה')
       }
-      
-      setResult(`בוצעו ${data.count} החלפות בהצלחה!`)
-      setTimeout(() => {
-        onSuccess()
-        onClose()
-        setResult('')
-      }, 1500)
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

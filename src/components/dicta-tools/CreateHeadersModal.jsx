@@ -4,41 +4,53 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
-export default function CreateHeadersModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function CreateHeadersModal({ isOpen, onClose, content, onContentChange }) {
   const [findWord, setFindWord] = useState('דף')
   const [endNumber, setEndNumber] = useState(999)
   const [level, setLevel] = useState(2)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'create-headers',
-          book_id: bookId,
-          find_word: findWord,
-          end: endNumber,
-          level_num: level
-        })
+      // ביצוע הלוגיקה מקומית
+      let newContent = content
+      let count = 0
+      
+      // חיפוש והחלפה של דפוסים כמו "דף א" עד "דף תתקצט"
+      const regex = new RegExp(`${findWord}\\s*([א-ת]+|\\d+)`, 'g')
+      
+      newContent = newContent.replace(regex, (match, number) => {
+        // המרת מספר עברי למספר רגיל (פשטני)
+        let numValue = 0
+        if (/^\d+$/.test(number)) {
+          numValue = parseInt(number)
+        } else {
+          // המרה פשוטה של אותיות עבריות למספרים
+          const hebrewNumerals = {
+            'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+            'י': 10, 'כ': 20, 'ל': 30, 'מ': 40, 'נ': 50, 'ס': 60, 'ע': 70, 'פ': 80, 'צ': 90,
+            'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
+          }
+          for (let char of number) {
+            numValue += hebrewNumerals[char] || 0
+          }
+        }
+        
+        if (numValue <= endNumber) {
+          count++
+          return `<h${level}>${match}</h${level}>`
+        }
+        return match
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
-      }
-      
-      if (data.found) {
-        setResult(`נוצרו ${data.count} כותרות בהצלחה!`)
+      if (count > 0) {
+        setResult(`נוצרו ${count} כותרות בהצלחה!`)
+        onContentChange(newContent)
         setTimeout(() => {
-          onSuccess()
           onClose()
           setResult('')
         }, 1500)
@@ -46,7 +58,7 @@ export default function CreateHeadersModal({ isOpen, onClose, bookId, onSuccess 
         setResult('לא נמצאו תוצאות תואמות')
       }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

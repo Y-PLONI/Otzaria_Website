@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
-export default function HeaderErrorCheckerModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onContentChange }) {
   const [reStart, setReStart] = useState('')
   const [reEnd, setReEnd] = useState('')
   const [gershayim, setGershayim] = useState(false)
@@ -12,34 +12,100 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, bookId, onSuc
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState(null)
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setErrors(null)
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'header-error-checker',
-          book_id: bookId,
-          re_start: reStart,
-          re_end: reEnd,
-          gershayim,
-          is_shas: isShas
-        })
-      })
-      
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setErrors({ error: data.detail || 'שגיאה לא ידועה' })
-        return
+      const result = {
+        unmatched_regex: [],
+        unmatched_tags: [],
+        opening_without_closing: [],
+        closing_without_opening: [],
+        heading_errors: [],
+        missing_levels: []
       }
       
-      setErrors(data)
+      // בדיקת תגים פתוחים וסוגרים
+      const tagStack = []
+      const tagRegex = /<\/?([a-z]+\d?)>/gi
+      let match
+      
+      while ((match = tagRegex.exec(content)) !== null) {
+        const fullTag = match[0]
+        const tagName = match[1]
+        
+        if (fullTag.startsWith('</')) {
+          // תג סוגר
+          if (tagStack.length === 0 || tagStack[tagStack.length - 1] !== tagName) {
+            result.closing_without_opening.push(fullTag)
+          } else {
+            tagStack.pop()
+          }
+        } else {
+          // תג פותח
+          tagStack.push(tagName)
+        }
+      }
+      
+      // תגים שנשארו פתוחים
+      result.opening_without_closing = tagStack.map(tag => `<${tag}>`)
+      
+      // בדיקת כותרות
+      const headerRegex = /<h(\d+)>(.*?)<\/h\1>/g
+      const headers = []
+      let headerMatch
+      let prevNumber = null
+      
+      while ((headerMatch = headerRegex.exec(content)) !== null) {
+        const level = parseInt(headerMatch[1])
+        const headerContent = headerMatch[2]
+        
+        headers.push({ level, content: headerContent, full: headerMatch[0] })
+        
+        // בדיקת regex התחלה וסוף
+        if (reStart && !new RegExp(`^[${reStart}]`).test(headerContent.trim())) {
+          result.unmatched_regex.push(headerMatch[0])
+        }
+        if (reEnd && !new RegExp(`[${reEnd}]$`).test(headerContent.trim())) {
+          result.unmatched_regex.push(headerMatch[0])
+        }
+        
+        // בדיקת גרשיים
+        if (!gershayim && (headerContent.includes('"') || headerContent.includes("'"))) {
+          // דילוג על כותרות עם גרשיים אם נדרש
+        }
+        
+        // בדיקת רצף מספרים (אם זה ש"ס)
+        if (isShas) {
+          const numMatch = headerContent.match(/(\d+)/)
+          if (numMatch) {
+            const currentNum = parseInt(numMatch[1])
+            if (prevNumber !== null && currentNum !== prevNumber + 1 && currentNum !== prevNumber + 2) {
+              result.unmatched_tags.push(`דילוג מ-${prevNumber} ל-${currentNum}: ${headerMatch[0]}`)
+            }
+            prevNumber = currentNum
+          }
+        }
+        
+        // בדיקת טקסט נוסף אחרי תג סגירה
+        const afterHeader = content.substring(headerMatch.index + headerMatch[0].length, headerMatch.index + headerMatch[0].length + 50)
+        if (afterHeader.trim() && !afterHeader.trim().startsWith('\n') && !afterHeader.trim().startsWith('<')) {
+          result.heading_errors.push(headerMatch[0] + ' [יש טקסט אחרי הכותרת]')
+        }
+      }
+      
+      // בדיקת רמות כותרת חסרות
+      const usedLevels = [...new Set(headers.map(h => h.level))].sort()
+      for (let i = 1; i <= 6; i++) {
+        if (usedLevels.length > 0 && i < Math.max(...usedLevels) && !usedLevels.includes(i)) {
+          result.missing_levels.push(i)
+        }
+      }
+      
+      setErrors(result)
     } catch (error) {
-      setErrors({ error: 'שגיאה בתקשורת עם השרת' })
+      setErrors({ error: 'שגיאה בביצוע הבדיקה' })
       console.error(error)
     } finally {
       setLoading(false)

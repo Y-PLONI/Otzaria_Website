@@ -3,39 +3,54 @@
 import { useState } from 'react'
 import Modal from '@/components/Modal'
 
-export default function PunctuateModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function PunctuateModal({ isOpen, onClose, content, onContentChange }) {
   const [addEnding, setAddEnding] = useState('הוסף נקודה')
   const [emphasizeStart, setEmphasizeStart] = useState(true)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'emphasize-and-punctuate',
-          book_id: bookId,
-          add_ending: addEnding,
-          emphasize_start: emphasizeStart
-        })
+      let newContent = content
+      let changed = false
+      
+      // פיצול לשורות
+      const lines = newContent.split('\n')
+      const processedLines = lines.map(line => {
+        let processedLine = line
+        
+        // בדיקה אם השורה ארוכה מספיק (יותר מ-20 תווים)
+        if (line.trim().length > 20) {
+          // הוספת סימן בסוף אם אין
+          if (addEnding === 'הוסף נקודה' && !line.trim().match(/[.!?:;]$/)) {
+            processedLine = line.trimEnd() + '.'
+            changed = true
+          } else if (addEnding === 'הוסף נקודותיים' && !line.trim().match(/[.!?:;]$/)) {
+            processedLine = line.trimEnd() + ':'
+            changed = true
+          }
+          
+          // הדגשת המילה הראשונה
+          if (emphasizeStart) {
+            const match = processedLine.match(/^(\s*)(\S+)/)
+            if (match && !match[2].startsWith('<')) {
+              processedLine = processedLine.replace(/^(\s*)(\S+)/, `$1<b>$2</b>`)
+              changed = true
+            }
+          }
+        }
+        
+        return processedLine
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
-      }
-      
-      if (data.changed) {
+      if (changed) {
+        newContent = processedLines.join('\n')
         setResult('השינויים בוצעו בהצלחה!')
+        onContentChange(newContent)
         setTimeout(() => {
-          onSuccess()
           onClose()
           setResult('')
         }, 1500)
@@ -43,7 +58,7 @@ export default function PunctuateModal({ isOpen, onClose, bookId, onSuccess }) {
         setResult('לא בוצעו שינויים')
       }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

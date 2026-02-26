@@ -188,6 +188,10 @@ export default function DictaEditorPage() {
     }
   }, [])
 
+  const handleContentChange = useCallback((newContent) => {
+    setContent(newContent)
+  }, [])
+
   const insertTag = useCallback((tag) => {
     if (!textareaRef.current) return
     
@@ -561,19 +565,6 @@ export default function DictaEditorPage() {
     window.addEventListener('keydown', handleGlobalKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true })
   }, [userShortcuts, actionsMap, showShortcutsDialog])
-
-  const refreshContent = async () => {
-    try {
-      const res = await fetch(`/api/dicta/books/${bookId}`)
-      if (!res.ok) throw new Error('שגיאה ברענון')
-      const data = await res.json()
-      setBook(data)
-      setContent(data.content || '')
-    } catch (error) {
-      console.error('Error refreshing:', error)
-      showAlert('שגיאה', 'שגיאה ברענון התוכן')
-    }
-  }
 
   const handleClaim = () => {
     showConfirm(
@@ -1105,64 +1096,64 @@ export default function DictaEditorPage() {
       <CreateHeadersModal
         isOpen={activeTool === 'createHeaders'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <SingleLetterHeadersModal
         isOpen={activeTool === 'singleLetterHeaders'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <ChangeHeadingModal
         isOpen={activeTool === 'changeHeading'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <PunctuateModal
         isOpen={activeTool === 'punctuate'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <PageBHeaderModal
         isOpen={activeTool === 'pageBHeader'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <ReplacePageBModal
         isOpen={activeTool === 'replacePageB'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <HeaderErrorCheckerModal
         isOpen={activeTool === 'headerCheck'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <TextCleanerModal
         isOpen={activeTool === 'cleanText'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
 
       <AddPageNumberModal
         isOpen={activeTool === 'addPageNumber'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
 
       <ShortcutsDialog

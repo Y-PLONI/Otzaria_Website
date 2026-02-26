@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
-export default function SingleLetterHeadersModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function SingleLetterHeadersModal({ isOpen, onClose, content, onContentChange }) {
   const [startChar, setStartChar] = useState('')
   const [endChar, setEndChar] = useState('')
   const [level, setLevel] = useState(3)
@@ -15,7 +15,7 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, bookId, onSu
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
@@ -23,37 +23,56 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, bookId, onSu
       const ignoreArray = ignoreTags.split(' ').filter(Boolean)
       const removeArray = removeTags.split(' ').filter(Boolean)
       
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'create-single-letter-headers',
-          book_id: bookId,
-          start: startChar,
-          end_suffix: endChar,
-          end: maxNum,
-          level_num: level,
-          ignore: ignoreArray,
-          remove: removeArray,
-          bold_only: boldOnly
+      let newContent = content
+      let count = 0
+      
+      // יצירת regex לחיפוש שורות שמתחילות באות בודדת
+      const lines = newContent.split('\n')
+      const processedLines = lines.map(line => {
+        // בדיקה אם השורה מתחילה באות בודדת
+        let testLine = line
+        
+        // הסרת תגים להתעלמות
+        ignoreArray.forEach(tag => {
+          testLine = testLine.replace(new RegExp(tag, 'g'), '')
         })
+        
+        // הסרת תווים להסרה
+        removeArray.forEach(char => {
+          testLine = testLine.replace(new RegExp(`\\${char}`, 'g'), '')
+        })
+        
+        // בדיקה אם מדובר בשורה מודגשת (אם נדרש)
+        const isBold = line.includes('<b>') || !boldOnly
+        
+        // בדיקה אם השורה מתחילה באות בודדת
+        const match = testLine.trim().match(/^([א-ת])/)
+        
+        if (match && isBold && startChar && match[1] >= startChar) {
+          if (!endChar || line.includes(endChar)) {
+            count++
+            return `<h${level}>${line}</h${level}>`
+          }
+        }
+        
+        return line
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+      if (count > 0 && count <= maxNum) {
+        newContent = processedLines.join('\n')
+        setResult(`נוצרו ${count} כותרות בהצלחה!`)
+        onContentChange(newContent)
+        setTimeout(() => {
+          onClose()
+          setResult('')
+        }, 1500)
+      } else if (count > maxNum) {
+        setResult(`נמצאו ${count} כותרות, אך המקסימום הוא ${maxNum}`)
+      } else {
+        setResult('לא נמצאו תוצאות תואמות')
       }
-      
-      setResult(`נוצרו ${data.count} כותרות בהצלחה!`)
-      setTimeout(() => {
-        onSuccess()
-        onClose()
-        setResult('')
-      }, 1500)
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

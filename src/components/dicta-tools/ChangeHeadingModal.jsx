@@ -4,47 +4,42 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
-export default function ChangeHeadingModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function ChangeHeadingModal({ isOpen, onClose, content, onContentChange }) {
   const [currentLevel, setCurrentLevel] = useState('2')
   const [newLevel, setNewLevel] = useState('3')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'change-heading-level',
-          book_id: bookId,
-          current_level: currentLevel,
-          new_level: newLevel
-        })
-      })
+      let newContent = content
+      let count = 0
       
-      const data = await response.json()
+      // החלפת כל תגי הכותרת מהרמה הנוכחית לרמה החדשה
+      const openTagRegex = new RegExp(`<h${currentLevel}>`, 'g')
+      const closeTagRegex = new RegExp(`</h${currentLevel}>`, 'g')
       
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
-      }
+      const matches = newContent.match(openTagRegex)
+      count = matches ? matches.length : 0
       
-      if (data.changed) {
-        setResult(data.message)
+      if (count > 0) {
+        newContent = newContent.replace(openTagRegex, `<h${newLevel}>`)
+        newContent = newContent.replace(closeTagRegex, `</h${newLevel}>`)
+        
+        setResult(`שונו ${count} כותרות מרמה ${currentLevel} לרמה ${newLevel}`)
+        onContentChange(newContent)
         setTimeout(() => {
-          onSuccess()
           onClose()
           setResult('')
         }, 1500)
       } else {
-        setResult(data.message)
+        setResult(`לא נמצאו כותרות ברמה ${currentLevel}`)
       }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

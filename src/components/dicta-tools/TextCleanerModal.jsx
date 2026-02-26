@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Modal from '@/components/Modal'
 
-export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function TextCleanerModal({ isOpen, onClose, content, onContentChange }) {
   const [options, setOptions] = useState({
     remove_empty_lines: true,
     remove_double_spaces: true,
@@ -21,32 +21,70 @@ export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess })
     setOptions(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'text-cleaner',
-          book_id: bookId,
-          options
-        })
-      })
+      let newContent = content
+      let changed = false
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+      if (options.remove_empty_lines) {
+        const before = newContent
+        newContent = newContent.replace(/\n\s*\n\s*\n/g, '\n\n')
+        if (before !== newContent) changed = true
       }
       
-      if (data.changed) {
+      if (options.remove_double_spaces) {
+        const before = newContent
+        newContent = newContent.replace(/  +/g, ' ')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.remove_spaces_before) {
+        const before = newContent
+        newContent = newContent.replace(/\s+([.,;:!?])/g, '$1')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.remove_spaces_after) {
+        const before = newContent
+        newContent = newContent.replace(/\(\s+/g, '(')
+        newContent = newContent.replace(/\[\s+/g, '[')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.remove_spaces_around_newlines) {
+        const before = newContent
+        newContent = newContent.replace(/\s+\n/g, '\n')
+        newContent = newContent.replace(/\n\s+/g, '\n')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.replace_double_quotes) {
+        const before = newContent
+        newContent = newContent.replace(/""/g, '"')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.normalize_quotes) {
+        const before = newContent
+        newContent = newContent.replace(/['']/g, "'")
+        newContent = newContent.replace(/[""]/g, '"')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.clean_duplicate_tags) {
+        const before = newContent
+        // ניקוי תגיות כפולות כמו </b> <b>
+        newContent = newContent.replace(/<\/(b|i|u)>\s*<\1>/g, ' ')
+        if (before !== newContent) changed = true
+      }
+      
+      if (changed) {
         setResult('הטקסט נוקה בהצלחה!')
+        onContentChange(newContent)
         setTimeout(() => {
-          onSuccess()
           onClose()
           setResult('')
         }, 1500)
@@ -54,7 +92,7 @@ export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess })
         setResult('לא נמצאו שינויים לביצוע')
       }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)
