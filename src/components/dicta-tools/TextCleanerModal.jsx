@@ -76,8 +76,28 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
       
       if (options.clean_duplicate_tags) {
         const before = newContent
-        // ניקוי תגיות כפולות כמו </b> <b>
-        newContent = newContent.replace(/<\/(b|i|u)>\s*<\1>/g, ' ')
+        // ניקוי תגיות כפולות - גרסה משופרת
+        // מטפל בתגים מקוננים כמו </b></big> <big><b>
+        
+        let iterations = 0
+        let prevContent = ''
+        
+        // חזור על התהליך עד שאין יותר שינויים (למקרה של שרשראות ארוכות)
+        while (prevContent !== newContent && iterations < 10) {
+          prevContent = newContent
+          
+          // דפוס 1: תגים מקוננים עם תגים חיצוניים
+          // </b></big>  <big><b> → </big> <big>
+          newContent = newContent.replace(/<\/(b|i|u|big|small|span)>((?:<\/[^>]+>)+)\s+((?:<[^/>]+>)+)<\1>/g, '$2 $3')
+          
+          // דפוס 2: תגים פשוטים (כולל big, small, span)
+          // </b>  <b> → רווח
+          // </big>  <big> → רווח
+          newContent = newContent.replace(/<\/(b|i|u|big|small|span)>\s+<\1>/g, ' ')
+          
+          iterations++
+        }
+        
         if (before !== newContent) changed = true
       }
       
