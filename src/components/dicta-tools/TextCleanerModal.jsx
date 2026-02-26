@@ -76,27 +76,21 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
       
       if (options.clean_duplicate_tags) {
         const before = newContent
-        // ניקוי תגיות כפולות - גרסה משופרת
-        // מטפל בתגים מקוננים כמו </b></big> <big><b>
+        // ניקוי תגיות כפולות - מאומץ מהמימוש בצד השרת
+        // מטפל בכל סוגי התגיות כולל h1-h6
         
-        let iterations = 0
-        let prevContent = ''
+        let previousText
+        do {
+          previousText = newContent
+          // תגית סוגרת ותגית פותחת אותו דבר עם רווח באמצע: </b> <b> -> רווח בלבד
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])>\s+<\1>/g, ' ')
         
-        // חזור על התהליך עד שאין יותר שינויים (למקרה של שרשראות ארוכות)
-        while (prevContent !== newContent && iterations < 10) {
-          prevContent = newContent
-          
-          // דפוס 1: תגים מקוננים עם תגים חיצוניים
-          // </b></big>  <big><b> → </big> <big>
-          newContent = newContent.replace(/<\/(b|i|u|big|small|span)>((?:<\/[^>]+>)+)\s+((?:<[^/>]+>)+)<\1>/g, '$2 $3')
-          
-          // דפוס 2: תגים פשוטים (כולל big, small, span)
-          // </b>  <b> → רווח
-          // </big>  <big> → רווח
-          newContent = newContent.replace(/<\/(b|i|u|big|small|span)>\s+<\1>/g, ' ')
-          
-          iterations++
-        }
+          // שני סוגרים ואז שני פותחים באותו סדר הפוך: </b></i> <i><b> -> רווח בלבד
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\2><\1>/g, ' ')
+        
+          // שני סוגרים ואז שני פותחים באותו סדר: </b></i> <b><i> -> רווח בלבד
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\1><\2>/g, ' ')
+        } while (newContent !== previousText)
         
         if (before !== newContent) changed = true
       }
