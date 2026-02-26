@@ -49,7 +49,7 @@ export default function DictaEditorPage() {
   
   const [book, setBook] = useState(null)
   const [content, setContent] = useState('')
-  const [savedContent, setSavedContent] = useState('') // תוכן שנשמר לאחרונה
+  const [savedContent, setSavedContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [claiming, setClaiming] = useState(false)
@@ -70,34 +70,32 @@ export default function DictaEditorPage() {
   const [savedSearches, setSavedSearches] = useState([])
   const [showPreview, setShowPreview] = useState(true)
   const [isPending, startTransition] = useTransition()
+  
   const hasLoadedPreviewState = useRef(false)
   const contentRef = useRef(null)
   const textareaRef = useRef(null)
   const previewRef = useRef(null)
+  const scrollingSource = useRef(null) // מזהה איזה אלמנט התחיל את הגלילה
 
-  // בדיקה אם יש שינויים לא שמורים
   const hasUnsavedChanges = content !== savedContent
 
-  // שמירת הגופן הנבחר ב-localStorage
   useEffect(() => {
     if (selectedFont) {
       localStorage.setItem('dicta_editor_font', selectedFont)
     }
   }, [selectedFont])
 
-  // שמירת מצב התצוגה המקדימה ב-localStorage
   useEffect(() => {
     if (hasLoadedPreviewState.current) {
       localStorage.setItem('dicta_editor_show_preview', showPreview.toString())
     }
   }, [showPreview])
 
-  // אזהרה לפני יציאה מהדף עם שינויים לא שמורים
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (hasUnsavedChanges) {
         e.preventDefault()
-        e.returnValue = '' // Chrome requires returnValue to be set
+        e.returnValue = ''
       }
     }
 
@@ -108,28 +106,23 @@ export default function DictaEditorPage() {
     }
   }, [hasUnsavedChanges])
 
-  // חסימת ניווט פנימי עם שינויים לא שמורים
   useEffect(() => {
     const handleRouteChange = () => {
       if (hasUnsavedChanges) {
         const confirmLeave = window.confirm('ישנם שינויים לא שמורים. האם אתה בטוח שברצונך לעזוב את הדף?')
         if (!confirmLeave) {
-          // Next.js App Router doesn't have a built-in way to prevent navigation
-          // We need to use the browser's history API
           window.history.pushState(null, '', window.location.href)
           throw 'Route change aborted by user'
         }
       }
     }
 
-    // Listen to all link clicks
     const handleClick = (e) => {
       const target = e.target.closest('a')
       if (target && target.href && hasUnsavedChanges) {
         const currentUrl = new URL(window.location.href)
         const targetUrl = new URL(target.href, window.location.origin)
         
-        // Check if it's an internal navigation
         if (currentUrl.origin === targetUrl.origin && currentUrl.pathname !== targetUrl.pathname) {
           const confirmLeave = window.confirm('ישנם שינויים לא שמורים. האם אתה בטוח שברצונך לעזוב את הדף?')
           if (!confirmLeave) {
@@ -162,7 +155,7 @@ export default function DictaEditorPage() {
         const data = await res.json()
         setBook(data)
         setContent(data.content || '')
-        setSavedContent(data.content || '') // שמירת התוכן המקורי
+        setSavedContent(data.content || '')
       } catch (error) {
         console.error('Error loading book:', error)
         showAlert('שגיאה', 'שגיאה בטעינת הספר')
@@ -198,7 +191,6 @@ export default function DictaEditorPage() {
       setSelectedFont(savedFont)
     }
 
-    // טעינת מצב התצוגה המקדימה רק בטעינה ראשונית
     if (!hasLoadedPreviewState.current) {
       const savedPreviewState = localStorage.getItem('dicta_editor_show_preview')
       if (savedPreviewState !== null) {
@@ -212,25 +204,40 @@ export default function DictaEditorPage() {
     setContent(newContent)
   }, [])
 
-  // סנכרון גלילה בין textarea לתצוגה מקדימה
   const handleTextareaScroll = useCallback(() => {
     if (!textareaRef.current || !previewRef.current) return
+    if (scrollingSource.current === 'preview') return
+    
+    scrollingSource.current = 'textarea'
     
     const textarea = textareaRef.current
     const preview = previewRef.current
     
     const scrollPercentage = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight)
     preview.scrollTop = scrollPercentage * (preview.scrollHeight - preview.clientHeight)
+    
+    clearTimeout(textareaRef.current.scrollTimeout)
+    textareaRef.current.scrollTimeout = setTimeout(() => {
+      scrollingSource.current = null
+    }, 50)
   }, [])
 
   const handlePreviewScroll = useCallback(() => {
     if (!textareaRef.current || !previewRef.current) return
+    if (scrollingSource.current === 'textarea') return
+    
+    scrollingSource.current = 'preview'
     
     const textarea = textareaRef.current
     const preview = previewRef.current
     
     const scrollPercentage = preview.scrollTop / (preview.scrollHeight - preview.clientHeight)
     textarea.scrollTop = scrollPercentage * (textarea.scrollHeight - textarea.clientHeight)
+    
+    clearTimeout(previewRef.current.scrollTimeout)
+    previewRef.current.scrollTimeout = setTimeout(() => {
+      scrollingSource.current = null
+    }, 50)
   }, [])
 
   const insertTag = useCallback((tag) => {
@@ -247,8 +254,6 @@ export default function DictaEditorPage() {
     setContent(newText);
     
     setTimeout(() => {
-      // אם יש טקסט נבחר, מקם את הסמן אחרי התג הסוגר.
-      // אם לא, מקם את הסמן בתוך התג הריק.
       const newPos = selectedText ? (start + insertion.length) : (start + tag.length + 2);
       textarea.focus();
       textarea.setSelectionRange(newPos, newPos);
@@ -511,7 +516,7 @@ export default function DictaEditorPage() {
       })
       
       if (!res.ok) throw new Error('שגיאה בשמירה')
-      setSavedContent(content) // עדכון התוכן השמור
+      setSavedContent(content)
       if (!silent) {
         showAlert('הצלחה', 'העריכה נשמרה בהצלחה!')
       }
@@ -655,7 +660,6 @@ export default function DictaEditorPage() {
     try {
       setCompleting(true)
       
-      // יצירת קובץ טקסט
       const cleanBookName = book.title.replace(/[^a-zA-Z0-9א-ת]/g, '_')
       const fileName = `${cleanBookName}_dicta.txt`
       const blob = new Blob([content], { type: 'text/plain' })
@@ -666,7 +670,7 @@ export default function DictaEditorPage() {
       formData.append('bookName', book.title)
       formData.append('userId', session.user._id || session.user.id)
       formData.append('userName', session.user.name)
-      formData.append('uploadType', 'dicta') // תגית מיוחדת לדיקטה
+      formData.append('uploadType', 'dicta')
 
       const uploadResponse = await fetch('/api/upload-book', { method: 'POST', body: formData })
       const uploadResult = await uploadResponse.json()
@@ -675,7 +679,6 @@ export default function DictaEditorPage() {
         throw new Error(uploadResult.error || 'שגיאה בהעלאה')
       }
 
-      // סימון הספר כהושלם
       const completeResponse = await fetch(`/api/dicta/books/${bookId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -685,7 +688,6 @@ export default function DictaEditorPage() {
       if (completeResponse.ok) {
         setShowUploadDialog(false)
         showAlert('הצלחה', 'הטקסט הועלה בהצלחה והספר סומן כהושלם!')
-        // חזרה לרשימת ספרי דיקטה
         setTimeout(() => {
           router.push('/library/dicta-books')
         }, 1500)
@@ -701,11 +703,14 @@ export default function DictaEditorPage() {
   }
 
   const scrollToHeading = (index) => {
-    // במצב עריכה, חפש בתצוגה המקדימה אם היא מוצגת
     const targetRef = (editMode && showPreview) ? previewRef : contentRef
     if (!targetRef.current) return
     
-    const headings = targetRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6')
+    const container = (editMode && showPreview) 
+      ? targetRef.current.querySelector('div[class*="prose"]') || targetRef.current
+      : targetRef.current
+    
+    const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6')
     if (headings[index]) {
       headings[index].scrollIntoView({ behavior: 'smooth', block: 'center' })
       headings[index].style.backgroundColor = '#fff3cd'
@@ -742,7 +747,6 @@ export default function DictaEditorPage() {
       <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
         <div className="container mx-auto px-4 py-3">
           <div className="flex flex-col gap-3">
-            {/* שורה ראשונה - לוגו וכותרת */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <Link href="/library" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -793,7 +797,6 @@ export default function DictaEditorPage() {
               </Link>
             </div>
 
-            {/* שורה שנייה - כפתורי פעולה */}
             <div className="flex items-center justify-between border-t border-surface-variant/50 pt-3">
               <div className="flex items-center gap-3">
           {canEdit && (
