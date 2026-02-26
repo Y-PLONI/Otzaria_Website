@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, useTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
@@ -68,6 +68,9 @@ export default function DictaEditorPage() {
   const [replaceText, setReplaceText] = useState('')
   const [useRegex, setUseRegex] = useState(false)
   const [savedSearches, setSavedSearches] = useState([])
+  const [showPreview, setShowPreview] = useState(true)
+  const [isPending, startTransition] = useTransition()
+  const hasLoadedPreviewState = useRef(false)
   const contentRef = useRef(null)
   const textareaRef = useRef(null)
   const previewRef = useRef(null)
@@ -81,6 +84,13 @@ export default function DictaEditorPage() {
       localStorage.setItem('dicta_editor_font', selectedFont)
     }
   }, [selectedFont])
+
+  // שמירת מצב התצוגה המקדימה ב-localStorage
+  useEffect(() => {
+    if (hasLoadedPreviewState.current) {
+      localStorage.setItem('dicta_editor_show_preview', showPreview.toString())
+    }
+  }, [showPreview])
 
   // אזהרה לפני יציאה מהדף עם שינויים לא שמורים
   useEffect(() => {
@@ -186,6 +196,15 @@ export default function DictaEditorPage() {
     const savedFont = localStorage.getItem('dicta_editor_font')
     if (savedFont) {
       setSelectedFont(savedFont)
+    }
+
+    // טעינת מצב התצוגה המקדימה רק בטעינה ראשונית
+    if (!hasLoadedPreviewState.current) {
+      const savedPreviewState = localStorage.getItem('dicta_editor_show_preview')
+      if (savedPreviewState !== null) {
+        setShowPreview(savedPreviewState === 'true')
+      }
+      hasLoadedPreviewState.current = true
     }
   }, [])
 
@@ -794,7 +813,11 @@ export default function DictaEditorPage() {
                 icon={editMode ? 'visibility' : 'edit'}
                 variant="ghost"
                 size="sm"
-                onClick={() => setEditMode(!editMode)}
+                onClick={() => {
+                  startTransition(() => {
+                    setEditMode(!editMode)
+                  })
+                }}
                 label={editMode ? 'תצוגה' : 'עריכה ידנית'}
               />
             </>
@@ -992,10 +1015,18 @@ export default function DictaEditorPage() {
         )}
 
         <main className="flex-1 overflow-auto bg-white flex">
-          {editMode && canEdit ? (
+          {isPending ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+                <div className="text-lg text-gray-600">טוען...</div>
+              </div>
+            </div>
+          ) : editMode && canEdit ? (
             <>
-              <div className="flex-1 flex flex-col h-full border-l">
-                <div className="bg-gray-50 border-b px-4 py-2 flex items-center gap-2 flex-wrap">
+              <div className={`${showPreview ? 'flex-1' : 'w-full'} flex flex-col h-full border-l`}>
+                <div className="bg-gray-50 border-b px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     icon="format_bold"
                     variant="ghost"
@@ -1073,6 +1104,18 @@ export default function DictaEditorPage() {
                     onClick={() => insertTag('small')}
                     label="קטן"
                   />
+                  </div>
+                  
+                  {!showPreview && (
+                    <button
+                      onClick={() => setShowPreview(true)}
+                      className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                      title="הצג תצוגה מקדימה"
+                    >
+                      <span className="material-symbols-outlined text-sm">visibility</span>
+                      <span>הצג תצוגה מקדימה</span>
+                    </button>
+                  )}
                 </div>
                 
                 <textarea
@@ -1085,8 +1128,19 @@ export default function DictaEditorPage() {
                 />
               </div>
               
+              {showPreview && (
               <div className="w-1/2 flex flex-col bg-gray-50">
-                <div className="text-xs text-gray-500 px-6 pt-6 pb-2 font-medium bg-gray-50 sticky top-0 z-10 border-b border-gray-200">תצוגה מקדימה</div>
+                <div className="px-6 pt-6 pb-2 bg-gray-50 sticky top-0 z-10 border-b border-gray-200 flex items-center justify-between">
+                  <span className="text-xs text-gray-500 font-medium">תצוגה מקדימה</span>
+                  <button
+                    onClick={() => setShowPreview(false)}
+                    className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                    title="הסתר תצוגה מקדימה"
+                  >
+                    <span className="material-symbols-outlined text-sm">visibility_off</span>
+                    <span>הסתר</span>
+                  </button>
+                </div>
                 <div 
                   ref={previewRef}
                   className="flex-1 overflow-auto px-6 pb-6"
@@ -1099,6 +1153,7 @@ export default function DictaEditorPage() {
                   />
                 </div>
               </div>
+              )}
             </>
           ) : (
             <div className="flex-1 p-6">
