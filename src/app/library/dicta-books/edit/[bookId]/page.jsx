@@ -703,20 +703,47 @@ export default function DictaEditorPage() {
   }
 
   const scrollToHeading = (index) => {
-    const targetRef = (editMode && showPreview) ? previewRef : contentRef
-    if (!targetRef.current) return
+    // טיפול במצב של עריכה ללא תצוגה מקדימה (רק Textarea)
+    if (editMode && !showPreview) {
+      if (!textareaRef.current || !toc[index]) return;
+      
+      const textarea = textareaRef.current;
+      // נחפש את מחרוזת ה-HTML המלאה של הכותרת כדי למנוע קפיצה למילה זהה בטקסט הרגיל
+      const textToFind = toc[index].html; 
+      const matchIndex = content.indexOf(textToFind);
+      
+      if (matchIndex !== -1) {
+        // סימון הטקסט (אופציונלי, נחמד כדי להראות למשתמש איפה הכותרת)
+        textarea.focus();
+        textarea.setSelectionRange(matchIndex, matchIndex + textToFind.length);
+        
+        // חישוב מיקום הגלילה לפי מספר שורות (בדומה לחיפוש והחלפה שכבר יש לך בקוד)
+        const textBeforeMatch = content.substring(0, matchIndex);
+        const lines = textBeforeMatch.split('\n').length;
+        // הערכה לגובה שורה (1.5 * גודל הגופן)
+        const lineHeight = fontSize * 1.5; 
+        const scrollPos = (lines - 4) * lineHeight;
+        
+        textarea.scrollTop = scrollPos > 0 ? scrollPos : 0;
+      }
+      return;
+    }
+
+    // ההתנהגות המקורית עבור מצב תצוגה מקדימה (Preview) או מצב קריאה בלבד (Read-only)
+    const targetRef = (editMode && showPreview) ? previewRef : contentRef;
+    if (!targetRef.current) return;
     
     const container = (editMode && showPreview) 
       ? targetRef.current.querySelector('div[class*="prose"]') || targetRef.current
-      : targetRef.current
+      : targetRef.current;
     
-    const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6')
+    const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
     if (headings[index]) {
-      headings[index].scrollIntoView({ behavior: 'smooth', block: 'center' })
-      headings[index].style.backgroundColor = '#fff3cd'
+      headings[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      headings[index].style.backgroundColor = '#fff3cd';
       setTimeout(() => {
-        headings[index].style.backgroundColor = ''
-      }, 2000)
+        headings[index].style.backgroundColor = '';
+      }, 2000);
     }
   }
 
