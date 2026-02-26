@@ -701,8 +701,11 @@ export default function DictaEditorPage() {
   }
 
   const scrollToHeading = (index) => {
-    if (!contentRef.current) return
-    const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6')
+    // במצב עריכה, חפש בתצוגה המקדימה אם היא מוצגת
+    const targetRef = (editMode && showPreview) ? previewRef : contentRef
+    if (!targetRef.current) return
+    
+    const headings = targetRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6')
     if (headings[index]) {
       headings[index].scrollIntoView({ behavior: 'smooth', block: 'center' })
       headings[index].style.backgroundColor = '#fff3cd'
