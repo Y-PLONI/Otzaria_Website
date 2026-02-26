@@ -22,6 +22,7 @@ export default function AdminDictaBooksPage() {
   const [editStatus, setEditStatus] = useState('')
   
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+  const [statusFilter, setStatusFilter] = useState('all') // ברירת מחדל: הכל
 
   // 1. בדיקת הרשאות והפניה
   useEffect(() => {
@@ -32,13 +33,15 @@ export default function AdminDictaBooksPage() {
     } else if (session?.user?.role !== 'admin') {
       router.push('/library/dashboard')
     } else {
-      loadBooks(true)
+      loadBooks()
     }
   }, [status, session, router])
 
-  const loadBooks = async (showLoader = false) => {
+  const loadBooks = async () => {
     try {
-      if (showLoader) setLoading(true)
+      // מציג מסך טעינה רק אם אין עדיין נתונים
+      if (books.length === 0) setLoading(true)
+      
       const response = await fetch('/api/dicta/books')
       if (response.ok) {
         const data = await response.json()
@@ -47,7 +50,7 @@ export default function AdminDictaBooksPage() {
     } catch (error) {
       console.error('Error loading dicta books:', error)
     } finally {
-      if (showLoader) setLoading(false)
+      setLoading(false)
     }
   }
 
@@ -73,7 +76,7 @@ export default function AdminDictaBooksPage() {
                 : 'הסנכרון הסתיים, לא היו שינויים.'
                 
             showAlert('הסנכרון הושלם', `${summary}`)
-            loadBooks()
+            loadBooks() // טעינה ברקע ללא מסך טעינה
           } else {
             showAlert('שגיאה', `שגיאה בסנכרון: ${data.detail || data.error || 'שגיאה לא ידועה'}`)
           }
@@ -107,7 +110,7 @@ export default function AdminDictaBooksPage() {
         setNewBookTitle('')
         setNewBookContent('')
         setShowCreateForm(false)
-        loadBooks()
+        loadBooks() // טעינה ברקע ללא מסך טעינה
         showAlert('הצלחה', 'הספר נוצר בהצלחה!')
       } else {
         const data = await response.json()
@@ -154,7 +157,7 @@ export default function AdminDictaBooksPage() {
           })
           
           if (response.ok) {
-            loadBooks()
+            loadBooks() // טעינה ברקע ללא מסך טעינה
             showAlert('הצלחה', 'הספר שוחרר בהצלחה!')
           } else {
             showAlert('שגיאה', 'שגיאה בשחרור הספר')
@@ -182,7 +185,7 @@ export default function AdminDictaBooksPage() {
       })
       
       if (response.ok) {
-        loadBooks()
+        loadBooks() // טעינה ברקע ללא מסך טעינה
         setEditingBook(null)
         showAlert('הצלחה', 'הסטטוס עודכן בהצלחה!')
       } else {
@@ -206,7 +209,13 @@ export default function AdminDictaBooksPage() {
     return sortConfig.direction === 'asc' ? '↑' : '↓'
   }
 
-  const sortedBooks = [...books].sort((a, b) => {
+  // סינון לפי סטטוס
+  const filteredBooks = books.filter(book => {
+    if (statusFilter === 'all') return true
+    return book.status === statusFilter
+  })
+
+  const sortedBooks = [...filteredBooks].sort((a, b) => {
     if (!sortConfig.key) return 0
     
     let aValue = a[sortConfig.key] || ''
@@ -286,54 +295,64 @@ export default function AdminDictaBooksPage() {
         </div>
       </div>
 
-      {/* טופס יצירת ספר */}
-      {showCreateForm && (
-        <div className="mb-6 p-4 bg-surface-variant rounded-lg border border-gray-200">
-          <h3 className="font-bold mb-4">יצירת ספר חדש ידנית</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm mb-1 font-medium">שם הספר</label>
-              <input
-                type="text"
-                value={newBookTitle}
-                onChange={(e) => setNewBookTitle(e.target.value)}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-primary outline-none"
-                placeholder="הזן שם לספר"
-              />
-            </div>
-            <div>
-              <label className="block text-sm mb-1 font-medium">תוכן התחלתי (אופציונלי)</label>
-              <textarea
-                value={newBookContent}
-                onChange={(e) => setNewBookContent(e.target.value)}
-                className="w-full p-2 border rounded h-32 focus:ring-2 focus:ring-primary outline-none"
-                placeholder="הדבק כאן טקסט התחלתי..."
-              />
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={handleCreateBook}
-                className="bg-primary text-on-primary px-4 py-2 rounded hover:bg-primary/90 font-medium"
-              >
-                צור ספר
-              </button>
-              <button 
-                onClick={() => setShowCreateForm(false)}
-                className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 font-medium"
-              >
-                ביטול
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* טופס יצירת ספר - חלון קופץ */}
+
+      {/* כפתורי סינון */}
+      <div className="mb-4 flex gap-2 flex-wrap">
+        <button
+          onClick={() => setStatusFilter('all')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            statusFilter === 'all'
+              ? 'bg-primary text-white shadow-sm'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          הכל ({books.length})
+        </button>
+        <button
+          onClick={() => setStatusFilter('available')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            statusFilter === 'available'
+              ? 'bg-green-600 text-white shadow-sm'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          פנוי ({books.filter(b => b.status === 'available').length})
+        </button>
+        <button
+          onClick={() => setStatusFilter('in-progress')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            statusFilter === 'in-progress'
+              ? 'bg-orange-600 text-white shadow-sm'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          בטיפול ({books.filter(b => b.status === 'in-progress').length})
+        </button>
+        <button
+          onClick={() => setStatusFilter('completed')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            statusFilter === 'completed'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          הושלם ({books.filter(b => b.status === 'completed').length})
+        </button>
+      </div>
 
       {/* רשימת ספרים */}
-      {books.length === 0 ? (
+      {filteredBooks.length === 0 ? (
         <div className="text-center py-12 text-on-surface/60 border-2 border-dashed border-gray-300 rounded-xl">
           <span className="material-symbols-outlined text-6xl mb-4 block opacity-50">library_books</span>
-          <p className="text-lg font-medium">אין ספרי דיקטה במערכת</p>
-          <p className="text-sm mt-2">לחץ על "סנכרון מ-GitHub" לייבוא ספרים או "הוסף ספר חדש"</p>
+          {books.length === 0 ? (
+            <>
+              <p className="text-lg font-medium">אין ספרי דיקטה במערכת</p>
+              <p className="text-sm mt-2">לחץ על "סנכרון מ-GitHub" לייבוא ספרים או "הוסף ספר חדש"</p>
+            </>
+          ) : (
+            <p className="text-lg font-medium">אין ספרים בסטטוס זה</p>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200">
@@ -420,6 +439,62 @@ export default function AdminDictaBooksPage() {
       )}
     </div>
       
+    {/* חלון קופץ ליצירת ספר חדש */}
+    {showCreateForm && (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">
+        <div 
+          className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden relative" 
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+            <h3 className="font-bold text-lg text-gray-800">יצירת ספר חדש ידנית</h3>
+            <button onClick={() => setShowCreateForm(false)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+              <span className="material-symbols-outlined text-xl">close</span>
+            </button>
+          </div>
+          
+          <div className="p-6">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm mb-2 font-medium text-gray-700">שם הספר</label>
+                <input
+                  type="text"
+                  value={newBookTitle}
+                  onChange={(e) => setNewBookTitle(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                  placeholder="הזן שם לספר"
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-2 font-medium text-gray-700">תוכן התחלתי (אופציונלי)</label>
+                <textarea
+                  value={newBookContent}
+                  onChange={(e) => setNewBookContent(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg h-48 focus:ring-2 focus:ring-primary outline-none"
+                  placeholder="הדבק כאן טקסט התחלתי..."
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-3 mt-8">
+              <button 
+                onClick={() => setShowCreateForm(false)}
+                className="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+              >
+                ביטול
+              </button>
+              <button 
+                onClick={handleCreateBook}
+                className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium shadow-sm transition-colors"
+              >
+                צור ספר
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
     {editingBook && (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">
         <div 
