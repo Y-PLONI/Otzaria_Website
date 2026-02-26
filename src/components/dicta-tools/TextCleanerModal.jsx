@@ -11,7 +11,8 @@ export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess })
     remove_spaces_after: true,
     remove_spaces_around_newlines: true,
     replace_double_quotes: true,
-    normalize_quotes: true
+    normalize_quotes: true,
+    clean_duplicate_tags: false
   })
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
@@ -146,6 +147,19 @@ export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess })
               className="w-4 h-4"
             />
             <span>אחדות מרכאות וגרשיים</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+            <input
+              type="checkbox"
+              checked={options.clean_duplicate_tags}
+              onChange={() => handleToggle('clean_duplicate_tags')}
+              className="w-4 h-4"
+            />
+            <div className="flex flex-col">
+              <span>נקה תגיות כפולות</span>
+              <span className="text-xs text-gray-500 mr-6">(למשל &lt;b&gt;חידושים&lt;/b&gt; &lt;b&gt;על&lt;/b&gt;, לא מומלץ להפעיל לפני גמר העריכה)</span>
+            </div>
           </label>
         </div>
 

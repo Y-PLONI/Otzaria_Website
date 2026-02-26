@@ -10,6 +10,7 @@ export default function AdminUploadsPage() {
   const [loading, setLoading] = useState(true)
   const [expandedBooks, setExpandedBooks] = useState({}) // מעקב אחרי ספרים מורחבים
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterType, setFilterType] = useState('all') // 'all', 'dicta', 'full_book', 'single_page'
   const router = useRouter()
   const { showConfirm, showAlert } = useDialog()
 
@@ -53,12 +54,19 @@ export default function AdminUploadsPage() {
     return bookName.replace(pagePattern, '').trim()
   }
 
-  // קיבוץ העלאות לפי ספרים עם סינון חיפוש
+  // קיבוץ העלאות לפי ספרים עם סינון חיפוש וסוג
   const groupedByBook = useMemo(() => {
     const groups = {}
     
-    // סינון העלאות לפי חיפוש
+    // סינון העלאות לפי חיפוש וסוג
     const filteredUploads = uploads.filter(upload => {
+      // סינון לפי סוג
+      if (filterType !== 'all') {
+        const uploadType = upload.uploadType || 'single_page'
+        if (filterType !== uploadType) return false
+      }
+      
+      // סינון לפי חיפוש
       if (!searchTerm) return true
       
       const bookName = upload.bookName || ''
@@ -102,7 +110,7 @@ export default function AdminUploadsPage() {
         )
       }))
       .sort((a, b) => new Date(b.latestUpload.uploadedAt) - new Date(a.latestUpload.uploadedAt))
-  }, [uploads, searchTerm])
+  }, [uploads, searchTerm, filterType])
 
   const toggleBookExpansion = (bookName) => {
     setExpandedBooks(prev => ({
@@ -260,6 +268,57 @@ export default function AdminUploadsPage() {
             </button>
           )}
         </div>
+      </div>
+      
+      {/* לחצני סינון */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setFilterType('all')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+            filterType === 'all'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">list</span>
+          הכל
+        </button>
+        
+        <button
+          onClick={() => setFilterType('dicta')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+            filterType === 'dicta'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">auto_stories</span>
+          דיקטה
+        </button>
+        
+        <button
+          onClick={() => setFilterType('full_book')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+            filterType === 'full_book'
+              ? 'bg-green-600 text-white shadow-md'
+              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">menu_book</span>
+          ספרים שהועלו
+        </button>
+        
+        <button
+          onClick={() => setFilterType('single_page')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+            filterType === 'single_page'
+              ? 'bg-amber-600 text-white shadow-md'
+              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">description</span>
+          עמודים שנערכו
+        </button>
       </div>
       
       {uploads.length === 0 ? (

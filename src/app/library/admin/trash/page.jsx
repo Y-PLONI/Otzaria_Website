@@ -169,7 +169,7 @@ export default function AdminTrashPage() {
             href="/library/admin/uploads"
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <span className="material-symbols-outlined">arrow_back</span>
+            <span className="material-symbols-outlined">arrow_forward</span>
           </Link>
           <h2 className="text-2xl font-bold text-on-surface flex items-center gap-2">
             <span className="material-symbols-outlined text-orange-600">delete</span>

@@ -260,6 +260,22 @@ export async function textCleanerDB(bookId, options) {
       .replace(/[''`]/g, "'")
       .replace(/׳/g, "'");
   }
+  
+  // ניקוי תגיות כפולות
+  if (options.clean_duplicate_tags) {
+    let previousText;
+    do {
+      previousText = text;
+      // תגית סוגרת ותגית פותחת אותו דבר עם רווח באמצע: </b> <b> -> רווח בלבד
+      text = text.replace(/<\/(b|i|u|big|small|h[1-6])>\s+<\1>/g, ' ');
+    
+      // שני סוגרים ואז שני פותחים באותו סדר הפוך: </b></i> <i><b> -> רווח בלבד
+      text = text.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\2><\1>/g, ' ');
+    
+      // שני סוגרים ואז שני פותחים באותו סדר: </b></i> <b><i> -> רווח בלבד
+      text = text.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\1><\2>/g, ' ');
+    } while (text !== previousText);
+  }
 
   text = text.replace(/\s+$/, "");
   if (text === original) return { changed: false };

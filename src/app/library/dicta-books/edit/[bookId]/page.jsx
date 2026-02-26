@@ -3,8 +3,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import Link from 'next/link'
 import Button from '@/components/Button'
 import { useDialog } from '@/components/DialogContext'
+import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import CreateHeadersModal from '@/components/dicta-tools/CreateHeadersModal'
 import SingleLetterHeadersModal from '@/components/dicta-tools/SingleLetterHeadersModal'
 import ChangeHeadingModal from '@/components/dicta-tools/ChangeHeadingModal'
@@ -15,6 +17,7 @@ import HeaderErrorCheckerModal from '@/components/dicta-tools/HeaderErrorChecker
 import TextCleanerModal from '@/components/dicta-tools/TextCleanerModal'
 import AddPageNumberModal from '@/components/dicta-tools/AddPageNumberModal'
 import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
+import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 
 const DEFAULT_SHORTCUTS = {
   'save': 'Ctrl+KeyS',
@@ -30,6 +33,7 @@ const DEFAULT_SHORTCUTS = {
   'alignRight': 'Ctrl+KeyR',
   'alignCenter': 'Ctrl+Shift+KeyC',
   'alignLeft': 'Ctrl+KeyL',
+  'findReplace': 'Ctrl+KeyF',
   'shortcuts': 'Alt+KeyK',
 }
 
@@ -52,17 +56,85 @@ export default function DictaEditorPage() {
   const [completing, setCompleting] = useState(false)
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [fontSize, setFontSize] = useState(18)
+  const [selectedFont, setSelectedFont] = useState("'Times New Roman'")
   const [textAlign, setTextAlign] = useState('right')
   const [toc, setToc] = useState([])
   const [activeTool, setActiveTool] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false)
   const [userShortcuts, setUserShortcuts] = useState(DEFAULT_SHORTCUTS)
+  const [showFindReplace, setShowFindReplace] = useState(false)
+  const [findText, setFindText] = useState('')
+  const [replaceText, setReplaceText] = useState('')
+  const [useRegex, setUseRegex] = useState(false)
+  const [savedSearches, setSavedSearches] = useState([])
   const contentRef = useRef(null)
   const textareaRef = useRef(null)
 
   // בדיקה אם יש שינויים לא שמורים
   const hasUnsavedChanges = content !== savedContent
+
+  // שמירת הגופן הנבחר ב-localStorage
+  useEffect(() => {
+    if (selectedFont) {
+      localStorage.setItem('dicta_editor_font', selectedFont)
+    }
+  }, [selectedFont])
+
+  // אזהרה לפני יציאה מהדף עם שינויים לא שמורים
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = '' // Chrome requires returnValue to be set
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [hasUnsavedChanges])
+
+  // חסימת ניווט פנימי עם שינויים לא שמורים
+  useEffect(() => {
+    const handleRouteChange = () => {
+      if (hasUnsavedChanges) {
+        const confirmLeave = window.confirm('ישנם שינויים לא שמורים. האם אתה בטוח שברצונך לעזוב את הדף?')
+        if (!confirmLeave) {
+          // Next.js App Router doesn't have a built-in way to prevent navigation
+          // We need to use the browser's history API
+          window.history.pushState(null, '', window.location.href)
+          throw 'Route change aborted by user'
+        }
+      }
+    }
+
+    // Listen to all link clicks
+    const handleClick = (e) => {
+      const target = e.target.closest('a')
+      if (target && target.href && hasUnsavedChanges) {
+        const currentUrl = new URL(window.location.href)
+        const targetUrl = new URL(target.href, window.location.origin)
+        
+        // Check if it's an internal navigation
+        if (currentUrl.origin === targetUrl.origin && currentUrl.pathname !== targetUrl.pathname) {
+          const confirmLeave = window.confirm('ישנם שינויים לא שמורים. האם אתה בטוח שברצונך לעזוב את הדף?')
+          if (!confirmLeave) {
+            e.preventDefault()
+            e.stopPropagation()
+          }
+        }
+      }
+    }
+
+    document.addEventListener('click', handleClick, true)
+
+    return () => {
+      document.removeEventListener('click', handleClick, true)
+    }
+  }, [hasUnsavedChanges])
 
   useEffect(() => {
     if (status === 'loading') return
@@ -100,6 +172,20 @@ export default function DictaEditorPage() {
         console.error('Failed to parse shortcuts:', e)
       }
     }
+
+    const savedSearchesData = localStorage.getItem('dicta_saved_searches')
+    if (savedSearchesData) {
+      try {
+        setSavedSearches(JSON.parse(savedSearchesData))
+      } catch (e) {
+        console.error('Failed to parse saved searches:', e)
+      }
+    }
+
+    const savedFont = localStorage.getItem('dicta_editor_font')
+    if (savedFont) {
+      setSelectedFont(savedFont)
+    }
   }, [])
 
   const insertTag = useCallback((tag) => {
@@ -123,6 +209,235 @@ export default function DictaEditorPage() {
       textarea.setSelectionRange(newPos, newPos);
     }, 0);
   }, [content])
+
+  const handleFindNext = useCallback((textToFind, isRegexMode) => {
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
+    if (!textareaRef.current) return
+
+    const textarea = textareaRef.current
+    const text = content
+    const processPattern = (str) => str.replaceAll('^13', '\n')
+    const patternStr = processPattern(textToFind)
+    
+    const startPos = textarea.selectionEnd || 0
+    let matchIndex = -1
+    let matchLength = 0
+
+    if (isRegexMode) {
+      try {
+        const regex = new RegExp(patternStr, 'g')
+        regex.lastIndex = startPos
+        const match = regex.exec(text)
+        
+        if (match) {
+          matchIndex = match.index
+          matchLength = match[0].length
+        } else {
+          regex.lastIndex = 0
+          const matchFromStart = regex.exec(text)
+          if (matchFromStart) {
+            matchIndex = matchFromStart.index
+            matchLength = matchFromStart[0].length
+            showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
+          }
+        }
+      } catch (e) {
+        return showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
+      }
+    } else {
+      matchIndex = text.indexOf(patternStr, startPos)
+      if (matchIndex === -1) {
+        matchIndex = text.indexOf(patternStr, 0)
+        if (matchIndex !== -1) {
+          showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
+        }
+      }
+      matchLength = patternStr.length
+    }
+
+    if (matchIndex !== -1) {
+      textarea.focus()
+      textarea.setSelectionRange(matchIndex, matchIndex + matchLength)
+      
+      const lineHeight = 24
+      const lines = text.substr(0, matchIndex).split('\n').length
+      const scrollPos = (lines - 5) * lineHeight
+      textarea.scrollTop = scrollPos > 0 ? scrollPos : 0
+    } else {
+      showAlert('חיפוש', 'לא נמצאו מופעים.')
+    }
+  }, [content, showAlert])
+
+  const handleReplaceCurrent = useCallback((textToReplace, textToFind, isRegexMode) => {
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
+    if (!textareaRef.current) return
+
+    const textarea = textareaRef.current
+
+    if (textarea.selectionStart === textarea.selectionEnd) {
+      handleFindNext(textToFind, isRegexMode)
+      return
+    }
+
+    const processPattern = (str) => str.replaceAll('^13', '\n')
+    const patternStr = processPattern(textToFind)
+    const replacement = processPattern(textToReplace || '')
+
+    let finalReplacement = replacement
+
+    if (isRegexMode) {
+      try {
+        const selectedText = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd)
+        const regex = new RegExp(patternStr)
+        finalReplacement = selectedText.replace(regex, replacement)
+      } catch (e) {
+        console.error('Regex replacement error:', e)
+        return showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
+      }
+    }
+
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const newText = content.substring(0, start) + finalReplacement + content.substring(end)
+    
+    setContent(newText)
+    
+    setTimeout(() => {
+      textarea.focus()
+      textarea.setSelectionRange(start + finalReplacement.length, start + finalReplacement.length)
+    }, 0)
+
+    handleFindNext(textToFind, isRegexMode)
+  }, [content, handleFindNext, showAlert])
+
+  const handleReplaceAll = useCallback((overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
+    const textToFind = overrideFind !== null ? overrideFind : findText
+    const textToReplace = overrideReplace !== null ? overrideReplace : replaceText
+    const isRegexMode = useRegexOverride !== null ? useRegexOverride : useRegex
+
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
+    
+    const processPattern = (str) => str.replaceAll('^13', '\n')
+    const patternStr = processPattern(textToFind)
+    const replacement = processPattern(textToReplace || '')
+
+    const createRegex = (global) => {
+      try {
+        if (isRegexMode) {
+          return new RegExp(patternStr, global ? 'g' : '')
+        } else {
+          const escaped = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          return new RegExp(escaped, global ? 'g' : '')
+        }
+      } catch (e) {
+        return null
+      }
+    }
+
+    const regex = createRegex(true)
+    if (!regex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
+
+    const matches = content.match(regex)
+    const count = matches ? matches.length : 0
+    
+    if (count === 0) {
+      return showAlert('לידיעתך', 'לא נמצאו תוצאות התואמות לחיפוש.')
+    }
+
+    const newContent = content.replace(regex, replacement)
+    setContent(newContent)
+    
+    showAlert('הצלחה', `ההחלפה בוצעה בהצלחה! הוחלפו ${count} מופעים.`)
+  }, [content, findText, replaceText, useRegex, showAlert])
+
+  const handleRemoveDigits = useCallback(() => {
+    const newContent = content.replace(/\d+/g, '')
+    setContent(newContent)
+    showAlert('הצלחה', 'הספרות הוסרו בהצלחה!')
+  }, [content, showAlert])
+
+  const addSavedSearch = useCallback((label, newFindText, newReplaceText, isRegex = false) => {
+    const newSearch = {
+      id: Date.now().toString(),
+      label: label || newFindText,
+      findText: newFindText,
+      replaceText: newReplaceText,
+      isRegex: isRegex
+    }
+    const updated = [...savedSearches, newSearch]
+    setSavedSearches(updated)
+    localStorage.setItem('dicta_saved_searches', JSON.stringify(updated))
+    showAlert('הצלחה', 'החיפוש נשמר בהצלחה!')
+  }, [savedSearches, showAlert])
+
+  const removeSavedSearch = useCallback((id) => {
+    const updated = savedSearches.filter(s => s.id !== id)
+    setSavedSearches(updated)
+    localStorage.setItem('dicta_saved_searches', JSON.stringify(updated))
+  }, [savedSearches])
+
+  const moveSearch = useCallback((index, direction) => {
+    const newSearches = [...savedSearches]
+    if (direction === 'up' && index > 0) {
+      [newSearches[index - 1], newSearches[index]] = [newSearches[index], newSearches[index - 1]]
+    } else if (direction === 'down' && index < newSearches.length - 1) {
+      [newSearches[index], newSearches[index + 1]] = [newSearches[index + 1], newSearches[index]]
+    }
+    setSavedSearches(newSearches)
+    localStorage.setItem('dicta_saved_searches', JSON.stringify(newSearches))
+  }, [savedSearches])
+
+  const runAllSavedReplacements = useCallback(() => {
+    if (savedSearches.length === 0) {
+      return showAlert('שגיאה', 'אין חיפושים שמורים')
+    }
+
+    let currentContent = content
+    let totalReplacements = 0
+
+    savedSearches.forEach(search => {
+      if (search.isRemoveDigits) {
+        currentContent = currentContent.replace(/\d+/g, '')
+      } else {
+        const processPattern = (str) => str.replaceAll('^13', '\n')
+        const patternStr = processPattern(search.findText)
+        const replacement = processPattern(search.replaceText || '')
+
+        try {
+          let regex
+          if (search.isRegex) {
+            regex = new RegExp(patternStr, 'g')
+          } else {
+            const escaped = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            regex = new RegExp(escaped, 'g')
+          }
+
+          const matches = currentContent.match(regex)
+          if (matches) {
+            totalReplacements += matches.length
+            currentContent = currentContent.replace(regex, replacement)
+          }
+        } catch (e) {
+          console.error('Error in saved search:', e)
+        }
+      }
+    })
+
+    setContent(currentContent)
+    showAlert('הצלחה', `בוצעו ${totalReplacements} החלפות מתוך ${savedSearches.length} חיפושים שמורים.`)
+  }, [content, savedSearches, showAlert])
+
+  const onAddRemoveDigitsToSaved = useCallback(() => {
+    const newSearch = {
+      id: Date.now().toString(),
+      label: 'ניקוי ספרות',
+      isRemoveDigits: true
+    }
+    const updated = [...savedSearches, newSearch]
+    setSavedSearches(updated)
+    localStorage.setItem('dicta_saved_searches', JSON.stringify(updated))
+    showAlert('הצלחה', 'פעולת ניקוי ספרות נוספה לרשימה!')
+  }, [savedSearches, showAlert])
 
   useEffect(() => {
     if (!content) return
@@ -153,7 +468,7 @@ export default function DictaEditorPage() {
       if (!res.ok) throw new Error('שגיאה בשמירה')
       setSavedContent(content) // עדכון התוכן השמור
       if (!silent) {
-        showAlert('הצלחה', 'הספר נשמר בהצלחה!')
+        showAlert('הצלחה', 'העריכה נשמרה בהצלחה!')
       }
     } catch (error) {
       console.error('Error saving book:', error)
@@ -176,7 +491,7 @@ export default function DictaEditorPage() {
   }, [showAlert])
 
   const actionsMap = useMemo(() => ({
-    'save': { label: 'שמירה', action: handleSave },
+    'save': { label: 'שמירה', action: () => handleSave(false) },
     'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: () => setEditMode(prev => !prev) },
     'fontIncrease': { label: 'הגדל גופן', action: () => setFontSize(prev => Math.min(32, prev + 2)) },
     'fontDecrease': { label: 'הקטן גופן', action: () => setFontSize(prev => Math.max(12, prev - 2)) },
@@ -195,6 +510,7 @@ export default function DictaEditorPage() {
     'h6': { label: 'כותרת H6', action: () => insertTag('h6') },
     'bigger': { label: 'הגדל גופן טקסט', action: () => insertTag('big') },
     'smaller': { label: 'הקטן גופן טקסט', action: () => insertTag('small') },
+    'findReplace': { label: 'חיפוש והחלפה', action: () => setShowFindReplace(true) },
     'createHeaders': { label: 'יצירת כותרות', action: () => setActiveTool('createHeaders') },
     'singleLetterHeaders': { label: 'כותרות אותיות', action: () => setActiveTool('singleLetterHeaders') },
     'changeHeading': { label: 'שינוי רמת כותרת', action: () => setActiveTool('changeHeading') },
@@ -388,30 +704,72 @@ export default function DictaEditorPage() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50" dir="rtl">
-      <header className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
-          <Button
-            icon="arrow_forward"
-            variant="ghost"
-            onClick={() => router.push('/library/dicta-books')}
-            label="חזרה"
-          />
-          <h1 className="text-2xl font-bold text-gray-800">{book.title}</h1>
-          {book.status === 'in-progress' && (
-            <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm">
-              בעריכה
-            </span>
-          )}
-          {book.status === 'completed' && (
-            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
-              הושלם
-            </span>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-3">
+      <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex flex-col gap-3">
+            {/* שורה ראשונה - לוגו וכותרת */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Link href="/library" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                  <img src="/logo.png" alt="לוגו אוצריא" className="w-10 h-10" />
+                  <span className="text-lg font-bold text-black" style={{ fontFamily: 'FrankRuehl, serif' }}>ספריית אוצריא</span>
+                </Link>
+
+                <div className="w-px h-8 bg-surface-variant"></div>
+
+                <Button
+                  icon="arrow_forward"
+                  variant="ghost"
+                  onClick={() => router.push('/library/dicta-books')}
+                  label="חזרה לדיקטה"
+                />
+
+                <div className="w-px h-8 bg-surface-variant"></div>
+
+                <div>
+                  <h1 className="text-lg font-bold text-on-surface">{book.title}</h1>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-on-surface/60">עריכת דיקטה</p>
+                    {book.status === 'in-progress' && (
+                      <span className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full text-xs">
+                        בעריכה
+                      </span>
+                    )}
+                    {book.status === 'completed' && (
+                      <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
+                        הושלם
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <Link
+                href="/library/dashboard"
+                className="flex items-center justify-center hover:opacity-80 transition-opacity"
+                title={session?.user?.name}
+              >
+                <div
+                  className="w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-base shadow-md hover:shadow-lg transition-shadow"
+                  style={{ backgroundColor: getAvatarColor(session?.user?.name || '') }}
+                >
+                  {getInitial(session?.user?.name || '')}
+                </div>
+              </Link>
+            </div>
+
+            {/* שורה שנייה - כפתורי פעולה */}
+            <div className="flex items-center justify-between border-t border-surface-variant/50 pt-3">
+              <div className="flex items-center gap-3">
           {canEdit && (
             <>
+              <Button
+                icon="find_replace"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFindReplace(true)}
+                label="חיפוש"
+              />
               <Button
                 icon="keyboard"
                 variant="ghost"
@@ -469,6 +827,24 @@ export default function DictaEditorPage() {
             size="sm"
             onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
           />
+
+          <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
+          <div className="relative">
+            <select 
+              value={selectedFont} 
+              onChange={(e) => setSelectedFont(e.target.value)} 
+              className="appearance-none pl-2 pr-6 h-8 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer"
+            >
+              <option value="'Times New Roman'">Times New Roman</option>
+              <option value="monospace">Monospace</option>
+              <option value="Arial">Arial</option>
+              <option value="'Courier New'">Courier New</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Verdana">Verdana</option>
+            </select>
+            <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+          </div>
           
           {isAvailable ? (
             <Button
@@ -479,7 +855,7 @@ export default function DictaEditorPage() {
               label="תפוס לעריכה"
             />
           ) : canEdit && !isCompleted ? (
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <Button
                 icon="task_alt"
                 variant="ghost"
@@ -490,20 +866,38 @@ export default function DictaEditorPage() {
               <Button
                 icon="save"
                 variant={hasUnsavedChanges ? "primary" : "ghost"}
-                onClick={handleSave}
+                onClick={() => handleSave(false)}
                 loading={saving}
                 label={hasUnsavedChanges ? "שמירה *" : "שמירה"}
               />
+              {hasUnsavedChanges && (
+                <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+              )}
             </div>
           ) : canEdit && isCompleted ? (
-            <Button
-              icon="save"
-              variant={hasUnsavedChanges ? "primary" : "ghost"}
-              onClick={handleSave}
-              loading={saving}
-              label={hasUnsavedChanges ? "שמירה *" : "שמירה"}
-            />
-          ) : null}
+            <div className="flex gap-2 items-center">
+              <Button
+                icon="upload"
+                variant="ghost"
+                onClick={handleComplete}
+                loading={completing}
+                label="העלה מחדש"
+              />
+              <Button
+                icon="save"
+                variant={hasUnsavedChanges ? "primary" : "ghost"}
+                onClick={() => handleSave(false)}
+                loading={saving}
+                label={hasUnsavedChanges ? "שמירה *" : "שמירה"}
+              />
+              {hasUnsavedChanges && (
+                <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+              )}
+            </div>
+              ) : null}
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -671,16 +1065,16 @@ export default function DictaEditorPage() {
                 ref={textareaRef}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className="flex-1 p-6 border-0 font-mono resize-none focus:ring-0 outline-none"
-                style={{ fontSize: `${fontSize}px`, direction: 'rtl', textAlign: textAlign }}
+                className="flex-1 p-6 border-0 resize-none focus:ring-0 outline-none"
+                style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign }}
               />
             </div>
           ) : (
             <div className="p-6">
               <div
                 ref={contentRef}
-                className="max-w-4xl mx-auto prose prose-lg"
-                style={{ fontSize: `${fontSize}px`, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
+                className="max-w-4xl mx-auto prose prose-lg [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold"
+                style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
                 dangerouslySetInnerHTML={{ __html: content }}
               />
             </div>
@@ -778,6 +1172,27 @@ export default function DictaEditorPage() {
         availableActions={availableActions}
         saveShortcuts={saveUserShortcuts}
         resetToDefaults={resetShortcutsToDefaults}
+      />
+
+      <FindReplaceDialog
+        isOpen={showFindReplace}
+        onClose={() => setShowFindReplace(false)}
+        findText={findText}
+        setFindText={setFindText}
+        replaceText={replaceText}
+        setReplaceText={setReplaceText}
+        handleReplaceAll={handleReplaceAll}
+        handleFindNext={handleFindNext}
+        handleReplaceCurrent={handleReplaceCurrent}
+        savedSearches={savedSearches}
+        addSavedSearch={addSavedSearch}
+        removeSavedSearch={removeSavedSearch}
+        moveSearch={moveSearch}
+        runAllSavedReplacements={runAllSavedReplacements}
+        handleRemoveDigits={handleRemoveDigits}
+        onAddRemoveDigitsToSaved={onAddRemoveDigitsToSaved}
+        useRegex={useRegex}
+        setUseRegex={setUseRegex}
       />
 
       {showUploadDialog && (
