@@ -3,45 +3,87 @@
 import { useState } from 'react'
 import Modal from '@/components/Modal'
 
-export default function AddPageNumberModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function AddPageNumberModal({ isOpen, onClose, content, onContentChange }) {
   const [replaceWith, setReplaceWith] = useState('נקודה ונקודותיים')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'add-page-number',
-          book_id: bookId,
-          replace_with: replaceWith
-        })
-      })
+      const lines = content.split('\n')
+      let changesMade = false
+      const updated = []
+      let i = 0
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+      while (i < lines.length) {
+        const line = lines[i]
+        const match = line.match(/<h([2-9])>(דף \S+)<\/h\1>/)
+        
+        if (match) {
+          const level = match[1]
+          const title = match[2]
+          const nextLineIndex = i + 1
+          
+          if (nextLineIndex < lines.length) {
+            const nextLine = lines[nextLineIndex].trim()
+            // דפוס מורכב יותר שתופס גם תגים
+            const pattern = /(<[a-z]+>)?(ע["']+?[אב]|עמוד [אב])[.,:()\[\]'"״׳]?(<\/[a-z]+>)?\s?/
+            const matchNextLine = nextLine.match(pattern)
+            
+            if (matchNextLine) {
+              changesMade = true
+              let newTitle = line
+              
+              if (replaceWith === "נקודה ונקודותיים") {
+                if (matchNextLine[2].includes("א")) {
+                  newTitle = `<h${level}>${title.replace(/\.+$/, "")}.</h${level}>`
+                } else {
+                  newTitle = `<h${level}>${title.replace(/\.+$/, "")}:</h${level}>`
+                }
+              } else if (replaceWith === 'ע"א וע"ב') {
+                const suffix = matchNextLine[2].includes("א") ? 'ע"א' : 'ע"ב'
+                newTitle = `<h${level}>${title.replace(/\.+$/, "")} ${suffix}</h${level}>`
+              }
+              
+              updated.push(newTitle)
+              
+              // הסרת הדפוס מהשורה הבאה
+              const modifiedNext = nextLine.replace(pattern, "").trim()
+              if (modifiedNext !== "") {
+                updated.push(modifiedNext)
+              }
+              
+              i += 1 // דילוג על השורה הבאה
+            } else {
+              updated.push(line)
+            }
+          } else {
+            updated.push(line)
+          }
+        } else {
+          updated.push(line)
+        }
+        
+        i += 1
       }
       
-      if (data.changed) {
-        setResult(data.message)
+      if (changesMade) {
+        const newContent = updated.join('\n')
+        const count = updated.length - lines.length + (lines.length - updated.length)
+        setResult('ההחלפה הושלמה בהצלחה!')
+        onContentChange(newContent)
         setTimeout(() => {
-          onSuccess()
           onClose()
           setResult('')
         }, 1500)
       } else {
-        setResult(data.message || 'לא בוצעו שינויים')
+        setResult('אין מה להחליף בקובץ זה')
       }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
-export default function HeaderErrorCheckerModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onContentChange }) {
   const [reStart, setReStart] = useState('')
   const [reEnd, setReEnd] = useState('')
   const [gershayim, setGershayim] = useState(false)
@@ -12,38 +12,198 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, bookId, onSuc
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState(null)
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setErrors(null)
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'header-error-checker',
-          book_id: bookId,
-          re_start: reStart,
-          re_end: reEnd,
-          gershayim,
-          is_shas: isShas
+      const result = {
+        unmatched_regex: [],
+        unmatched_tags: [],
+        opening_without_closing: [],
+        closing_without_opening: [],
+        heading_errors: [],
+        missing_levels: []
+      }
+      
+      // פונקציה להמרת גימטריה למספר
+      const toNumber = (text) => {
+        const hebrewNumerals = {
+          'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+          'י': 10, 'כ': 20, 'ך': 20, 'ל': 30, 'מ': 40, 'ם': 40, 'נ': 50, 'ן': 50,
+          'ס': 60, 'ע': 70, 'פ': 80, 'ף': 80, 'צ': 90, 'ץ': 90,
+          'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
+        }
+        
+        let value = 0
+        for (let char of text) {
+          if (hebrewNumerals[char]) {
+            value += hebrewNumerals[char]
+          }
+        }
+        return value
+      }
+      
+      // בדיקת תגים פתוחים וסוגרים - לפי שורות כמו בקוד המקורי
+      const lines = content.split('\n')
+      lines.forEach((line, lineIndex) => {
+        const allTags = []
+        const tagRegex = /<(\/?[a-z]+\d?)>/gi
+        let match
+        
+        while ((match = tagRegex.exec(line)) !== null) {
+          const fullTag = match[0]
+          const tagName = match[1]
+          const position = match.index
+          
+          if (tagName.startsWith('/')) {
+            allTags.push(['close', tagName.slice(1), position])
+          } else {
+            allTags.push(['open', tagName, position])
+          }
+        }
+        
+        // מיון לפי מיקום
+        allTags.sort((a, b) => a[2] - b[2])
+        
+        const openStack = []
+        for (const [tagType, tagName] of allTags) {
+          if (tagType === 'open') {
+            openStack.push(tagName)
+          } else {
+            // חיפוש תג פתוח תואם
+            let found = false
+            for (let i = openStack.length - 1; i >= 0; i--) {
+              if (openStack[i] === tagName) {
+                openStack.splice(i, 1)
+                found = true
+                break
+              }
+            }
+            if (!found) {
+              result.closing_without_opening.push(`שורה ${lineIndex + 1}: </${tagName}> || ${line.trim()}`)
+            }
+          }
+        }
+        
+        // תגים שנשארו פתוחים בשורה זו
+        openStack.forEach(tag => {
+          result.opening_without_closing.push(`שורה ${lineIndex + 1}: <${tag}> || ${line.trim()}`)
         })
       })
       
-      const data = await response.json()
+      // בדיקת כותרות שלא לבד בשורה
+      lines.forEach((line, lineIndex) => {
+        const headingMatch = line.match(/<h[2-6]>.*?<\/h[2-6]>/)
+        if (headingMatch) {
+          const start = headingMatch.index
+          const end = start + headingMatch[0].length
+          const before = line.slice(0, start).trim()
+          const after = line.slice(end).trim()
+          
+          if (before || after) {
+            result.heading_errors.push(`שורה ${lineIndex + 1}: ${line.trim()}`)
+          }
+        }
+      })
       
-      if (!response.ok) {
-        setErrors({ error: data.detail || 'שגיאה לא ידועה' })
-        return
+      // בניית regex לבדיקת כותרות
+      let pattern
+      if (reStart && reEnd) {
+        pattern = new RegExp(`^[${escapeRegex(reStart)}]*[א-ת]([א-ת \\-]*[א-ת])?[${escapeRegex(reEnd)}]*$`)
+      } else if (reStart) {
+        pattern = new RegExp(`^[${escapeRegex(reStart)}]*[א-ת]([א-ת \\-]*[א-ת])?$`)
+      } else if (reEnd) {
+        pattern = new RegExp(`^[א-ת]([א-ת \\-]*[א-ת])?[${escapeRegex(reEnd)}]*$`)
+      } else {
+        pattern = new RegExp('^[א-ת]([א-ת \\-]*[א-ת])?$')
       }
       
-      setErrors(data)
+      // בדיקת כותרות
+      const headersByLevel = {}
+      for (let level = 2; level <= 6; level++) {
+        headersByLevel[level] = []
+      }
+      
+      const headerRegex = /<h([2-6])>(.*?)<\/h\1>/g
+      let headerMatch
+      
+      while ((headerMatch = headerRegex.exec(content)) !== null) {
+        const level = parseInt(headerMatch[1])
+        const headerContent = headerMatch[2].trim()
+        const fullHeader = headerMatch[0]
+        
+        headersByLevel[level].push({ content: headerContent, full: fullHeader })
+      }
+      
+      // בדיקת רמות חסרות
+      const usedLevels = Object.keys(headersByLevel).filter(level => headersByLevel[level].length > 0).map(Number)
+      if (usedLevels.length > 0) {
+        const maxLevel = Math.max(...usedLevels)
+        for (let i = 2; i <= maxLevel; i++) {
+          if (!usedLevels.includes(i)) {
+            result.missing_levels.push(i)
+          }
+        }
+      }
+      
+      // בדיקת כל רמה
+      for (let level = 2; level <= 6; level++) {
+        const headers = headersByLevel[level]
+        if (headers.length === 0) continue
+        
+        const step = isShas ? 2 : 1
+        
+        for (let i = 0; i < headers.length - step; i += step) {
+          const current = headers[i]
+          const next = headers[i + step]
+          
+          if (!current || !next) continue
+          
+          const currentText = current.content
+          const nextText = next.content
+          
+          // בדיקת regex
+          if (pattern && !pattern.test(currentText)) {
+            if (!(gershayim && (currentText.includes("'") || currentText.includes('"')))) {
+              result.unmatched_regex.push(current.full)
+            }
+          }
+          
+          // חילוץ החלק המספרי
+          const currentParts = currentText.split(' ')
+          const nextParts = nextText.split(' ')
+          const currentHeading = currentParts.length > 1 ? currentParts[1] : currentText
+          const nextHeading = nextParts.length > 1 ? nextParts[1] : nextText
+          
+          // בדיקת גרשיים
+          if (currentHeading.includes("'") || currentHeading.includes('"')) {
+            if (!gershayim) {
+              result.unmatched_tags.push(currentHeading)
+            }
+          }
+          
+          // בדיקת רצף
+          const currentNum = toNumber(currentHeading)
+          const nextNum = toNumber(nextHeading)
+          
+          if (currentNum > 0 && nextNum > 0 && currentNum + step !== nextNum) {
+            result.unmatched_tags.push(`כותרת נוכחית - ${currentText} || כותרת הבאה - ${nextText}`)
+          }
+        }
+      }
+      
+      setErrors(result)
     } catch (error) {
-      setErrors({ error: 'שגיאה בתקשורת עם השרת' })
+      setErrors({ error: 'שגיאה בביצוע הבדיקה' })
       console.error(error)
     } finally {
       setLoading(false)
     }
+  }
+  
+  const escapeRegex = (text) => {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   }
 
   const handleClose = () => {

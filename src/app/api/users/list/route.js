@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import Page from '@/models/Page';
+import DictaBook from '@/models/DictaBook';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,22 @@ export async function GET() {
       }
     ]);
 
+    // 2.5. חישוב כמות ספרי דיקטה לכל משתמש - רק ספרים שהושלמו
+    const dictaBooksStats = await DictaBook.aggregate([
+      {
+        $match: { 
+          claimedBy: { $ne: null },
+          status: 'completed' // רק ספרים שהושלמו
+        }
+      },
+      {
+        $group: {
+          _id: '$claimedBy',
+          dictaBooksCount: { $sum: 1 }
+        }
+      }
+    ]);
+
     // 3. המרת המערך למילון (Map) לגישה מהירה
     const statsMap = {};
     pagesStats.forEach(stat => {
@@ -42,9 +59,18 @@ export async function GET() {
       }
     });
 
+    // 3.5. המרת ספרי דיקטה למילון
+    const dictaBooksMap = {};
+    dictaBooksStats.forEach(stat => {
+      if (stat._id) {
+        dictaBooksMap[stat._id.toString()] = stat.dictaBooksCount;
+      }
+    });
+
     // 4. מיזוג הנתונים
     const usersWithStats = users.map(user => {
         const stats = statsMap[user._id.toString()] || { completed: 0, inProgress: 0 };
+        const dictaBooksCount = dictaBooksMap[user._id.toString()] || 0;
         return {
             id: user._id.toString(),
             name: user.name,
@@ -52,7 +78,8 @@ export async function GET() {
             createdAt: user.createdAt,
             points: user.points || 0,
             completedPages: stats.completed,
-            inProgressPages: stats.inProgress
+            inProgressPages: stats.inProgress,
+            dictaBooks: dictaBooksCount
         };
     });
 

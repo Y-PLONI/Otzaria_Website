@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
-export default function SingleLetterHeadersModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function SingleLetterHeadersModal({ isOpen, onClose, content, onContentChange }) {
   const [startChar, setStartChar] = useState('')
   const [endChar, setEndChar] = useState('')
   const [level, setLevel] = useState(3)
@@ -15,7 +15,7 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, bookId, onSu
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
@@ -23,37 +23,96 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, bookId, onSu
       const ignoreArray = ignoreTags.split(' ').filter(Boolean)
       const removeArray = removeTags.split(' ').filter(Boolean)
       
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'create-single-letter-headers',
-          book_id: bookId,
-          start: startChar,
-          end_suffix: endChar,
-          end: maxNum,
-          level_num: level,
-          ignore: ignoreArray,
-          remove: removeArray,
-          bold_only: boldOnly
+      // פונקציה להסרת תגים
+      const stripHtml = (text, tagsToRemove) => {
+        let result = text
+        tagsToRemove.forEach(tag => {
+          result = result.split(tag).join('')
         })
-      })
-      
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+        return result
       }
       
-      setResult(`נוצרו ${data.count} כותרות בהצלחה!`)
-      setTimeout(() => {
-        onSuccess()
-        onClose()
-        setResult('')
-      }, 1500)
+      // פונקציה לבדיקת גימטריה
+      const isGematria = (text, maxValue) => {
+        const hebrewNumerals = {
+          'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+          'י': 10, 'כ': 20, 'ך': 20, 'ל': 30, 'מ': 40, 'ם': 40, 'נ': 50, 'ן': 50,
+          'ס': 60, 'ע': 70, 'פ': 80, 'ף': 80, 'צ': 90, 'ץ': 90,
+          'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
+        }
+        
+        let value = 0
+        for (let char of text) {
+          if (hebrewNumerals[char]) {
+            value += hebrewNumerals[char]
+          } else if (!/['"״׳]/.test(char)) {
+            return false
+          }
+        }
+        return value > 0 && value < maxValue
+      }
+      
+      // הגדרת סיומת וסימן התחלה
+      let localEndSuffix = endChar
+      let localStart = startChar
+      let localIgnore = [...ignoreArray]
+      
+      if (boldOnly) {
+        localEndSuffix += '</b>'
+        localStart = `<b>${localStart}`
+      } else {
+        localIgnore = localIgnore.concat(['<b>', '</b>'])
+      }
+      
+      const lines = content.split('\n')
+      const allLines = lines.slice(0, 1) // שמירת השורה הראשונה
+      let count = 0
+      
+      for (const line of lines.slice(1)) {
+        const words = line.split(/\s+/).filter(Boolean)
+        
+        try {
+          if (words.length > 0) {
+            const firstWord = words[0]
+            const stripped = stripHtml(firstWord, localIgnore)
+            
+            // בדיקה אם המילה הראשונה מסתיימת בסיומת הנדרשת
+            if (stripped.endsWith(localEndSuffix) && 
+                isGematria(firstWord, maxNum + 1) && 
+                stripped.startsWith(localStart)) {
+              
+              const cleanWord = stripHtml(firstWord, removeArray)
+              const headingLine = `<h${level}>${cleanWord}</h${level}>`
+              allLines.push(headingLine)
+              
+              if (words.length > 1) {
+                allLines.push(words.slice(1).join(' '))
+              }
+              count++
+            } else {
+              allLines.push(line)
+            }
+          } else {
+            allLines.push(line)
+          }
+        } catch (error) {
+          allLines.push(line)
+        }
+      }
+      
+      if (count > 0) {
+        const newContent = allLines.join('\n')
+        setResult(`נוצרו ${count} כותרות בהצלחה!`)
+        onContentChange(newContent)
+        setTimeout(() => {
+          onClose()
+          setResult('')
+        }, 1500)
+      } else {
+        setResult('לא נמצאו תוצאות תואמות')
+      }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

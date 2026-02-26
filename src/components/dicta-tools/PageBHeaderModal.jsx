@@ -4,41 +4,90 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
-export default function PageBHeaderModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function PageBHeaderModal({ isOpen, onClose, content, onContentChange }) {
   const [headerLevel, setHeaderLevel] = useState(2)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'create-page-b-headers',
-          book_id: bookId,
-          header_level: headerLevel
-        })
-      })
-      
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+      // פונקציה לבניית regex שמתעלם מתגים
+      const buildTagAgnosticPattern = (word, optionalEndChars = "['\"']*") => {
+        const anyTags = "(?:<[^>]+>\\s*)*"
+        let pattern = ""
+        for (const char of word) {
+          pattern += anyTags + char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        }
+        pattern += anyTags
+        if (optionalEndChars) pattern += optionalEndChars + anyTags
+        return pattern
       }
       
-      setResult(`נוצרו ${data.count} כותרות "עמוד ב" בהצלחה!`)
-      setTimeout(() => {
-        onSuccess()
-        onClose()
-        setResult('')
-      }, 1500)
+      // פונקציה לעיבוד שורה
+      const stripAndReplace = (text, counter) => {
+        const anyTags = "(?:<[^>]+>\\s*)*"
+        const nonWord = "(?:[^\\w<>]|$)"
+        let pattern = "^\\s*" + anyTags
+        
+        // דפוס אופציונלי ל"שם"
+        const shemPattern = buildTagAgnosticPattern("שם", "")
+        pattern += `(?<shem>${shemPattern}\\s*)?`
+        
+        // דפוס אופציונלי ל"גמרא"
+        const gmarahVariants = ["גמרא", "בגמרא", "גמ'", "בגמ'"]
+        const gmarahPatterns = gmarahVariants.map(word => buildTagAgnosticPattern(word, ""))
+        const gmarahPattern = `(?<gmarah>${gmarahPatterns.join("|")})\\s*`
+        pattern += `(?:${gmarahPattern})?`
+        
+        // דפוס ל"עמוד ב" או "ע"ב"
+        const abVariants = ["עמוד ב", "ע\"ב", "ע''ב", "ע'ב"]
+        const abPatterns = abVariants.map(word => `(?<!\\w)${buildTagAgnosticPattern(word)}(?!\\w)`)
+        const abPattern = `(?<ab>${abPatterns.join("|")})`
+        pattern += abPattern + nonWord + `(?<rest>.*)`
+        
+        const matchPattern = new RegExp(pattern, "iu")
+        
+        // בדיקה אם כבר יש כותרת
+        if (/<h\d>.*?<\/h\d>/i.test(text)) return text
+        
+        const match = matchPattern.exec(text)
+        if (!match) return text
+        
+        counter.count++
+        const header = `<h${headerLevel}>עמוד ב</h${headerLevel}>`
+        const restOfLine = (match.groups?.rest || "").trimStart()
+        let gmarahText = match.groups?.gmarah || ""
+        
+        if (gmarahText) {
+          gmarahText = gmarahText.replace(new RegExp(anyTags, "g"), "").trim()
+        }
+        
+        if (gmarahText) {
+          return restOfLine ? `${header}\n${gmarahText} ${restOfLine}\n` : `${header}\n${gmarahText}\n`
+        }
+        return restOfLine ? `${header}\n${restOfLine}\n` : `${header}\n`
+      }
+      
+      const lines = content.split('\n')
+      const counter = { count: 0 }
+      const newLines = lines.map(line => stripAndReplace(line, counter))
+      const newContent = newLines.join('').replace(/\n\s*\n/g, '\n')
+      
+      if (counter.count > 0) {
+        setResult(`נוצרו ${counter.count} כותרות "עמוד ב" בהצלחה!`)
+        onContentChange(newContent)
+        setTimeout(() => {
+          onClose()
+          setResult('')
+        }, 1500)
+      } else {
+        setResult('לא נמצאו אזכורים של "עמוד ב"')
+      }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

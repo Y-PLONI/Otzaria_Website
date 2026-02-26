@@ -107,7 +107,7 @@ export default function AdminUsersPage() {
     let aValue = a[sortConfig.key] || ''
     let bValue = b[sortConfig.key] || ''
     
-    if (sortConfig.key === 'points' || sortConfig.key === 'completedPages') {
+    if (sortConfig.key === 'points' || sortConfig.key === 'completedPages' || sortConfig.key === 'dictaBooks') {
         aValue = Number(aValue) || 0
         bValue = Number(bValue) || 0
     }
@@ -164,7 +164,13 @@ export default function AdminUsersPage() {
                 className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-200 select-none"
               >
                 עמודים שהושלמו {getSortIcon('completedPages')}
-              </th> 
+              </th>
+              <th 
+                onClick={() => handleSort('dictaBooks')}
+                className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-200 select-none"
+              >
+                ספרי דיקטה {getSortIcon('dictaBooks')}
+              </th>
               <th className="text-right p-4 font-bold text-gray-700">פעולות</th>
             </tr>
           </thead>
@@ -225,6 +231,11 @@ export default function AdminUsersPage() {
                   <td className="p-4 text-center">
                     <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">
                         {user.completedPages || 0}
+                    </span>
+                  </td>
+                  <td className="p-4 text-center">
+                    <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                        {user.dictaBooks || 0}
                     </span>
                   </td>
                   <td className="p-4 flex gap-2">

@@ -4,41 +4,98 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
-export default function CreateHeadersModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function CreateHeadersModal({ isOpen, onClose, content, onContentChange }) {
   const [findWord, setFindWord] = useState('דף')
   const [endNumber, setEndNumber] = useState(999)
   const [level, setLevel] = useState(2)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'create-headers',
-          book_id: bookId,
-          find_word: findWord,
-          end: endNumber,
-          level_num: level
+      // הסרת תגי HTML מטקסט
+      const htmlTags = ["<b>", "</b>", "<big>", "</big>", ":", '"', ",", ";", "[", "]", "(", ")", "'", "״", ".", "‚"]
+      const stripTags = (text) => {
+        let result = text
+        htmlTags.forEach(tag => {
+          result = result.split(tag).join('')
         })
-      })
-      
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+        return result.trim()
       }
       
-      if (data.found) {
-        setResult(`נוצרו ${data.count} כותרות בהצלחה!`)
+      // בדיקה אם מספר עברי תקין
+      const isGematria = (text, maxValue) => {
+        const hebrewNumerals = {
+          'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+          'י': 10, 'כ': 20, 'ך': 20, 'ל': 30, 'מ': 40, 'ם': 40, 'נ': 50, 'ן': 50, 
+          'ס': 60, 'ע': 70, 'פ': 80, 'ף': 80, 'צ': 90, 'ץ': 90,
+          'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
+        }
+        
+        let value = 0
+        for (let char of text) {
+          if (hebrewNumerals[char]) {
+            value += hebrewNumerals[char]
+          } else if (!/['"״׳]/.test(char)) {
+            return false // תו לא חוקי
+          }
+        }
+        return value > 0 && value < maxValue
+      }
+      
+      const findClean = stripTags(findWord)
+      const lines = content.split('\n')
+      const allLines = []
+      let count = 0
+      let i = 0
+      
+      while (i < lines.length) {
+        const line = lines[i]
+        const words = line.split(/\s+/).filter(Boolean)
+        
+        try {
+          // מקרה 1: שתי מילים או יותר בשורה
+          if (words.length >= 2 && stripTags(words[0]) === findClean && isGematria(stripTags(words[1]), endNumber + 1)) {
+            count++
+            const headingLine = `<h${level}>${stripTags(words[0])} ${stripTags(words[1])}</h${level}>`
+            allLines.push(headingLine)
+            if (words.length > 2) {
+              allLines.push(words.slice(2).join(' '))
+            }
+          }
+          // מקרה 2: מילה אחת בשורה והמספר בשורה הבאה
+          else if (words.length === 1 && stripTags(words[0]) === findClean && i + 1 < lines.length) {
+            const nextLine = lines[i + 1]
+            const nextWords = nextLine.split(/\s+/).filter(Boolean)
+            
+            if (nextWords.length >= 1 && isGematria(stripTags(nextWords[0]), endNumber + 1)) {
+              count++
+              const headingLine = `<h${level}>${stripTags(words[0])} ${stripTags(nextWords[0])}</h${level}>`
+              allLines.push(headingLine)
+              if (nextWords.length > 1) {
+                allLines.push(nextWords.slice(1).join(' '))
+              }
+              i++ // דלג על השורה הבאה
+            } else {
+              allLines.push(line)
+            }
+          } else {
+            allLines.push(line)
+          }
+        } catch (error) {
+          allLines.push(line)
+        }
+        
+        i++
+      }
+      
+      if (count > 0) {
+        setResult(`נוצרו ${count} כותרות בהצלחה!`)
+        onContentChange(allLines.join('\n'))
         setTimeout(() => {
-          onSuccess()
           onClose()
           setResult('')
         }, 1500)
@@ -46,7 +103,7 @@ export default function CreateHeadersModal({ isOpen, onClose, bookId, onSuccess 
         setResult('לא נמצאו תוצאות תואמות')
       }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

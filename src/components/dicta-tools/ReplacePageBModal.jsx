@@ -3,41 +3,59 @@
 import { useState } from 'react'
 import Modal from '@/components/Modal'
 
-export default function ReplacePageBModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function ReplacePageBModal({ isOpen, onClose, content, onContentChange }) {
   const [replaceType, setReplaceType] = useState('נקודותיים')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'replace-page-b-headers',
-          book_id: bookId,
-          replace_type: replaceType
-        })
+      let newContent = content
+      let previousTitle = ""
+      let previousLevel = ""
+      let replacementsMade = 0
+      
+      // החלפת כותרות "עמוד ב" בהתאם לכותרת הקודמת
+      newContent = newContent.replace(/<h([1-9])>(.*?)<\/h\1>/g, (match, level, title) => {
+        // אם זו כותרת דף - שמור אותה
+        if (/^דף \S+\.?/.test(title)) {
+          previousTitle = title.trim()
+          previousLevel = level
+          return match
+        }
+        
+        // אם זו כותרת "עמוד ב" - החלף אותה
+        if (title === "עמוד ב") {
+          replacementsMade++
+          
+          if (replaceType === "נקודותיים") {
+            return `<h${previousLevel}>${previousTitle.replace(/\.+$/, "")}:</h${previousLevel}>`
+          }
+          
+          if (replaceType === 'ע"ב') {
+            const modifiedTitle = previousTitle.replace(/( ע"א| עמוד א)/, "")
+            return `<h${previousLevel}>${modifiedTitle.replace(/\.+$/, "")} ע"ב</h${previousLevel}>`
+          }
+        }
+        
+        return match
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+      if (replacementsMade > 0) {
+        setResult(`בוצעו ${replacementsMade} החלפות בהצלחה!`)
+        onContentChange(newContent)
+        setTimeout(() => {
+          onClose()
+          setResult('')
+        }, 1500)
+      } else {
+        setResult('לא נמצאו כותרות "עמוד ב" להחלפה')
       }
-      
-      setResult(`בוצעו ${data.count} החלפות בהצלחה!`)
-      setTimeout(() => {
-        onSuccess()
-        onClose()
-        setResult('')
-      }, 1500)
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)

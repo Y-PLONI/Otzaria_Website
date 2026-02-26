@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Modal from '@/components/Modal'
 
-export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess }) {
+export default function TextCleanerModal({ isOpen, onClose, content, onContentChange }) {
   const [options, setOptions] = useState({
     remove_empty_lines: true,
     remove_double_spaces: true,
@@ -11,7 +11,8 @@ export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess })
     remove_spaces_after: true,
     remove_spaces_around_newlines: true,
     replace_double_quotes: true,
-    normalize_quotes: true
+    normalize_quotes: true,
+    clean_duplicate_tags: false
   })
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
@@ -20,32 +21,84 @@ export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess })
     setOptions(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     setResult('')
     setLoading(true)
     
     try {
-      const response = await fetch('/api/dicta/tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'text-cleaner',
-          book_id: bookId,
-          options
-        })
-      })
+      let newContent = content
+      let changed = false
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setResult(`שגיאה: ${data.detail || 'שגיאה לא ידועה'}`)
-        return
+      if (options.remove_empty_lines) {
+        const before = newContent
+        newContent = newContent.replace(/\n\s*\n\s*\n/g, '\n\n')
+        if (before !== newContent) changed = true
       }
       
-      if (data.changed) {
+      if (options.remove_double_spaces) {
+        const before = newContent
+        newContent = newContent.replace(/  +/g, ' ')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.remove_spaces_before) {
+        const before = newContent
+        newContent = newContent.replace(/\s+([.,;:!?])/g, '$1')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.remove_spaces_after) {
+        const before = newContent
+        newContent = newContent.replace(/\(\s+/g, '(')
+        newContent = newContent.replace(/\[\s+/g, '[')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.remove_spaces_around_newlines) {
+        const before = newContent
+        newContent = newContent.replace(/\s+\n/g, '\n')
+        newContent = newContent.replace(/\n\s+/g, '\n')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.replace_double_quotes) {
+        const before = newContent
+        newContent = newContent.replace(/""/g, '"')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.normalize_quotes) {
+        const before = newContent
+        newContent = newContent.replace(/[""]/g, '"')
+        newContent = newContent.replace(/['']/g, "'")
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.clean_duplicate_tags) {
+        const before = newContent
+        // ניקוי תגיות כפולות - מאומץ מהמימוש בצד השרת
+        // מטפל בכל סוגי התגיות כולל h1-h6
+        
+        let previousText
+        do {
+          previousText = newContent
+          // תגית סוגרת ותגית פותחת אותו דבר עם רווח באמצע: </b> <b> -> רווח בלבד
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])>\s+<\1>/g, ' ')
+        
+          // שני סוגרים ואז שני פותחים באותו סדר הפוך: </b></i> <i><b> -> רווח בלבד
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\2><\1>/g, ' ')
+        
+          // שני סוגרים ואז שני פותחים באותו סדר: </b></i> <b><i> -> רווח בלבד
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\1><\2>/g, ' ')
+        } while (newContent !== previousText)
+        
+        if (before !== newContent) changed = true
+      }
+      
+      if (changed) {
         setResult('הטקסט נוקה בהצלחה!')
+        onContentChange(newContent)
         setTimeout(() => {
-          onSuccess()
           onClose()
           setResult('')
         }, 1500)
@@ -53,7 +106,7 @@ export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess })
         setResult('לא נמצאו שינויים לביצוע')
       }
     } catch (error) {
-      setResult('שגיאה בתקשורת עם השרת')
+      setResult('שגיאה בביצוע הפעולה')
       console.error(error)
     } finally {
       setLoading(false)
@@ -146,6 +199,19 @@ export default function TextCleanerModal({ isOpen, onClose, bookId, onSuccess })
               className="w-4 h-4"
             />
             <span>אחדות מרכאות וגרשיים</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+            <input
+              type="checkbox"
+              checked={options.clean_duplicate_tags}
+              onChange={() => handleToggle('clean_duplicate_tags')}
+              className="w-4 h-4"
+            />
+            <div className="flex flex-col">
+              <span>נקה תגיות כפולות</span>
+              <span className="text-xs text-gray-500 mr-6">(למשל &lt;b&gt;חידושים&lt;/b&gt; &lt;b&gt;על&lt;/b&gt;, לא מומלץ להפעיל לפני גמר העריכה)</span>
+            </div>
           </label>
         </div>
 

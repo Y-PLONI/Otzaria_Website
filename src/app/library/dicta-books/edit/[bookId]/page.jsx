@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, useTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import Link from 'next/link'
 import Button from '@/components/Button'
 import { useDialog } from '@/components/DialogContext'
+import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import CreateHeadersModal from '@/components/dicta-tools/CreateHeadersModal'
 import SingleLetterHeadersModal from '@/components/dicta-tools/SingleLetterHeadersModal'
 import ChangeHeadingModal from '@/components/dicta-tools/ChangeHeadingModal'
@@ -15,6 +17,7 @@ import HeaderErrorCheckerModal from '@/components/dicta-tools/HeaderErrorChecker
 import TextCleanerModal from '@/components/dicta-tools/TextCleanerModal'
 import AddPageNumberModal from '@/components/dicta-tools/AddPageNumberModal'
 import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
+import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 
 const DEFAULT_SHORTCUTS = {
   'save': 'Ctrl+KeyS',
@@ -30,6 +33,7 @@ const DEFAULT_SHORTCUTS = {
   'alignRight': 'Ctrl+KeyR',
   'alignCenter': 'Ctrl+Shift+KeyC',
   'alignLeft': 'Ctrl+KeyL',
+  'findReplace': 'Ctrl+KeyF',
   'shortcuts': 'Alt+KeyK',
 }
 
@@ -45,24 +49,109 @@ export default function DictaEditorPage() {
   
   const [book, setBook] = useState(null)
   const [content, setContent] = useState('')
-  const [savedContent, setSavedContent] = useState('') // תוכן שנשמר לאחרונה
+  const [savedContent, setSavedContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [claiming, setClaiming] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [showResetDialog, setShowResetDialog] = useState(false)
   const [fontSize, setFontSize] = useState(18)
+  const [selectedFont, setSelectedFont] = useState("'Times New Roman'")
   const [textAlign, setTextAlign] = useState('right')
   const [toc, setToc] = useState([])
   const [activeTool, setActiveTool] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false)
   const [userShortcuts, setUserShortcuts] = useState(DEFAULT_SHORTCUTS)
+  const [showFindReplace, setShowFindReplace] = useState(false)
+  const [findText, setFindText] = useState('')
+  const [replaceText, setReplaceText] = useState('')
+  const [useRegex, setUseRegex] = useState(false)
+  const [savedSearches, setSavedSearches] = useState([])
+  const [showPreview, setShowPreview] = useState(true)
+  const [isPending, startTransition] = useTransition()
+  const [toolbarExpanded, setToolbarExpanded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dicta_editor_toolbar_expanded')
+      return saved === 'true'
+    }
+    return false
+  })
+  
+  const hasLoadedPreviewState = useRef(false)
   const contentRef = useRef(null)
   const textareaRef = useRef(null)
+  const previewRef = useRef(null)
+  const scrollingSource = useRef(null) // מזהה איזה אלמנט התחיל את הגלילה
 
-  // בדיקה אם יש שינויים לא שמורים
   const hasUnsavedChanges = content !== savedContent
+
+  useEffect(() => {
+    if (selectedFont) {
+      localStorage.setItem('dicta_editor_font', selectedFont)
+    }
+  }, [selectedFont])
+
+  useEffect(() => {
+    if (hasLoadedPreviewState.current) {
+      localStorage.setItem('dicta_editor_show_preview', showPreview.toString())
+    }
+  }, [showPreview])
+
+  useEffect(() => {
+    localStorage.setItem('dicta_editor_toolbar_expanded', toolbarExpanded.toString())
+  }, [toolbarExpanded])
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [hasUnsavedChanges])
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      if (hasUnsavedChanges) {
+        const confirmLeave = window.confirm('ישנם שינויים לא שמורים. האם אתה בטוח שברצונך לעזוב את הדף?')
+        if (!confirmLeave) {
+          window.history.pushState(null, '', window.location.href)
+          throw 'Route change aborted by user'
+        }
+      }
+    }
+
+    const handleClick = (e) => {
+      const target = e.target.closest('a')
+      if (target && target.href && hasUnsavedChanges) {
+        const currentUrl = new URL(window.location.href)
+        const targetUrl = new URL(target.href, window.location.origin)
+        
+        if (currentUrl.origin === targetUrl.origin && currentUrl.pathname !== targetUrl.pathname) {
+          const confirmLeave = window.confirm('ישנם שינויים לא שמורים. האם אתה בטוח שברצונך לעזוב את הדף?')
+          if (!confirmLeave) {
+            e.preventDefault()
+            e.stopPropagation()
+          }
+        }
+      }
+    }
+
+    document.addEventListener('click', handleClick, true)
+
+    return () => {
+      document.removeEventListener('click', handleClick, true)
+    }
+  }, [hasUnsavedChanges])
 
   useEffect(() => {
     if (status === 'loading') return
@@ -79,7 +168,7 @@ export default function DictaEditorPage() {
         const data = await res.json()
         setBook(data)
         setContent(data.content || '')
-        setSavedContent(data.content || '') // שמירת התוכן המקורי
+        setSavedContent(data.content || '')
       } catch (error) {
         console.error('Error loading book:', error)
         showAlert('שגיאה', 'שגיאה בטעינת הספר')
@@ -100,6 +189,68 @@ export default function DictaEditorPage() {
         console.error('Failed to parse shortcuts:', e)
       }
     }
+
+    const savedSearchesData = localStorage.getItem('dicta_saved_searches')
+    if (savedSearchesData) {
+      try {
+        setSavedSearches(JSON.parse(savedSearchesData))
+      } catch (e) {
+        console.error('Failed to parse saved searches:', e)
+      }
+    }
+
+    const savedFont = localStorage.getItem('dicta_editor_font')
+    if (savedFont) {
+      setSelectedFont(savedFont)
+    }
+
+    if (!hasLoadedPreviewState.current) {
+      const savedPreviewState = localStorage.getItem('dicta_editor_show_preview')
+      if (savedPreviewState !== null) {
+        setShowPreview(savedPreviewState === 'true')
+      }
+      hasLoadedPreviewState.current = true
+    }
+  }, [])
+
+  const handleContentChange = useCallback((newContent) => {
+    setContent(newContent)
+  }, [])
+
+  const handleTextareaScroll = useCallback(() => {
+    if (!textareaRef.current || !previewRef.current) return
+    if (scrollingSource.current === 'preview') return
+    
+    scrollingSource.current = 'textarea'
+    
+    const textarea = textareaRef.current
+    const preview = previewRef.current
+    
+    const scrollPercentage = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight)
+    preview.scrollTop = scrollPercentage * (preview.scrollHeight - preview.clientHeight)
+    
+    clearTimeout(textareaRef.current.scrollTimeout)
+    textareaRef.current.scrollTimeout = setTimeout(() => {
+      scrollingSource.current = null
+    }, 50)
+  }, [])
+
+  const handlePreviewScroll = useCallback(() => {
+    if (!textareaRef.current || !previewRef.current) return
+    if (scrollingSource.current === 'textarea') return
+    
+    scrollingSource.current = 'preview'
+    
+    const textarea = textareaRef.current
+    const preview = previewRef.current
+    
+    const scrollPercentage = preview.scrollTop / (preview.scrollHeight - preview.clientHeight)
+    textarea.scrollTop = scrollPercentage * (textarea.scrollHeight - textarea.clientHeight)
+    
+    clearTimeout(previewRef.current.scrollTimeout)
+    previewRef.current.scrollTimeout = setTimeout(() => {
+      scrollingSource.current = null
+    }, 50)
   }, [])
 
   const insertTag = useCallback((tag) => {
@@ -116,13 +267,240 @@ export default function DictaEditorPage() {
     setContent(newText);
     
     setTimeout(() => {
-      // אם יש טקסט נבחר, מקם את הסמן אחרי התג הסוגר.
-      // אם לא, מקם את הסמן בתוך התג הריק.
       const newPos = selectedText ? (start + insertion.length) : (start + tag.length + 2);
       textarea.focus();
       textarea.setSelectionRange(newPos, newPos);
     }, 0);
   }, [content])
+
+  const handleFindNext = useCallback((textToFind, isRegexMode) => {
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
+    if (!textareaRef.current) return
+
+    const textarea = textareaRef.current
+    const text = content
+    const processPattern = (str) => str.replaceAll('^13', '\n')
+    const patternStr = processPattern(textToFind)
+    
+    const startPos = textarea.selectionEnd || 0
+    let matchIndex = -1
+    let matchLength = 0
+
+    if (isRegexMode) {
+      try {
+        const regex = new RegExp(patternStr, 'g')
+        regex.lastIndex = startPos
+        const match = regex.exec(text)
+        
+        if (match) {
+          matchIndex = match.index
+          matchLength = match[0].length
+        } else {
+          regex.lastIndex = 0
+          const matchFromStart = regex.exec(text)
+          if (matchFromStart) {
+            matchIndex = matchFromStart.index
+            matchLength = matchFromStart[0].length
+            showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
+          }
+        }
+      } catch (e) {
+        return showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
+      }
+    } else {
+      matchIndex = text.indexOf(patternStr, startPos)
+      if (matchIndex === -1) {
+        matchIndex = text.indexOf(patternStr, 0)
+        if (matchIndex !== -1) {
+          showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
+        }
+      }
+      matchLength = patternStr.length
+    }
+
+    if (matchIndex !== -1) {
+      textarea.focus()
+      textarea.setSelectionRange(matchIndex, matchIndex + matchLength)
+      
+      const lineHeight = 24
+      const lines = text.substr(0, matchIndex).split('\n').length
+      const scrollPos = (lines - 5) * lineHeight
+      textarea.scrollTop = scrollPos > 0 ? scrollPos : 0
+    } else {
+      showAlert('חיפוש', 'לא נמצאו מופעים.')
+    }
+  }, [content, showAlert])
+
+  const handleReplaceCurrent = useCallback((textToReplace, textToFind, isRegexMode) => {
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
+    if (!textareaRef.current) return
+
+    const textarea = textareaRef.current
+
+    if (textarea.selectionStart === textarea.selectionEnd) {
+      handleFindNext(textToFind, isRegexMode)
+      return
+    }
+
+    const processPattern = (str) => str.replaceAll('^13', '\n')
+    const patternStr = processPattern(textToFind)
+    const replacement = processPattern(textToReplace || '')
+
+    let finalReplacement = replacement
+
+    if (isRegexMode) {
+      try {
+        const selectedText = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd)
+        const regex = new RegExp(patternStr)
+        finalReplacement = selectedText.replace(regex, replacement)
+      } catch (e) {
+        console.error('Regex replacement error:', e)
+        return showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
+      }
+    }
+
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const newText = content.substring(0, start) + finalReplacement + content.substring(end)
+    
+    setContent(newText)
+    
+    setTimeout(() => {
+      textarea.focus()
+      textarea.setSelectionRange(start + finalReplacement.length, start + finalReplacement.length)
+    }, 0)
+
+    handleFindNext(textToFind, isRegexMode)
+  }, [content, handleFindNext, showAlert])
+
+  const handleReplaceAll = useCallback((overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
+    const textToFind = overrideFind !== null ? overrideFind : findText
+    const textToReplace = overrideReplace !== null ? overrideReplace : replaceText
+    const isRegexMode = useRegexOverride !== null ? useRegexOverride : useRegex
+
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
+    
+    const processPattern = (str) => str.replaceAll('^13', '\n')
+    const patternStr = processPattern(textToFind)
+    const replacement = processPattern(textToReplace || '')
+
+    const createRegex = (global) => {
+      try {
+        if (isRegexMode) {
+          return new RegExp(patternStr, global ? 'g' : '')
+        } else {
+          const escaped = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          return new RegExp(escaped, global ? 'g' : '')
+        }
+      } catch (e) {
+        return null
+      }
+    }
+
+    const regex = createRegex(true)
+    if (!regex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
+
+    const matches = content.match(regex)
+    const count = matches ? matches.length : 0
+    
+    if (count === 0) {
+      return showAlert('לידיעתך', 'לא נמצאו תוצאות התואמות לחיפוש.')
+    }
+
+    const newContent = content.replace(regex, replacement)
+    setContent(newContent)
+    
+    showAlert('הצלחה', `ההחלפה בוצעה בהצלחה! הוחלפו ${count} מופעים.`)
+  }, [content, findText, replaceText, useRegex, showAlert])
+
+  const handleRemoveDigits = useCallback(() => {
+    const newContent = content.replace(/\d+/g, '')
+    setContent(newContent)
+    showAlert('הצלחה', 'הספרות הוסרו בהצלחה!')
+  }, [content, showAlert])
+
+  const addSavedSearch = useCallback((label, newFindText, newReplaceText, isRegex = false) => {
+    const newSearch = {
+      id: Date.now().toString(),
+      label: label || newFindText,
+      findText: newFindText,
+      replaceText: newReplaceText,
+      isRegex: isRegex
+    }
+    const updated = [...savedSearches, newSearch]
+    setSavedSearches(updated)
+    localStorage.setItem('dicta_saved_searches', JSON.stringify(updated))
+    showAlert('הצלחה', 'החיפוש נשמר בהצלחה!')
+  }, [savedSearches, showAlert])
+
+  const removeSavedSearch = useCallback((id) => {
+    const updated = savedSearches.filter(s => s.id !== id)
+    setSavedSearches(updated)
+    localStorage.setItem('dicta_saved_searches', JSON.stringify(updated))
+  }, [savedSearches])
+
+  const moveSearch = useCallback((index, direction) => {
+    const newSearches = [...savedSearches]
+    if (direction === 'up' && index > 0) {
+      [newSearches[index - 1], newSearches[index]] = [newSearches[index], newSearches[index - 1]]
+    } else if (direction === 'down' && index < newSearches.length - 1) {
+      [newSearches[index], newSearches[index + 1]] = [newSearches[index + 1], newSearches[index]]
+    }
+    setSavedSearches(newSearches)
+    localStorage.setItem('dicta_saved_searches', JSON.stringify(newSearches))
+  }, [savedSearches])
+
+  const runAllSavedReplacements = useCallback(() => {
+    if (savedSearches.length === 0) {
+      return showAlert('שגיאה', 'אין חיפושים שמורים')
+    }
+
+    let currentContent = content
+    let totalReplacements = 0
+
+    savedSearches.forEach(search => {
+      if (search.isRemoveDigits) {
+        currentContent = currentContent.replace(/\d+/g, '')
+      } else {
+        const processPattern = (str) => str.replaceAll('^13', '\n')
+        const patternStr = processPattern(search.findText)
+        const replacement = processPattern(search.replaceText || '')
+
+        try {
+          let regex
+          if (search.isRegex) {
+            regex = new RegExp(patternStr, 'g')
+          } else {
+            const escaped = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            regex = new RegExp(escaped, 'g')
+          }
+
+          const matches = currentContent.match(regex)
+          if (matches) {
+            totalReplacements += matches.length
+            currentContent = currentContent.replace(regex, replacement)
+          }
+        } catch (e) {
+          console.error('Error in saved search:', e)
+        }
+      }
+    })
+
+    setContent(currentContent)
+    showAlert('הצלחה', `בוצעו ${totalReplacements} החלפות מתוך ${savedSearches.length} חיפושים שמורים.`)
+  }, [content, savedSearches, showAlert])
+
+  const onAddRemoveDigitsToSaved = useCallback(() => {
+    const newSearch = {
+      id: Date.now().toString(),
+      label: 'ניקוי ספרות',
+      isRemoveDigits: true
+    }
+    const updated = [...savedSearches, newSearch]
+    setSavedSearches(updated)
+    localStorage.setItem('dicta_saved_searches', JSON.stringify(updated))
+    showAlert('הצלחה', 'פעולת ניקוי ספרות נוספה לרשימה!')
+  }, [savedSearches, showAlert])
 
   useEffect(() => {
     if (!content) return
@@ -151,9 +529,9 @@ export default function DictaEditorPage() {
       })
       
       if (!res.ok) throw new Error('שגיאה בשמירה')
-      setSavedContent(content) // עדכון התוכן השמור
+      setSavedContent(content)
       if (!silent) {
-        showAlert('הצלחה', 'הספר נשמר בהצלחה!')
+        showAlert('הצלחה', 'העריכה נשמרה בהצלחה!')
       }
     } catch (error) {
       console.error('Error saving book:', error)
@@ -176,7 +554,7 @@ export default function DictaEditorPage() {
   }, [showAlert])
 
   const actionsMap = useMemo(() => ({
-    'save': { label: 'שמירה', action: handleSave },
+    'save': { label: 'שמירה', action: () => handleSave(false) },
     'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: () => setEditMode(prev => !prev) },
     'fontIncrease': { label: 'הגדל גופן', action: () => setFontSize(prev => Math.min(32, prev + 2)) },
     'fontDecrease': { label: 'הקטן גופן', action: () => setFontSize(prev => Math.max(12, prev - 2)) },
@@ -195,6 +573,7 @@ export default function DictaEditorPage() {
     'h6': { label: 'כותרת H6', action: () => insertTag('h6') },
     'bigger': { label: 'הגדל גופן טקסט', action: () => insertTag('big') },
     'smaller': { label: 'הקטן גופן טקסט', action: () => insertTag('small') },
+    'findReplace': { label: 'חיפוש והחלפה', action: () => setShowFindReplace(true) },
     'createHeaders': { label: 'יצירת כותרות', action: () => setActiveTool('createHeaders') },
     'singleLetterHeaders': { label: 'כותרות אותיות', action: () => setActiveTool('singleLetterHeaders') },
     'changeHeading': { label: 'שינוי רמת כותרת', action: () => setActiveTool('changeHeading') },
@@ -246,19 +625,6 @@ export default function DictaEditorPage() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true })
   }, [userShortcuts, actionsMap, showShortcutsDialog])
 
-  const refreshContent = async () => {
-    try {
-      const res = await fetch(`/api/dicta/books/${bookId}`)
-      if (!res.ok) throw new Error('שגיאה ברענון')
-      const data = await res.json()
-      setBook(data)
-      setContent(data.content || '')
-    } catch (error) {
-      console.error('Error refreshing:', error)
-      showAlert('שגיאה', 'שגיאה ברענון התוכן')
-    }
-  }
-
   const handleClaim = () => {
     showConfirm(
       'תפיסת ספר',
@@ -307,7 +673,6 @@ export default function DictaEditorPage() {
     try {
       setCompleting(true)
       
-      // יצירת קובץ טקסט
       const cleanBookName = book.title.replace(/[^a-zA-Z0-9א-ת]/g, '_')
       const fileName = `${cleanBookName}_dicta.txt`
       const blob = new Blob([content], { type: 'text/plain' })
@@ -318,7 +683,7 @@ export default function DictaEditorPage() {
       formData.append('bookName', book.title)
       formData.append('userId', session.user._id || session.user.id)
       formData.append('userName', session.user.name)
-      formData.append('uploadType', 'dicta') // תגית מיוחדת לדיקטה
+      formData.append('uploadType', 'dicta')
 
       const uploadResponse = await fetch('/api/upload-book', { method: 'POST', body: formData })
       const uploadResult = await uploadResponse.json()
@@ -327,7 +692,6 @@ export default function DictaEditorPage() {
         throw new Error(uploadResult.error || 'שגיאה בהעלאה')
       }
 
-      // סימון הספר כהושלם
       const completeResponse = await fetch(`/api/dicta/books/${bookId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -337,7 +701,6 @@ export default function DictaEditorPage() {
       if (completeResponse.ok) {
         setShowUploadDialog(false)
         showAlert('הצלחה', 'הטקסט הועלה בהצלחה והספר סומן כהושלם!')
-        // חזרה לרשימת ספרי דיקטה
         setTimeout(() => {
           router.push('/library/dicta-books')
         }, 1500)
@@ -352,15 +715,77 @@ export default function DictaEditorPage() {
     }
   }
 
+  const handleReset = () => {
+    setShowResetDialog(true)
+  }
+
+  const handleResetConfirm = async () => {
+    try {
+      setResetting(true)
+      const res = await fetch(`/api/dicta/books/${bookId}/reset`, {
+        method: 'POST',
+      })
+      
+      const data = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'שגיאה באיפוס הספר')
+      }
+      
+      setContent(data.book.content)
+      setSavedContent(data.book.content)
+      setShowResetDialog(false)
+      showAlert('הצלחה', 'הספר אופס בהצלחה! נתוני הספר נמשכו מחדש מגיטהאב.')
+    } catch (error) {
+      console.error('Error resetting book:', error)
+      showAlert('שגיאה', error.message || 'אירעה שגיאה באיפוס הספר')
+    } finally {
+      setResetting(false)
+    }
+  }
+
   const scrollToHeading = (index) => {
-    if (!contentRef.current) return
-    const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6')
+    // טיפול במצב של עריכה ללא תצוגה מקדימה (רק Textarea)
+    if (editMode && !showPreview) {
+      if (!textareaRef.current || !toc[index]) return;
+      
+      const textarea = textareaRef.current;
+      // נחפש את מחרוזת ה-HTML המלאה של הכותרת כדי למנוע קפיצה למילה זהה בטקסט הרגיל
+      const textToFind = toc[index].html; 
+      const matchIndex = content.indexOf(textToFind);
+      
+      if (matchIndex !== -1) {
+        // סימון הטקסט (אופציונלי, נחמד כדי להראות למשתמש איפה הכותרת)
+        textarea.focus();
+        textarea.setSelectionRange(matchIndex, matchIndex + textToFind.length);
+        
+        // חישוב מיקום הגלילה לפי מספר שורות (בדומה לחיפוש והחלפה שכבר יש לך בקוד)
+        const textBeforeMatch = content.substring(0, matchIndex);
+        const lines = textBeforeMatch.split('\n').length;
+        // הערכה לגובה שורה (1.5 * גודל הגופן)
+        const lineHeight = fontSize * 1.5; 
+        const scrollPos = (lines - 4) * lineHeight;
+        
+        textarea.scrollTop = scrollPos > 0 ? scrollPos : 0;
+      }
+      return;
+    }
+
+    // ההתנהגות המקורית עבור מצב תצוגה מקדימה (Preview) או מצב קריאה בלבד (Read-only)
+    const targetRef = (editMode && showPreview) ? previewRef : contentRef;
+    if (!targetRef.current) return;
+    
+    const container = (editMode && showPreview) 
+      ? targetRef.current.querySelector('div[class*="prose"]') || targetRef.current
+      : targetRef.current;
+    
+    const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
     if (headings[index]) {
-      headings[index].scrollIntoView({ behavior: 'smooth', block: 'center' })
-      headings[index].style.backgroundColor = '#fff3cd'
+      headings[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      headings[index].style.backgroundColor = '#fff3cd';
       setTimeout(() => {
-        headings[index].style.backgroundColor = ''
-      }, 2000)
+        headings[index].style.backgroundColor = '';
+      }, 2000);
     }
   }
 
@@ -388,30 +813,78 @@ export default function DictaEditorPage() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50" dir="rtl">
-      <header className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
-          <Button
-            icon="arrow_forward"
-            variant="ghost"
-            onClick={() => router.push('/library/dicta-books')}
-            label="חזרה"
-          />
-          <h1 className="text-2xl font-bold text-gray-800">{book.title}</h1>
-          {book.status === 'in-progress' && (
-            <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm">
-              בעריכה
-            </span>
-          )}
-          {book.status === 'completed' && (
-            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
-              הושלם
-            </span>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-3">
+      <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Link href="/library" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                  <img src="/logo.png" alt="לוגו אוצריא" className="w-10 h-10" />
+                  <span className="text-lg font-bold text-black" style={{ fontFamily: 'FrankRuehl, serif' }}>ספריית אוצריא</span>
+                </Link>
+
+                <div className="w-px h-8 bg-surface-variant"></div>
+
+                <Button
+                  icon="arrow_forward"
+                  variant="ghost"
+                  onClick={() => router.push('/library/dicta-books')}
+                  label="חזרה לדיקטה"
+                />
+
+                <div className="w-px h-8 bg-surface-variant"></div>
+
+                <div>
+                  <h1 className="text-lg font-bold text-on-surface">{book.title}</h1>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-on-surface/60">עריכת דיקטה</p>
+                    {book.status === 'in-progress' && (
+                      <span className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full text-xs">
+                        בעריכה
+                      </span>
+                    )}
+                    {book.status === 'completed' && (
+                      <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
+                        הושלם
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <Link
+                href="/library/dashboard"
+                className="flex items-center justify-center hover:opacity-80 transition-opacity"
+                title={session?.user?.name}
+              >
+                <div
+                  className="w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-base shadow-md hover:shadow-lg transition-shadow"
+                  style={{ backgroundColor: getAvatarColor(session?.user?.name || '') }}
+                >
+                  {getInitial(session?.user?.name || '')}
+                </div>
+              </Link>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-surface-variant/50 pt-3">
+              <div className="flex items-center gap-3">
           {canEdit && (
             <>
+              <Button
+                icon="restart_alt"
+                variant="ghost"
+                size="sm"
+                onClick={handleReset}
+                loading={resetting}
+                label="אפס עריכת ספר"
+              />
+              <Button
+                icon="find_replace"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFindReplace(true)}
+                label="חיפוש"
+              />
               <Button
                 icon="keyboard"
                 variant="ghost"
@@ -423,8 +896,12 @@ export default function DictaEditorPage() {
                 icon={editMode ? 'visibility' : 'edit'}
                 variant="ghost"
                 size="sm"
-                onClick={() => setEditMode(!editMode)}
-                label={editMode ? 'תצוגה' : 'עריכה'}
+                onClick={() => {
+                  startTransition(() => {
+                    setEditMode(!editMode)
+                  })
+                }}
+                label={editMode ? 'תצוגה' : 'עריכה ידנית'}
               />
             </>
           )}
@@ -469,6 +946,24 @@ export default function DictaEditorPage() {
             size="sm"
             onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
           />
+
+          <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
+          <div className="relative">
+            <select 
+              value={selectedFont} 
+              onChange={(e) => setSelectedFont(e.target.value)} 
+              className="appearance-none pl-2 pr-6 h-8 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer"
+            >
+              <option value="'Times New Roman'">Times New Roman</option>
+              <option value="monospace">Monospace</option>
+              <option value="Arial">Arial</option>
+              <option value="'Courier New'">Courier New</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Verdana">Verdana</option>
+            </select>
+            <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+          </div>
           
           {isAvailable ? (
             <Button
@@ -479,7 +974,7 @@ export default function DictaEditorPage() {
               label="תפוס לעריכה"
             />
           ) : canEdit && !isCompleted ? (
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <Button
                 icon="task_alt"
                 variant="ghost"
@@ -490,197 +985,297 @@ export default function DictaEditorPage() {
               <Button
                 icon="save"
                 variant={hasUnsavedChanges ? "primary" : "ghost"}
-                onClick={handleSave}
+                onClick={() => handleSave(false)}
                 loading={saving}
                 label={hasUnsavedChanges ? "שמירה *" : "שמירה"}
               />
+              {hasUnsavedChanges && (
+                <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+              )}
             </div>
           ) : canEdit && isCompleted ? (
-            <Button
-              icon="save"
-              variant={hasUnsavedChanges ? "primary" : "ghost"}
-              onClick={handleSave}
-              loading={saving}
-              label={hasUnsavedChanges ? "שמירה *" : "שמירה"}
-            />
-          ) : null}
+            <div className="flex gap-2 items-center">
+              <Button
+                icon="upload"
+                variant="ghost"
+                onClick={handleComplete}
+                loading={completing}
+                label="העלה מחדש"
+              />
+              <Button
+                icon="save"
+                variant={hasUnsavedChanges ? "primary" : "ghost"}
+                onClick={() => handleSave(false)}
+                loading={saving}
+                label={hasUnsavedChanges ? "שמירה *" : "שמירה"}
+              />
+              {hasUnsavedChanges && (
+                <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+              )}
+            </div>
+              ) : null}
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
         {canEdit && (
-          <aside className="w-20 bg-white border-l flex flex-col items-center py-4 gap-2 overflow-y-auto shadow-sm">
+          <aside className={`${toolbarExpanded ? 'w-56' : 'w-20'} bg-white border-l flex flex-col py-4 gap-2 overflow-y-auto shadow-sm transition-all duration-300`}>
+            {toolbarExpanded && (
+              <div className="px-4 mb-2">
+                <span className="text-sm font-medium text-gray-700">כלי עריכה</span>
+              </div>
+            )}
+            
             <button
               onClick={() => setActiveTool('createHeaders')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="יצירת כותרות"
             >
               <span className="material-symbols-outlined text-gray-700">title</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">יצירת כותרות</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('singleLetterHeaders')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="כותרות אותיות"
             >
               <span className="material-symbols-outlined text-gray-700">format_size</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">כותרות אותיות</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('changeHeading')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="שינוי רמת כותרת"
             >
               <span className="material-symbols-outlined text-gray-700">format_indent_increase</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">שינוי רמת כותרת</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('punctuate')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="הדגשה וניקוד"
             >
               <span className="material-symbols-outlined text-gray-700">format_bold</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">הדגשה וניקוד</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('pageBHeader')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="כותרות עמוד ב"
             >
               <span className="material-symbols-outlined text-gray-700">find_in_page</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">כותרות עמוד ב</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('replacePageB')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="החלפת עמוד ב"
             >
               <span className="material-symbols-outlined text-gray-700">swap_horiz</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">החלפת עמוד ב</span>}
             </button>
 
             <button
               onClick={() => setActiveTool('addPageNumber')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="מיזוג דף ועמוד"
             >
               <span className="material-symbols-outlined text-gray-700">auto_stories</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">מיזוג דף ועמוד</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('headerCheck')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="בדיקת שגיאות בכותרות"
             >
               <span className="material-symbols-outlined text-gray-700">bug_report</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">בדיקת שגיאות</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('cleanText')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="ניקוי טקסט"
             >
               <span className="material-symbols-outlined text-gray-700">cleaning_services</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">ניקוי טקסט</span>}
             </button>
+            
+            {/* Spacer to push button to bottom */}
+            <div className="flex-1"></div>
+            
+            {/* Expand/Collapse button at bottom */}
+            <div className="border-t pt-2 mt-2">
+              <button
+                onClick={() => setToolbarExpanded(!toolbarExpanded)}
+                className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2 w-full`}
+                title={toolbarExpanded ? "כווץ סרגל" : "הרחב סרגל"}
+              >
+                <span className="material-symbols-outlined text-gray-600">
+                  {toolbarExpanded ? 'chevron_right' : 'chevron_left'}
+                </span>
+                {toolbarExpanded && <span className="text-sm text-gray-600">{toolbarExpanded ? 'כווץ' : 'הרחב'}</span>}
+              </button>
+            </div>
           </aside>
         )}
 
-        <main className="flex-1 overflow-auto bg-white">
-          {editMode && canEdit ? (
-            <div className="flex flex-col h-full">
-              <div className="bg-gray-50 border-b px-4 py-2 flex items-center gap-2 flex-wrap">
-                <Button
-                  icon="format_bold"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('b')}
-                  label="מודגש"
-                />
-                <Button
-                  icon="format_italic"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('i')}
-                  label="נטוי"
-                />
-                <Button
-                  icon="format_underlined"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('u')}
-                  label="קו תחתון"
-                />
+        <main className="flex-1 overflow-auto bg-white flex">
+          {isPending ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+                <div className="text-lg text-gray-600">טוען...</div>
+              </div>
+            </div>
+          ) : editMode && canEdit ? (
+            <>
+              <div className={`${showPreview ? 'flex-1' : 'w-full'} flex flex-col h-full border-l`}>
+                <div className="bg-gray-50 border-b px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    icon="format_bold"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('b')}
+                    label="מודגש"
+                  />
+                  <Button
+                    icon="format_italic"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('i')}
+                    label="נטוי"
+                  />
+                  <Button
+                    icon="format_underlined"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('u')}
+                    label="קו תחתון"
+                  />
+                  
+                  <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h1')}
+                    label="H1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h2')}
+                    label="H2"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h3')}
+                    label="H3"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h4')}
+                    label="H4"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h5')}
+                    label="H5"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h6')}
+                    label="H6"
+                  />
+                  
+                  <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                  
+                  <Button
+                    icon="text_increase"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('big')}
+                    label="גדול"
+                  />
+                  <Button
+                    icon="text_decrease"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('small')}
+                    label="קטן"
+                  />
+                  </div>
+                  
+                  {!showPreview && (
+                    <button
+                      onClick={() => setShowPreview(true)}
+                      className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                      title="הצג תצוגה מקדימה"
+                    >
+                      <span className="material-symbols-outlined text-sm">visibility</span>
+                      <span>הצג תצוגה מקדימה</span>
+                    </button>
+                  )}
+                </div>
                 
-                <div className="w-px h-6 bg-gray-300 mx-1"></div>
-                
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h1')}
-                  label="H1"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h2')}
-                  label="H2"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h3')}
-                  label="H3"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h4')}
-                  label="H4"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h5')}
-                  label="H5"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h6')}
-                  label="H6"
-                />
-                
-                <div className="w-px h-6 bg-gray-300 mx-1"></div>
-                
-                <Button
-                  icon="text_increase"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('big')}
-                  label="גדול"
-                />
-                <Button
-                  icon="text_decrease"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('small')}
-                  label="קטן"
+                <textarea
+                  ref={textareaRef}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  onScroll={handleTextareaScroll}
+                  className="flex-1 p-6 border-0 resize-none focus:ring-0 outline-none"
+                  style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign }}
                 />
               </div>
               
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                className="flex-1 p-6 border-0 font-mono resize-none focus:ring-0 outline-none"
-                style={{ fontSize: `${fontSize}px`, direction: 'rtl', textAlign: textAlign }}
-              />
-            </div>
+              {showPreview && (
+              <div className="w-1/2 flex flex-col bg-gray-50">
+                <div className="px-6 pt-6 pb-2 bg-gray-50 sticky top-0 z-10 border-b border-gray-200 flex items-center justify-between">
+                  <span className="text-xs text-gray-500 font-medium">תצוגה מקדימה</span>
+                  <button
+                    onClick={() => setShowPreview(false)}
+                    className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                    title="הסתר תצוגה מקדימה"
+                  >
+                    <span className="material-symbols-outlined text-sm">visibility_off</span>
+                    <span>הסתר</span>
+                  </button>
+                </div>
+                <div 
+                  ref={previewRef}
+                  className="flex-1 overflow-auto px-6 pb-6"
+                  onScroll={handlePreviewScroll}
+                >
+                  <div
+                    className="max-w-4xl mx-auto prose prose-lg [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold bg-white p-6 rounded-lg shadow-sm"
+                    style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
+                    dangerouslySetInnerHTML={{ __html: content }}
+                  />
+                </div>
+              </div>
+              )}
+            </>
           ) : (
-            <div className="p-6">
+            <div className="flex-1 p-6">
               <div
                 ref={contentRef}
-                className="max-w-4xl mx-auto prose prose-lg"
-                style={{ fontSize: `${fontSize}px`, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
+                className="max-w-4xl mx-auto prose prose-lg [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold"
+                style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
                 dangerouslySetInnerHTML={{ __html: content }}
               />
             </div>
@@ -711,64 +1306,64 @@ export default function DictaEditorPage() {
       <CreateHeadersModal
         isOpen={activeTool === 'createHeaders'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <SingleLetterHeadersModal
         isOpen={activeTool === 'singleLetterHeaders'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <ChangeHeadingModal
         isOpen={activeTool === 'changeHeading'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <PunctuateModal
         isOpen={activeTool === 'punctuate'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <PageBHeaderModal
         isOpen={activeTool === 'pageBHeader'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <ReplacePageBModal
         isOpen={activeTool === 'replacePageB'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <HeaderErrorCheckerModal
         isOpen={activeTool === 'headerCheck'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
       
       <TextCleanerModal
         isOpen={activeTool === 'cleanText'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
 
       <AddPageNumberModal
         isOpen={activeTool === 'addPageNumber'}
         onClose={() => setActiveTool(null)}
-        bookId={bookId}
-        onSuccess={refreshContent}
+        content={content}
+        onContentChange={handleContentChange}
       />
 
       <ShortcutsDialog
@@ -780,11 +1375,41 @@ export default function DictaEditorPage() {
         resetToDefaults={resetShortcutsToDefaults}
       />
 
+      <FindReplaceDialog
+        isOpen={showFindReplace}
+        onClose={() => setShowFindReplace(false)}
+        findText={findText}
+        setFindText={setFindText}
+        replaceText={replaceText}
+        setReplaceText={setReplaceText}
+        handleReplaceAll={handleReplaceAll}
+        handleFindNext={handleFindNext}
+        handleReplaceCurrent={handleReplaceCurrent}
+        savedSearches={savedSearches}
+        addSavedSearch={addSavedSearch}
+        removeSavedSearch={removeSavedSearch}
+        moveSearch={moveSearch}
+        runAllSavedReplacements={runAllSavedReplacements}
+        handleRemoveDigits={handleRemoveDigits}
+        onAddRemoveDigitsToSaved={onAddRemoveDigitsToSaved}
+        useRegex={useRegex}
+        setUseRegex={setUseRegex}
+      />
+
       {showUploadDialog && (
         <UploadDialog
           bookTitle={book?.title}
           onConfirm={handleUploadConfirm}
           onCancel={() => setShowUploadDialog(false)}
+        />
+      )}
+
+      {showResetDialog && (
+        <ResetDialog
+          bookTitle={book?.title}
+          onConfirm={handleResetConfirm}
+          onCancel={() => setShowResetDialog(false)}
+          loading={resetting}
         />
       )}
     </div>
@@ -840,6 +1465,75 @@ function UploadDialog({ bookTitle, onConfirm, onCancel }) {
           <button
             onClick={onCancel}
             className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors"
+          >
+            ביטול
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ResetDialog({ bookTitle, onConfirm, onCancel, loading }) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onCancel])
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-4xl text-red-600">warning</span>
+          </div>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">אפס עריכת ספר</h2>
+          <p className="text-on-surface/70 font-bold">{bookTitle}</p>
+        </div>
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined text-red-600 mt-0.5">error</span>
+            <div className="text-sm text-red-800">
+              <p className="font-bold mb-2">אזהרה: פעולה בלתי הפיכה!</p>
+              <ul className="space-y-1">
+                <li>• כל העריכות שביצעת יימחקו לצמיתות</li>
+                <li>• הספר יחזור למצבו המקורי מגיטהאב</li>
+                <li>• לא ניתן לשחזר את השינויים לאחר האיפוס</li>
+              </ul>
+              <p className="mt-3 font-bold">האם אתה בטוח שברצונך להמשיך?</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3">
+          <button 
+            onClick={onConfirm} 
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <>
+                <span className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white"></span>
+                <span>מאפס...</span>
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined">restart_alt</span>
+                <span>כן, אפס את הספר</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ביטול
           </button>

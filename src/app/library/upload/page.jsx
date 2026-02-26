@@ -26,7 +26,8 @@ export default function UploadPage() {
       setFile(selectedFile)
       // מציע שם ספר לפי שם הקובץ
       if (!bookName) {
-        setBookName(selectedFile.name.replace('.txt', ''))
+        const nameWithoutExt = selectedFile.name.replace(/\.(txt|doc|docx|rtf|odt)$/i, '')
+        setBookName(nameWithoutExt)
       }
     }
   }
@@ -77,7 +78,7 @@ export default function UploadPage() {
               העלאת ספר חדש
             </h1>
             <p className="text-on-surface/70">
-              תרום לקהילה על ידי העלאת טקסטים של ספרי קודש (קבצי TXT בלבד)
+              תרום לקהילה על ידי העלאת טקסטים של ספרי קודש (כל פורמטי טקסט ווורד)
             </p>
           </div>
 
@@ -96,11 +97,11 @@ export default function UploadPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-bold mb-2">קובץ טקסט (TXT)</label>
+                <label className="block text-sm font-bold mb-2">קובץ טקסט או וורד</label>
                 <div className="border-2 border-dashed border-surface-variant rounded-lg p-8 text-center hover:bg-surface/50 transition-colors cursor-pointer relative">
                   <input
                     type="file"
-                    accept=".txt"
+                    accept=".txt,.doc,.docx,.rtf,.odt,text/*"
                     onChange={handleFileChange}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     required

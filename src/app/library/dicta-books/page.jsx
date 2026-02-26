@@ -25,7 +25,8 @@ export default function DictaBooksPublicPage() {
     { id: 'available', label: 'זמין' },
     { id: 'in-progress', label: 'בטיפול' },
     { id: 'completed', label: 'הושלם' },
-    { id: 'all', label: 'הכל' }
+    { id: 'my-books', label: 'הספרים שלי' },
+    { id: 'all', label: 'כל הספרים' }
   ]
 
   useEffect(() => {
@@ -109,7 +110,7 @@ export default function DictaBooksPublicPage() {
   const handleRelease = (bookId) => {
     showConfirm(
       'שחרור ספר',
-      'האם אתה בטוח שברצונך לשחרר את הספר? משתמשים אחרים יוכלו לתפוס אותו לעריכה במקומך.',
+      'האם אתה בטוח שברצונך לשחרר את הספר? תאבד את הנקודות שנוספו לך ומשתמשים אחרים יוכלו לתפוס אותו לעריכה במקומך.',
       async () => {
         try {
           const res = await fetch(`/api/dicta/books/${bookId}`, {
@@ -159,7 +160,7 @@ export default function DictaBooksPublicPage() {
   const handleCancelCompletion = (bookId) => {
     showConfirm(
       'ביטול סיום',
-      'האם אתה בטוח שברצונך לבטל את סיום העריכה? הספר יחזור לסטטוס "בטיפול".',
+      'האם אתה בטוח שברצונך לבטל את הסימון "הושלם"?\nהספר יחזור לסטטוס "בטיפול" והנקודות שקיבלת ירדו.',
       async () => {
         try {
           const res = await fetch(`/api/dicta/books/${bookId}`, {
@@ -214,6 +215,8 @@ export default function DictaBooksPublicPage() {
         matchesStatus = book.status === 'in-progress'
       } else if (filterStatus === 'completed') {
         matchesStatus = book.status === 'completed'
+      } else if (filterStatus === 'my-books') {
+        matchesStatus = currentUserId && book.claimedBy?._id === currentUserId
       }
 
       let matchesCategory = true
@@ -223,7 +226,7 @@ export default function DictaBooksPublicPage() {
 
       return matchesSearch && matchesStatus && matchesCategory
     })
-  }, [processedBooks, searchTerm, filterStatus, filterCategory])
+  }, [processedBooks, searchTerm, filterStatus, filterCategory, currentUserId])
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
@@ -370,7 +373,7 @@ export default function DictaBooksPublicPage() {
                           {book.status === 'completed' ? (
                             <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
                               <span className="material-symbols-outlined text-base">verified</span>
-                              <span>העריכה הושלמה</span>
+                              <span>הושלם על ידי {book.claimedBy?.name || 'לא ידוע'}</span>
                             </div>
                           ) : book.status === 'in-progress' ? (
                             <div className="flex items-center gap-2 text-sm text-slate-500">

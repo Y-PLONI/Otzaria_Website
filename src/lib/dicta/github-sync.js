@@ -2,8 +2,8 @@ import connectDB from "@/lib/db";
 import DictaBook from "@/models/DictaBook";
 
 // כתובת הבסיס של התיקייה בגיטהאב (Raw Content)
-const DEFAULT_REPO_URL = "https://raw.githubusercontent.com/zevisvei/otzaria-library/refs/heads/main";
-const DEFAULT_FOLDER = "DictaToOtzaria/ספרים/לא ערוך";
+const DEFAULT_REPO_URL = "https://raw.githubusercontent.com/Otzaria/otzaria-library/refs/heads/main";
+const DEFAULT_FOLDER = "DictaToOtzaria/לא ערוך";
 
 /**
  * מסנכרן ספרים מתיקייה בגיטהאב למסד הנתונים
@@ -60,9 +60,8 @@ export async function dictaSync(customFolderPath) {
         }
 
         // 3. הורדת תוכן הספר
-        // הנתיב הוא: base + folder + אוצריא + filename
-        // בדוק את המבנה בגיטהאב שלך. לפי הקוד הישן זה היה בתוך תת-תיקייה "אוצריא"
-        const contentUrl = `${baseUrl}/${folderPath}/אוצריא/${encodeURIComponent(fileName)}`;
+        // הנתיב הוא: base + folder + ספרים/אוצריא + filename
+        const contentUrl = `${baseUrl}/${folderPath}/ספרים/אוצריא/${encodeURIComponent(fileName)}`;
         
         const contentResp = await fetch(contentUrl);
         
