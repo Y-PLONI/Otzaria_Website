@@ -14,26 +14,70 @@ export default function PageBHeaderModal({ isOpen, onClose, content, onContentCh
     setLoading(true)
     
     try {
-      let newContent = content
-      let count = 0
-      
-      // חיפוש דפוסים של "עמוד ב" או "ע"ב"
-      const patterns = [
-        /עמוד ב(?![א-ת])/g,
-        /ע"ב(?![א-ת])/g,
-        /ע״ב(?![א-ת])/g
-      ]
-      
-      patterns.forEach(pattern => {
-        const matches = newContent.match(pattern)
-        if (matches) {
-          count += matches.length
-          newContent = newContent.replace(pattern, (match) => `<h${headerLevel}>${match}</h${headerLevel}>`)
+      // פונקציה לבניית regex שמתעלם מתגים
+      const buildTagAgnosticPattern = (word, optionalEndChars = "['\"']*") => {
+        const anyTags = "(?:<[^>]+>\\s*)*"
+        let pattern = ""
+        for (const char of word) {
+          pattern += anyTags + char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
         }
-      })
+        pattern += anyTags
+        if (optionalEndChars) pattern += optionalEndChars + anyTags
+        return pattern
+      }
       
-      if (count > 0) {
-        setResult(`נוצרו ${count} כותרות "עמוד ב" בהצלחה!`)
+      // פונקציה לעיבוד שורה
+      const stripAndReplace = (text, counter) => {
+        const anyTags = "(?:<[^>]+>\\s*)*"
+        const nonWord = "(?:[^\\w<>]|$)"
+        let pattern = "^\\s*" + anyTags
+        
+        // דפוס אופציונלי ל"שם"
+        const shemPattern = buildTagAgnosticPattern("שם", "")
+        pattern += `(?<shem>${shemPattern}\\s*)?`
+        
+        // דפוס אופציונלי ל"גמרא"
+        const gmarahVariants = ["גמרא", "בגמרא", "גמ'", "בגמ'"]
+        const gmarahPatterns = gmarahVariants.map(word => buildTagAgnosticPattern(word, ""))
+        const gmarahPattern = `(?<gmarah>${gmarahPatterns.join("|")})\\s*`
+        pattern += `(?:${gmarahPattern})?`
+        
+        // דפוס ל"עמוד ב" או "ע"ב"
+        const abVariants = ["עמוד ב", "ע\"ב", "ע''ב", "ע'ב"]
+        const abPatterns = abVariants.map(word => `(?<!\\w)${buildTagAgnosticPattern(word)}(?!\\w)`)
+        const abPattern = `(?<ab>${abPatterns.join("|")})`
+        pattern += abPattern + nonWord + `(?<rest>.*)`
+        
+        const matchPattern = new RegExp(pattern, "iu")
+        
+        // בדיקה אם כבר יש כותרת
+        if (/<h\d>.*?<\/h\d>/i.test(text)) return text
+        
+        const match = matchPattern.exec(text)
+        if (!match) return text
+        
+        counter.count++
+        const header = `<h${headerLevel}>עמוד ב</h${headerLevel}>`
+        const restOfLine = (match.groups?.rest || "").trimStart()
+        let gmarahText = match.groups?.gmarah || ""
+        
+        if (gmarahText) {
+          gmarahText = gmarahText.replace(new RegExp(anyTags, "g"), "").trim()
+        }
+        
+        if (gmarahText) {
+          return restOfLine ? `${header}\n${gmarahText} ${restOfLine}\n` : `${header}\n${gmarahText}\n`
+        }
+        return restOfLine ? `${header}\n${restOfLine}\n` : `${header}\n`
+      }
+      
+      const lines = content.split('\n')
+      const counter = { count: 0 }
+      const newLines = lines.map(line => stripAndReplace(line, counter))
+      const newContent = newLines.join('').replace(/\n\s*\n/g, '\n')
+      
+      if (counter.count > 0) {
+        setResult(`נוצרו ${counter.count} כותרות "עמוד ב" בהצלחה!`)
         onContentChange(newContent)
         setTimeout(() => {
           onClose()

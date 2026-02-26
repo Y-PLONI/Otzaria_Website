@@ -13,56 +13,74 @@ export default function AddPageNumberModal({ isOpen, onClose, content, onContent
     setLoading(true)
     
     try {
-      let newContent = content
-      let count = 0
+      const lines = content.split('\n')
+      let changesMade = false
+      const updated = []
+      let i = 0
       
-      // חיפוש דפוס של כותרת "דף X" ואחריה שורה עם "עמוד א/ב"
-      const lines = newContent.split('\n')
-      const processedLines = []
-      
-      for (let i = 0; i < lines.length; i++) {
+      while (i < lines.length) {
         const line = lines[i]
-        const nextLine = i < lines.length - 1 ? lines[i + 1] : ''
+        const match = line.match(/<h([2-9])>(דף \S+)<\/h\1>/)
         
-        // בדיקה אם זו כותרת דף
-        const pageMatch = line.match(/<h(\d+)>דף\s+([א-ת]+|\d+)<\/h\1>/)
-        
-        if (pageMatch && nextLine) {
-          // בדיקה אם השורה הבאה היא "עמוד א" או "עמוד ב"
-          const columnMatch = nextLine.match(/^\s*עמוד\s+([אב])\s*$/)
+        if (match) {
+          const level = match[1]
+          const title = match[2]
+          const nextLineIndex = i + 1
           
-          if (columnMatch) {
-            const column = columnMatch[1]
-            let suffix = ''
+          if (nextLineIndex < lines.length) {
+            const nextLine = lines[nextLineIndex].trim()
+            // דפוס מורכב יותר שתופס גם תגים
+            const pattern = /(<[a-z]+>)?(ע["']+?[אב]|עמוד [אב])[.,:()\[\]'"״׳]?(<\/[a-z]+>)?\s?/
+            const matchNextLine = nextLine.match(pattern)
             
-            if (replaceWith === 'נקודה ונקודותיים') {
-              suffix = column === 'א' ? '.' : ':'
+            if (matchNextLine) {
+              changesMade = true
+              let newTitle = line
+              
+              if (replaceWith === "נקודה ונקודותיים") {
+                if (matchNextLine[2].includes("א")) {
+                  newTitle = `<h${level}>${title.replace(/\.+$/, "")}.</h${level}>`
+                } else {
+                  newTitle = `<h${level}>${title.replace(/\.+$/, "")}:</h${level}>`
+                }
+              } else if (replaceWith === 'ע"א וע"ב') {
+                const suffix = matchNextLine[2].includes("א") ? 'ע"א' : 'ע"ב'
+                newTitle = `<h${level}>${title.replace(/\.+$/, "")} ${suffix}</h${level}>`
+              }
+              
+              updated.push(newTitle)
+              
+              // הסרת הדפוס מהשורה הבאה
+              const modifiedNext = nextLine.replace(pattern, "").trim()
+              if (modifiedNext !== "") {
+                updated.push(modifiedNext)
+              }
+              
+              i += 1 // דילוג על השורה הבאה
             } else {
-              suffix = column === 'א' ? ' ע"א' : ' ע"ב'
+              updated.push(line)
             }
-            
-            // החלפת הכותרת
-            const newHeader = line.replace(/<\/h(\d+)>$/, `${suffix}</h$1>`)
-            processedLines.push(newHeader)
-            i++ // דילוג על השורה הבאה
-            count++
-            continue
+          } else {
+            updated.push(line)
           }
+        } else {
+          updated.push(line)
         }
         
-        processedLines.push(line)
+        i += 1
       }
       
-      if (count > 0) {
-        newContent = processedLines.join('\n')
-        setResult(`בוצעו ${count} מיזוגים בהצלחה!`)
+      if (changesMade) {
+        const newContent = updated.join('\n')
+        const count = updated.length - lines.length + (lines.length - updated.length)
+        setResult('ההחלפה הושלמה בהצלחה!')
         onContentChange(newContent)
         setTimeout(() => {
           onClose()
           setResult('')
         }, 1500)
       } else {
-        setResult('לא נמצאו דפוסים תואמים למיזוג')
+        setResult('אין מה להחליף בקובץ זה')
       }
     } catch (error) {
       setResult('שגיאה בביצוע הפעולה')

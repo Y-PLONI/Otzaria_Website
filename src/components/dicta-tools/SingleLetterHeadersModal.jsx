@@ -23,51 +23,91 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
       const ignoreArray = ignoreTags.split(' ').filter(Boolean)
       const removeArray = removeTags.split(' ').filter(Boolean)
       
-      let newContent = content
-      let count = 0
+      // פונקציה להסרת תגים
+      const stripHtml = (text, tagsToRemove) => {
+        let result = text
+        tagsToRemove.forEach(tag => {
+          result = result.split(tag).join('')
+        })
+        return result
+      }
       
-      // יצירת regex לחיפוש שורות שמתחילות באות בודדת
-      const lines = newContent.split('\n')
-      const processedLines = lines.map(line => {
-        // בדיקה אם השורה מתחילה באות בודדת
-        let testLine = line
-        
-        // הסרת תגים להתעלמות
-        ignoreArray.forEach(tag => {
-          testLine = testLine.replace(new RegExp(tag, 'g'), '')
-        })
-        
-        // הסרת תווים להסרה
-        removeArray.forEach(char => {
-          testLine = testLine.replace(new RegExp(`\\${char}`, 'g'), '')
-        })
-        
-        // בדיקה אם מדובר בשורה מודגשת (אם נדרש)
-        const isBold = line.includes('<b>') || !boldOnly
-        
-        // בדיקה אם השורה מתחילה באות בודדת
-        const match = testLine.trim().match(/^([א-ת])/)
-        
-        if (match && isBold && startChar && match[1] >= startChar) {
-          if (!endChar || line.includes(endChar)) {
-            count++
-            return `<h${level}>${line}</h${level}>`
-          }
+      // פונקציה לבדיקת גימטריה
+      const isGematria = (text, maxValue) => {
+        const hebrewNumerals = {
+          'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+          'י': 10, 'כ': 20, 'ך': 20, 'ל': 30, 'מ': 40, 'ם': 40, 'נ': 50, 'ן': 50,
+          'ס': 60, 'ע': 70, 'פ': 80, 'ף': 80, 'צ': 90, 'ץ': 90,
+          'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
         }
         
-        return line
-      })
+        let value = 0
+        for (let char of text) {
+          if (hebrewNumerals[char]) {
+            value += hebrewNumerals[char]
+          } else if (!/['"״׳]/.test(char)) {
+            return false
+          }
+        }
+        return value > 0 && value < maxValue
+      }
       
-      if (count > 0 && count <= maxNum) {
-        newContent = processedLines.join('\n')
+      // הגדרת סיומת וסימן התחלה
+      let localEndSuffix = endChar
+      let localStart = startChar
+      let localIgnore = [...ignoreArray]
+      
+      if (boldOnly) {
+        localEndSuffix += '</b>'
+        localStart = `<b>${localStart}`
+      } else {
+        localIgnore = localIgnore.concat(['<b>', '</b>'])
+      }
+      
+      const lines = content.split('\n')
+      const allLines = lines.slice(0, 1) // שמירת השורה הראשונה
+      let count = 0
+      
+      for (const line of lines.slice(1)) {
+        const words = line.split(/\s+/).filter(Boolean)
+        
+        try {
+          if (words.length > 0) {
+            const firstWord = words[0]
+            const stripped = stripHtml(firstWord, localIgnore)
+            
+            // בדיקה אם המילה הראשונה מסתיימת בסיומת הנדרשת
+            if (stripped.endsWith(localEndSuffix) && 
+                isGematria(firstWord, maxNum + 1) && 
+                stripped.startsWith(localStart)) {
+              
+              const cleanWord = stripHtml(firstWord, removeArray)
+              const headingLine = `<h${level}>${cleanWord}</h${level}>`
+              allLines.push(headingLine)
+              
+              if (words.length > 1) {
+                allLines.push(words.slice(1).join(' '))
+              }
+              count++
+            } else {
+              allLines.push(line)
+            }
+          } else {
+            allLines.push(line)
+          }
+        } catch (error) {
+          allLines.push(line)
+        }
+      }
+      
+      if (count > 0) {
+        const newContent = allLines.join('\n')
         setResult(`נוצרו ${count} כותרות בהצלחה!`)
         onContentChange(newContent)
         setTimeout(() => {
           onClose()
           setResult('')
         }, 1500)
-      } else if (count > maxNum) {
-        setResult(`נמצאו ${count} כותרות, אך המקסימום הוא ${maxNum}`)
       } else {
         setResult('לא נמצאו תוצאות תואמות')
       }

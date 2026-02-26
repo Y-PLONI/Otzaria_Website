@@ -14,29 +14,38 @@ export default function ReplacePageBModal({ isOpen, onClose, content, onContentC
     
     try {
       let newContent = content
-      let count = 0
+      let previousTitle = ""
+      let previousLevel = ""
+      let replacementsMade = 0
       
-      // חיפוש כותרות "עמוד ב" והחלפתן
-      const patterns = [
-        /<h\d+>עמוד ב<\/h\d+>/g,
-        /<h\d+>ע"ב<\/h\d+>/g,
-        /<h\d+>ע״ב<\/h\d+>/g
-      ]
-      
-      const replacement = replaceType === 'נקודותיים' ? ':' : 'ע"ב'
-      
-      patterns.forEach(pattern => {
-        const matches = newContent.match(pattern)
-        if (matches) {
-          count += matches.length
-          newContent = newContent.replace(pattern, (match) => {
-            return match.replace(/עמוד ב|ע"ב|ע״ב/, replacement)
-          })
+      // החלפת כותרות "עמוד ב" בהתאם לכותרת הקודמת
+      newContent = newContent.replace(/<h([1-9])>(.*?)<\/h\1>/g, (match, level, title) => {
+        // אם זו כותרת דף - שמור אותה
+        if (/^דף \S+\.?/.test(title)) {
+          previousTitle = title.trim()
+          previousLevel = level
+          return match
         }
+        
+        // אם זו כותרת "עמוד ב" - החלף אותה
+        if (title === "עמוד ב") {
+          replacementsMade++
+          
+          if (replaceType === "נקודותיים") {
+            return `<h${previousLevel}>${previousTitle.replace(/\.+$/, "")}:</h${previousLevel}>`
+          }
+          
+          if (replaceType === 'ע"ב') {
+            const modifiedTitle = previousTitle.replace(/( ע"א| עמוד א)/, "")
+            return `<h${previousLevel}>${modifiedTitle.replace(/\.+$/, "")} ע"ב</h${previousLevel}>`
+          }
+        }
+        
+        return match
       })
       
-      if (count > 0) {
-        setResult(`בוצעו ${count} החלפות בהצלחה!`)
+      if (replacementsMade > 0) {
+        setResult(`בוצעו ${replacementsMade} החלפות בהצלחה!`)
         onContentChange(newContent)
         setTimeout(() => {
           onClose()

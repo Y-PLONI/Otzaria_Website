@@ -20,25 +20,31 @@ export default function PunctuateModal({ isOpen, onClose, content, onContentChan
       // פיצול לשורות
       const lines = newContent.split('\n')
       const processedLines = lines.map(line => {
-        let processedLine = line
+        let processedLine = line.replace(/\r$/, '')
+        const words = processedLine.split(/\s+/).filter(Boolean)
         
-        // בדיקה אם השורה ארוכה מספיק (יותר מ-20 תווים)
-        if (line.trim().length > 20) {
+        // בדיקה שיש יותר מ-10 מילים ושזו לא כותרת
+        if (words.length > 10 && !/<h[2-8]>/.test(processedLine)) {
           // הוספת סימן בסוף אם אין
-          if (addEnding === 'הוסף נקודה' && !line.trim().match(/[.!?:;]$/)) {
-            processedLine = line.trimEnd() + '.'
-            changed = true
-          } else if (addEnding === 'הוסף נקודותיים' && !line.trim().match(/[.!?:;]$/)) {
-            processedLine = line.trimEnd() + ':'
-            changed = true
+          if (addEnding !== 'ללא שינוי') {
+            if (processedLine.endsWith(',')) {
+              processedLine = processedLine.slice(0, -1)
+              processedLine += addEnding === 'הוסף נקודה' ? '.' : ':'
+              changed = true
+            } else if (!/[.!?:]$/.test(processedLine) && !['</small>', '</big>', '</b>'].some(tag => processedLine.endsWith(tag))) {
+              processedLine += addEnding === 'הוסף נקודה' ? '.' : ':'
+              changed = true
+            }
           }
           
           // הדגשת המילה הראשונה
           if (emphasizeStart) {
-            const match = processedLine.match(/^(\s*)(\S+)/)
-            if (match && !match[2].startsWith('<')) {
-              processedLine = processedLine.replace(/^(\s*)(\S+)/, `$1<b>$2</b>`)
-              changed = true
+            const firstWord = words[0]
+            if (!['<b>', '<small>', '<big>', '<h2>', '<h3>', '<h4>', '<h5>', '<h6>'].some(tag => firstWord.includes(tag))) {
+              if (!(firstWord.startsWith('<') && firstWord.endsWith('>'))) {
+                processedLine = `<b>${firstWord}</b> ${words.slice(1).join(' ')}`
+                changed = true
+              }
             }
           }
         }
