@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import dbConnect from '@/lib/db' 
 import DictaBook from '@/models/DictaBook'
+import User from '@/models/User'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route' 
 
 export async function POST(request, context) {
@@ -68,6 +69,9 @@ export async function POST(request, context) {
 
     // 7. שמירה במסד הנתונים
     await book.save();
+
+    // 8. הפחתת 10 נקודות מהמשתמש על שחרור הספר
+    await User.findByIdAndUpdate(userId, { $inc: { points: -10 } });
 
     return NextResponse.json({ success: true, message: 'הספר שוחרר בהצלחה' }, { status: 200 });
 

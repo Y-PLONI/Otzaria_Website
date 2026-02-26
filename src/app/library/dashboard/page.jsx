@@ -17,12 +17,17 @@ export default function DashboardPage() {
     myPages: 0,
     completedPages: 0,
     inProgressPages: 0,
+    myDictaBooks: 0,
+    completedDictaBooks: 0,
+    inProgressDictaBooks: 0,
     points: 0,
-    recentActivity: []
+    recentActivity: [],
+    recentDictaBooks: []
   })
   const [loading, setLoading] = useState(true)
 
   const [currentPage, setCurrentPage] = useState(1)
+  const [currentDictaPage, setCurrentDictaPage] = useState(1)
   const itemsPerPage = 10
 
   const [showMessageForm, setShowMessageForm] = useState(false)
@@ -74,8 +79,12 @@ export default function DashboardPage() {
           myPages: result.stats?.myPages || 0,
           completedPages: result.stats?.completedPages || 0,
           inProgressPages: result.stats?.inProgressPages || 0,
+          myDictaBooks: result.stats?.myDictaBooks || 0,
+          completedDictaBooks: result.stats?.completedDictaBooks || 0,
+          inProgressDictaBooks: result.stats?.inProgressDictaBooks || 0,
           points: result.stats?.points || 0,
-          recentActivity: result.stats?.recentActivity || []
+          recentActivity: result.stats?.recentActivity || [],
+          recentDictaBooks: result.stats?.recentDictaBooks || []
         });
       }
     } catch (error) {
@@ -464,6 +473,50 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          <div className="grid md:grid-cols-3 gap-6 mb-12">
+            <div className="glass p-6 rounded-xl">
+              <div className="flex items-center gap-4">
+                <span className="material-symbols-outlined text-5xl text-blue-600">
+                  menu_book
+                </span>
+                <div>
+                  <p className="text-3xl font-bold text-on-surface">
+                    {loading ? '...' : stats.inProgressDictaBooks}
+                  </p>
+                  <p className="text-on-surface/70">ספרי דיקטה בטיפול</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass p-6 rounded-xl">
+              <div className="flex items-center gap-4">
+                <span className="material-symbols-outlined text-5xl text-green-600">
+                  task_alt
+                </span>
+                <div>
+                  <p className="text-3xl font-bold text-on-surface">
+                    {loading ? '...' : stats.completedDictaBooks}
+                  </p>
+                  <p className="text-on-surface/70">ספרי דיקטה שהושלמו</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass p-6 rounded-xl">
+              <div className="flex items-center gap-4">
+                <span className="material-symbols-outlined text-5xl text-primary">
+                  auto_stories
+                </span>
+                <div>
+                  <p className="text-3xl font-bold text-on-surface">
+                    {loading ? '...' : stats.myDictaBooks}
+                  </p>
+                  <p className="text-on-surface/70">סה״כ ספרי דיקטה שלי</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="glass-strong p-8 rounded-2xl mb-8">
             <h2 className="text-2xl font-bold mb-6 text-on-surface">פעולות מהירות</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -625,6 +678,142 @@ export default function DashboardPage() {
                 >
                   <span className="material-symbols-outlined">library_books</span>
                   <span>עבור לספרייה</span>
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="glass-strong p-8 rounded-2xl mb-8">
+            <h2 className="text-2xl font-bold mb-6 text-on-surface">ספרי דיקטה שלי</h2>
+            {loading ? (
+              <div className="text-center py-8">
+                <span className="material-symbols-outlined animate-spin text-4xl text-primary">
+                  progress_activity
+                </span>
+              </div>
+            ) : stats.recentDictaBooks && stats.recentDictaBooks.length > 0 ? (
+              <>
+                <div className="space-y-4">
+                  {(() => {
+                    const sortedDictaBooks = [...stats.recentDictaBooks].sort((a, b) => {
+                      return (a.status === 'completed') - (b.status === 'completed');
+                    });
+                    const indexOfLastDictaItem = currentDictaPage * itemsPerPage;
+                    const indexOfFirstDictaItem = indexOfLastDictaItem - itemsPerPage;
+                    const currentDictaItems = sortedDictaBooks.slice(indexOfFirstDictaItem, indexOfLastDictaItem);
+                    const totalDictaPages = Math.ceil(sortedDictaBooks.length / itemsPerPage);
+
+                    return (
+                      <>
+                        {currentDictaItems.map((book) => (
+                          <div key={book.id} className="flex items-center gap-4 p-4 bg-surface rounded-lg">
+                            <span className={`material-symbols-outlined ${
+                              book.status === 'completed' ? 'text-green-600' : 'text-blue-600'
+                            }`}>
+                              {book.status === 'completed' ? 'task_alt' : 'menu_book'}
+                            </span>
+                            <div className="flex-1">
+                              <p className="font-medium text-on-surface">
+                                {book.bookName}
+                              </p>
+                              <p className="text-sm text-on-surface/60">
+                                {book.status === 'completed' ? 'הושלם' : 'בטיפול'} • {book.date}
+                              </p>
+                            </div>
+                            <Link 
+                              href={`/library/dicta-books/edit/${book.bookId}`}
+                              className="text-primary hover:text-accent"
+                            >
+                              <span className="material-symbols-outlined">arrow_back</span>
+                            </Link>
+                          </div>
+                        ))}
+
+                        {totalDictaPages > 1 && (
+                          <div className="flex justify-center items-center gap-2 mt-8 select-none">
+                            <button
+                              onClick={() => setCurrentDictaPage(currentDictaPage - 1)}
+                              disabled={currentDictaPage === 1}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-sm">chevron_right</span>
+                            </button>
+
+                            {(() => {
+                              const getDictaPageNumbers = () => {
+                                const result = [];
+                                const pages = new Set([
+                                  1, 
+                                  totalDictaPages, 
+                                  currentDictaPage, 
+                                  currentDictaPage - 1, 
+                                  currentDictaPage + 1
+                                ]);
+
+                                const sortedPages = Array.from(pages)
+                                  .filter(p => p >= 1 && p <= totalDictaPages)
+                                  .sort((a, b) => a - b);
+
+                                for (let i = 0; i < sortedPages.length; i++) {
+                                  const page = sortedPages[i];
+                                  const prevPage = sortedPages[i - 1];
+
+                                  if (i > 0) {
+                                    if (page - prevPage > 1) {
+                                       result.push('...');
+                                    }
+                                  }
+                                  result.push(page);
+                                }
+
+                                return result;
+                              };
+
+                              return getDictaPageNumbers().map((page, index) => (
+                                page === '...' ? (
+                                  <span key={`dots-${index}`} className="w-8 text-center text-on-surface/50">...</span>
+                                ) : (
+                                  <button
+                                    key={page}
+                                    onClick={() => setCurrentDictaPage(page)}
+                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
+                                      currentDictaPage === page
+                                        ? 'bg-primary text-white shadow-md'
+                                        : 'bg-surface-variant text-on-surface hover:bg-primary/20'
+                                    }`}
+                                  >
+                                    {page}
+                                  </button>
+                                )
+                              ));
+                            })()}
+
+                            <button
+                              onClick={() => setCurrentDictaPage(currentDictaPage + 1)}
+                              disabled={currentDictaPage === totalDictaPages}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-sm">chevron_left</span>
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-12">
+                <span className="material-symbols-outlined text-6xl text-on-surface/20 mb-4 block">
+                  auto_stories
+                </span>
+                <p className="text-on-surface/60">עדיין לא תפסת ספרי דיקטה לעריכה</p>
+                <Link 
+                  href="/library/dicta-books"
+                  className="inline-flex items-center gap-2 mt-4 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors"
+                >
+                  <span className="material-symbols-outlined">auto_stories</span>
+                  <span>עבור לספרי דיקטה</span>
                 </Link>
               </div>
             )}

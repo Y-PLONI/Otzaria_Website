@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import DictaBook from '@/models/DictaBook';
+import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
@@ -110,12 +111,26 @@ export async function PUT(req, { params }) {
         book.status = 'available';
         book.claimedBy = null;
         book.claimedAt = null;
+        // הפחתת 10 נקודות על שחרור הספר
+        await User.findByIdAndUpdate(userId, { $inc: { points: -10 } });
       } else if (action === 'complete') {
+        const wasCompleted = book.status === 'completed';
         book.status = 'completed';
         book.completedAt = new Date();
+        // הוספת 20 נקודות רק אם הספר לא היה מושלם קודם
+        if (!wasCompleted) {
+          const userIdToReward = book.claimedBy || userId;
+          await User.findByIdAndUpdate(userIdToReward, { $inc: { points: 20 } });
+        }
       } else if (action === 'uncomplete') {
+        const wasCompleted = book.status === 'completed';
         book.status = 'in-progress';
         book.completedAt = undefined;
+        // הפחתת 20 נקודות אם הספר היה מושלם
+        if (wasCompleted) {
+          const userIdToPenalize = book.claimedBy || userId;
+          await User.findByIdAndUpdate(userIdToPenalize, { $inc: { points: -20 } });
+        }
       }
     }
     
