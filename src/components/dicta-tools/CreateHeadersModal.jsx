@@ -16,40 +16,85 @@ export default function CreateHeadersModal({ isOpen, onClose, content, onContent
     setLoading(true)
     
     try {
-      // ביצוע הלוגיקה מקומית
-      let newContent = content
-      let count = 0
+      // הסרת תגי HTML מטקסט
+      const htmlTags = ["<b>", "</b>", "<big>", "</big>", ":", '"', ",", ";", "[", "]", "(", ")", "'", "״", ".", "‚"]
+      const stripTags = (text) => {
+        let result = text
+        htmlTags.forEach(tag => {
+          result = result.split(tag).join('')
+        })
+        return result.trim()
+      }
       
-      // חיפוש והחלפה של דפוסים כמו "דף א" עד "דף תתקצט"
-      const regex = new RegExp(`${findWord}\\s*([א-ת]+|\\d+)`, 'g')
-      
-      newContent = newContent.replace(regex, (match, number) => {
-        // המרת מספר עברי למספר רגיל (פשטני)
-        let numValue = 0
-        if (/^\d+$/.test(number)) {
-          numValue = parseInt(number)
-        } else {
-          // המרה פשוטה של אותיות עבריות למספרים
-          const hebrewNumerals = {
-            'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
-            'י': 10, 'כ': 20, 'ל': 30, 'מ': 40, 'נ': 50, 'ס': 60, 'ע': 70, 'פ': 80, 'צ': 90,
-            'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
-          }
-          for (let char of number) {
-            numValue += hebrewNumerals[char] || 0
-          }
+      // בדיקה אם מספר עברי תקין
+      const isGematria = (text, maxValue) => {
+        const hebrewNumerals = {
+          'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+          'י': 10, 'כ': 20, 'ך': 20, 'ל': 30, 'מ': 40, 'ם': 40, 'נ': 50, 'ן': 50, 
+          'ס': 60, 'ע': 70, 'פ': 80, 'ף': 80, 'צ': 90, 'ץ': 90,
+          'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
         }
         
-        if (numValue <= endNumber) {
-          count++
-          return `<h${level}>${match}</h${level}>`
+        let value = 0
+        for (let char of text) {
+          if (hebrewNumerals[char]) {
+            value += hebrewNumerals[char]
+          } else if (!/['"״׳]/.test(char)) {
+            return false // תו לא חוקי
+          }
         }
-        return match
-      })
+        return value > 0 && value < maxValue
+      }
+      
+      const findClean = stripTags(findWord)
+      const lines = content.split('\n')
+      const allLines = []
+      let count = 0
+      let i = 0
+      
+      while (i < lines.length) {
+        const line = lines[i]
+        const words = line.split(/\s+/).filter(Boolean)
+        
+        try {
+          // מקרה 1: שתי מילים או יותר בשורה
+          if (words.length >= 2 && stripTags(words[0]) === findClean && isGematria(stripTags(words[1]), endNumber + 1)) {
+            count++
+            const headingLine = `<h${level}>${stripTags(words[0])} ${stripTags(words[1])}</h${level}>`
+            allLines.push(headingLine)
+            if (words.length > 2) {
+              allLines.push(words.slice(2).join(' '))
+            }
+          }
+          // מקרה 2: מילה אחת בשורה והמספר בשורה הבאה
+          else if (words.length === 1 && stripTags(words[0]) === findClean && i + 1 < lines.length) {
+            const nextLine = lines[i + 1]
+            const nextWords = nextLine.split(/\s+/).filter(Boolean)
+            
+            if (nextWords.length >= 1 && isGematria(stripTags(nextWords[0]), endNumber + 1)) {
+              count++
+              const headingLine = `<h${level}>${stripTags(words[0])} ${stripTags(nextWords[0])}</h${level}>`
+              allLines.push(headingLine)
+              if (nextWords.length > 1) {
+                allLines.push(nextWords.slice(1).join(' '))
+              }
+              i++ // דלג על השורה הבאה
+            } else {
+              allLines.push(line)
+            }
+          } else {
+            allLines.push(line)
+          }
+        } catch (error) {
+          allLines.push(line)
+        }
+        
+        i++
+      }
       
       if (count > 0) {
         setResult(`נוצרו ${count} כותרות בהצלחה!`)
-        onContentChange(newContent)
+        onContentChange(allLines.join('\n'))
         setTimeout(() => {
           onClose()
           setResult('')
