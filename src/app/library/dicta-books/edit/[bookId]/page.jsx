@@ -70,6 +70,7 @@ export default function DictaEditorPage() {
   const [savedSearches, setSavedSearches] = useState([])
   const contentRef = useRef(null)
   const textareaRef = useRef(null)
+  const previewRef = useRef(null)
 
   // בדיקה אם יש שינויים לא שמורים
   const hasUnsavedChanges = content !== savedContent
@@ -190,6 +191,27 @@ export default function DictaEditorPage() {
 
   const handleContentChange = useCallback((newContent) => {
     setContent(newContent)
+  }, [])
+
+  // סנכרון גלילה בין textarea לתצוגה מקדימה
+  const handleTextareaScroll = useCallback(() => {
+    if (!textareaRef.current || !previewRef.current) return
+    
+    const textarea = textareaRef.current
+    const preview = previewRef.current
+    
+    const scrollPercentage = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight)
+    preview.scrollTop = scrollPercentage * (preview.scrollHeight - preview.clientHeight)
+  }, [])
+
+  const handlePreviewScroll = useCallback(() => {
+    if (!textareaRef.current || !previewRef.current) return
+    
+    const textarea = textareaRef.current
+    const preview = previewRef.current
+    
+    const scrollPercentage = preview.scrollTop / (preview.scrollHeight - preview.clientHeight)
+    textarea.scrollTop = scrollPercentage * (textarea.scrollHeight - textarea.clientHeight)
   }, [])
 
   const insertTag = useCallback((tag) => {
@@ -773,7 +795,7 @@ export default function DictaEditorPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setEditMode(!editMode)}
-                label={editMode ? 'תצוגה' : 'עריכה'}
+                label={editMode ? 'תצוגה' : 'עריכה ידנית'}
               />
             </>
           )}
@@ -969,99 +991,117 @@ export default function DictaEditorPage() {
           </aside>
         )}
 
-        <main className="flex-1 overflow-auto bg-white">
+        <main className="flex-1 overflow-auto bg-white flex">
           {editMode && canEdit ? (
-            <div className="flex flex-col h-full">
-              <div className="bg-gray-50 border-b px-4 py-2 flex items-center gap-2 flex-wrap">
-                <Button
-                  icon="format_bold"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('b')}
-                  label="מודגש"
-                />
-                <Button
-                  icon="format_italic"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('i')}
-                  label="נטוי"
-                />
-                <Button
-                  icon="format_underlined"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('u')}
-                  label="קו תחתון"
-                />
+            <>
+              <div className="flex-1 flex flex-col h-full border-l">
+                <div className="bg-gray-50 border-b px-4 py-2 flex items-center gap-2 flex-wrap">
+                  <Button
+                    icon="format_bold"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('b')}
+                    label="מודגש"
+                  />
+                  <Button
+                    icon="format_italic"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('i')}
+                    label="נטוי"
+                  />
+                  <Button
+                    icon="format_underlined"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('u')}
+                    label="קו תחתון"
+                  />
+                  
+                  <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h1')}
+                    label="H1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h2')}
+                    label="H2"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h3')}
+                    label="H3"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h4')}
+                    label="H4"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h5')}
+                    label="H5"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('h6')}
+                    label="H6"
+                  />
+                  
+                  <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                  
+                  <Button
+                    icon="text_increase"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('big')}
+                    label="גדול"
+                  />
+                  <Button
+                    icon="text_decrease"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertTag('small')}
+                    label="קטן"
+                  />
+                </div>
                 
-                <div className="w-px h-6 bg-gray-300 mx-1"></div>
-                
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h1')}
-                  label="H1"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h2')}
-                  label="H2"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h3')}
-                  label="H3"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h4')}
-                  label="H4"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h5')}
-                  label="H5"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('h6')}
-                  label="H6"
-                />
-                
-                <div className="w-px h-6 bg-gray-300 mx-1"></div>
-                
-                <Button
-                  icon="text_increase"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('big')}
-                  label="גדול"
-                />
-                <Button
-                  icon="text_decrease"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => insertTag('small')}
-                  label="קטן"
+                <textarea
+                  ref={textareaRef}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  onScroll={handleTextareaScroll}
+                  className="flex-1 p-6 border-0 resize-none focus:ring-0 outline-none"
+                  style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign }}
                 />
               </div>
               
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                className="flex-1 p-6 border-0 resize-none focus:ring-0 outline-none"
-                style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign }}
-              />
-            </div>
+              <div className="w-1/2 flex flex-col bg-gray-50">
+                <div className="text-xs text-gray-500 px-6 pt-6 pb-2 font-medium bg-gray-50 sticky top-0 z-10 border-b border-gray-200">תצוגה מקדימה</div>
+                <div 
+                  ref={previewRef}
+                  className="flex-1 overflow-auto px-6 pb-6"
+                  onScroll={handlePreviewScroll}
+                >
+                  <div
+                    className="max-w-4xl mx-auto prose prose-lg [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold bg-white p-6 rounded-lg shadow-sm"
+                    style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
+                    dangerouslySetInnerHTML={{ __html: content }}
+                  />
+                </div>
+              </div>
+            </>
           ) : (
-            <div className="p-6">
+            <div className="flex-1 p-6">
               <div
                 ref={contentRef}
                 className="max-w-4xl mx-auto prose prose-lg [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold"
