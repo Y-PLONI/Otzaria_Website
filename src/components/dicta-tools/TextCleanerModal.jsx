@@ -68,12 +68,6 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
       }
       
       if (options.normalize_quotes) {
-        const before = newContent
-        newContent = newContent.replace(/['']/g, "'")
-        newContent = newContent.replace(/[""]/g, '"')
-        if (before !== newContent) changed = true
-      }
-      
       if (options.clean_duplicate_tags) {
         const before = newContent
         // ניקוי תגיות כפולות - מאומץ מהמימוש בצד השרת
