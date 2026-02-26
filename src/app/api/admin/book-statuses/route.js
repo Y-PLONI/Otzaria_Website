@@ -66,7 +66,7 @@ export async function POST(request) {
       { key: 'book_statuses' },
       { 
         value: statuses,
-        lastUpdatedBy: session.user._id || session.user.id,
+        lastUpdatedBy: session.user.id,
         description: 'הגדרות סטטוסים לספרים'
       },
       { upsert: true, new: true }
