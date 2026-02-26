@@ -24,6 +24,7 @@ export async function GET() {
       uploadedAt: u.createdAt,
       uploadType: u.uploadType || 'single_page', // ברירת מחדל לרשומות ישנות
       status: u.status,
+      bookStatus: u.bookStatus || 'not_checked', // סטטוס הספר
   }));
 
   return NextResponse.json({ success: true, uploads: formattedUploads });

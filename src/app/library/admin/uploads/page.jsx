@@ -4,6 +4,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useDialog } from '@/components/DialogContext'
+import StatusConfigModal from '@/components/StatusConfigModal'
+import StatusBadge from '@/components/StatusBadge'
+import StatusEditor from '@/components/StatusEditor'
 
 export default function AdminUploadsPage() {
   const [uploads, setUploads] = useState([])
@@ -11,6 +14,11 @@ export default function AdminUploadsPage() {
   const [expandedBooks, setExpandedBooks] = useState({}) // מעקב אחרי ספרים מורחבים
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all') // 'all', 'dicta', 'full_book', 'single_page'
+  const [filterStatus, setFilterStatus] = useState('all') // 'all' או מפתח סטטוס
+  const [showFilterMenu, setShowFilterMenu] = useState(false) // הצגת תפריט סינון
+  const [bookStatuses, setBookStatuses] = useState({}) // הגדרות סטטוסים
+  const [editingStatus, setEditingStatus] = useState(null) // שם הספר שעורכים את הסטטוס שלו
+  const [showStatusConfig, setShowStatusConfig] = useState(false) // הצגת חלון הגדרות סטטוסים
   const router = useRouter()
   const { showConfirm, showAlert } = useDialog()
 
@@ -29,9 +37,34 @@ export default function AdminUploadsPage() {
     }
   }
 
+  const loadBookStatuses = async () => {
+    try {
+      const response = await fetch('/api/admin/book-statuses')
+      const data = await response.json()
+      if (data.success) {
+        setBookStatuses(data.statuses)
+      }
+    } catch (error) {
+      console.error('Error loading book statuses:', error)
+    }
+  }
+
   useEffect(() => {
     loadUploads()
+    loadBookStatuses()
   }, [])
+  
+  // סגירת תפריט סינון בלחיצה מחוץ לתפריט
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showFilterMenu && !event.target.closest('.filter-menu-container')) {
+        setShowFilterMenu(false)
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showFilterMenu])
 
   // חישוב ספירות מאופטם עם useMemo
   const { fullBookCount, singlePageCount } = useMemo(() => {
@@ -54,16 +87,22 @@ export default function AdminUploadsPage() {
     return bookName.replace(pagePattern, '').trim()
   }
 
-  // קיבוץ העלאות לפי ספרים עם סינון חיפוש וסוג
+  // קיבוץ העלאות לפי ספרים עם סינון חיפוש, סוג וסטטוס
   const groupedByBook = useMemo(() => {
     const groups = {}
     
-    // סינון העלאות לפי חיפוש וסוג
+    // סינון העלאות לפי חיפוש, סוג וסטטוס
     const filteredUploads = uploads.filter(upload => {
       // סינון לפי סוג
       if (filterType !== 'all') {
         const uploadType = upload.uploadType || 'single_page'
         if (filterType !== uploadType) return false
+      }
+      
+      // סינון לפי סטטוס
+      if (filterStatus !== 'all') {
+        const bookStatus = upload.bookStatus || 'not_checked'
+        if (filterStatus !== bookStatus) return false
       }
       
       // סינון לפי חיפוש
@@ -110,7 +149,7 @@ export default function AdminUploadsPage() {
         )
       }))
       .sort((a, b) => new Date(b.latestUpload.uploadedAt) - new Date(a.latestUpload.uploadedAt))
-  }, [uploads, searchTerm, filterType])
+  }, [uploads, searchTerm, filterType, filterStatus])
 
   const toggleBookExpansion = (bookName) => {
     setExpandedBooks(prev => ({
@@ -211,6 +250,78 @@ export default function AdminUploadsPage() {
     )
   }
 
+  const handleUpdateBookStatus = async (bookName, newStatus) => {
+    try {
+      // מציאת כל ההעלאות של הספר
+      const bookUploads = uploads.filter(u => extractBaseBookName(u.bookName) === bookName)
+      const uploadIds = bookUploads.map(u => u.id)
+      
+      const response = await fetch('/api/admin/uploads/batch-update-book-status', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadIds, bookStatus: newStatus })
+      })
+      
+      if (response.ok) {
+        setUploads(prev => prev.map(u => 
+          uploadIds.includes(u.id) ? { ...u, bookStatus: newStatus } : u
+        ))
+        setEditingStatus(null)
+        showAlert('הצלחה', 'הסטטוס עודכן בהצלחה')
+      } else {
+        showAlert('שגיאה', 'שגיאה בעדכון הסטטוס')
+      }
+    } catch (error) {
+      console.error('Error updating book status:', error)
+      showAlert('שגיאה', 'שגיאה בעדכון הסטטוס')
+    }
+  }
+
+  const handleBatchUpdateStatus = async (uploadIds, newStatus) => {
+    try {
+      const response = await fetch('/api/admin/uploads/batch-update-book-status', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadIds, bookStatus: newStatus })
+      })
+      
+      if (response.ok) {
+        setUploads(prev => prev.map(u => 
+          uploadIds.includes(u.id) ? { ...u, bookStatus: newStatus } : u
+        ))
+        showAlert('הצלחה', `הסטטוס עודכן בהצלחה`)
+      } else {
+        showAlert('שגיאה', 'שגיאה בעדכון הסטטוסים')
+      }
+    } catch (error) {
+      console.error('Error batch updating book status:', error)
+      showAlert('שגיאה', 'שגיאה בעדכון הסטטוסים')
+    }
+  }
+
+  const handleSaveStatusConfig = async (newStatuses) => {
+    try {
+      const response = await fetch('/api/admin/book-statuses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statuses: newStatuses })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        // יצירת אובייקט חדש כדי לוודא שReact מזהה את השינוי
+        setBookStatuses({ ...data.statuses })
+        setShowStatusConfig(false)
+        showAlert('הצלחה', 'הגדרות הסטטוסים נשמרו בהצלחה')
+      } else {
+        showAlert('שגיאה', 'שגיאה בשמירת ההגדרות')
+      }
+    } catch (error) {
+      console.error('Error saving status config:', error)
+      showAlert('שגיאה', 'שגיאה בשמירת ההגדרות')
+    }
+  }
+
   if (loading) return (
     <div className="flex justify-center items-center h-64">
         <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
@@ -250,6 +361,14 @@ export default function AdminUploadsPage() {
         </div>
         
         <div className="flex gap-2">
+          <button
+            onClick={() => setShowStatusConfig(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+          >
+            <span className="material-symbols-outlined text-sm">settings</span>
+            הגדרות סטטוסים
+          </button>
+          
           <Link 
             href="/library/admin/trash"
             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors shadow-sm"
@@ -270,55 +389,124 @@ export default function AdminUploadsPage() {
         </div>
       </div>
       
-      {/* לחצני סינון */}
-      <div className="flex gap-2 mb-6">
+      {/* לחצן סינון */}
+      <div className="relative mb-6 filter-menu-container">
         <button
-          onClick={() => setFilterType('all')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-            filterType === 'all'
-              ? 'bg-blue-600 text-white shadow-md'
-              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-          }`}
+          onClick={() => setShowFilterMenu(!showFilterMenu)}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
         >
-          <span className="material-symbols-outlined text-sm">list</span>
-          הכל
+          <span className="material-symbols-outlined text-sm">filter_list</span>
+          סינון
+          {(filterType !== 'all' || filterStatus !== 'all') && (
+            <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
+          )}
+          <span className="material-symbols-outlined text-sm">
+            {showFilterMenu ? 'expand_less' : 'expand_more'}
+          </span>
         </button>
         
-        <button
-          onClick={() => setFilterType('dicta')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-            filterType === 'dicta'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">auto_stories</span>
-          דיקטה
-        </button>
-        
-        <button
-          onClick={() => setFilterType('full_book')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-            filterType === 'full_book'
-              ? 'bg-green-600 text-white shadow-md'
-              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">menu_book</span>
-          ספרים שהועלו
-        </button>
-        
-        <button
-          onClick={() => setFilterType('single_page')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-            filterType === 'single_page'
-              ? 'bg-amber-600 text-white shadow-md'
-              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">description</span>
-          עמודים שנערכו
-        </button>
+        {/* תפריט סינון */}
+        {showFilterMenu && (
+          <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-10 p-4 min-w-[400px]">
+            <div className="grid grid-cols-2 gap-6">
+              {/* עמודה ראשונה - סוג */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b">סוג</h3>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setFilterType('all')}
+                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
+                      filterType === 'all'
+                        ? 'bg-blue-100 text-blue-700 font-semibold'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    הכל
+                  </button>
+                  <button
+                    onClick={() => setFilterType('dicta')}
+                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
+                      filterType === 'dicta'
+                        ? 'bg-purple-100 text-purple-700 font-semibold'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    דיקטה
+                  </button>
+                  <button
+                    onClick={() => setFilterType('full_book')}
+                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
+                      filterType === 'full_book'
+                        ? 'bg-green-100 text-green-700 font-semibold'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    ספרים שהועלו
+                  </button>
+                  <button
+                    onClick={() => setFilterType('single_page')}
+                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
+                      filterType === 'single_page'
+                        ? 'bg-amber-100 text-amber-700 font-semibold'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    עמודים שנערכו
+                  </button>
+                </div>
+              </div>
+              
+              {/* עמודה שניה - סטטוס */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b">סטטוס</h3>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  <button
+                    onClick={() => setFilterStatus('all')}
+                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
+                      filterStatus === 'all'
+                        ? 'bg-blue-100 text-blue-700 font-semibold'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    הכל
+                  </button>
+                  {Object.entries(bookStatuses).map(([key, config]) => (
+                    <button
+                      key={key}
+                      onClick={() => setFilterStatus(key)}
+                      className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
+                        filterStatus === key
+                          ? 'bg-blue-100 text-blue-700 font-semibold'
+                          : 'hover:bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      <span 
+                        className="w-3 h-3 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: config.color }}
+                      ></span>
+                      {config.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            {/* כפתור איפוס */}
+            {(filterType !== 'all' || filterStatus !== 'all') && (
+              <div className="mt-4 pt-4 border-t">
+                <button
+                  onClick={() => {
+                    setFilterType('all')
+                    setFilterStatus('all')
+                  }}
+                  className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                >
+                  איפוס סינון
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       
       {uploads.length === 0 ? (
@@ -367,6 +555,25 @@ export default function AdminUploadsPage() {
                                                   </span>
                                               )}
                                           </h3>
+                                          
+                                          {/* סטטוס הספר */}
+                                          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                                              {editingStatus === bookName ? (
+                                                  <StatusEditor
+                                                      currentStatus={firstUpload.bookStatus || 'not_checked'}
+                                                      statuses={bookStatuses}
+                                                      onSave={(newStatus) => handleUpdateBookStatus(bookName, newStatus)}
+                                                      onCancel={() => setEditingStatus(null)}
+                                                  />
+                                              ) : (
+                                                  <StatusBadge
+                                                      status={firstUpload.bookStatus || 'not_checked'}
+                                                      statuses={bookStatuses}
+                                                      onEdit={() => setEditingStatus(bookName)}
+                                                      editable={true}
+                                                  />
+                                              )}
+                                          </div>
                                           <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                                               <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-sm">person</span>
@@ -521,7 +728,8 @@ export default function AdminUploadsPage() {
                                                   <h4 className="font-semibold text-gray-800">
                                                       {upload.bookName}
                                                   </h4>
-                                                  <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                                                  
+                                                  <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
                                                       <span className="flex items-center gap-1">
                                                         <span className="material-symbols-outlined text-xs">person</span>
                                                         {upload.uploadedBy || 'אורח'}
@@ -572,6 +780,18 @@ export default function AdminUploadsPage() {
               })}
           </div>
       )}
+      
+      {/* חלון הגדרות סטטוסים */}
+      {showStatusConfig && (
+        <StatusConfigModal
+          statuses={bookStatuses}
+          uploads={uploads}
+          onSave={handleSaveStatusConfig}
+          onClose={() => setShowStatusConfig(false)}
+        />
+      )}
+      
+
     </div>
   )
 }

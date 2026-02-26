@@ -9,6 +9,7 @@ const UploadSchema = new mongoose.Schema({
   lineCount: { type: Number }, // מספר שורות
   uploadType: { type: String, enum: ['full_book', 'single_page', 'dicta'], default: 'single_page' }, // סוג ההעלאה
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  bookStatus: { type: String, default: 'not_checked' }, // סטטוס הספר: not_checked, needs_attention, ready, added_to_library
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   isDeleted: { type: Boolean, default: false }, // האם הועבר לאשפה
   deletedAt: { type: Date }, // תאריך העברה לאשפה
