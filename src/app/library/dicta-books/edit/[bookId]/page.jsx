@@ -54,7 +54,9 @@ export default function DictaEditorPage() {
   const [saving, setSaving] = useState(false)
   const [claiming, setClaiming] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [showResetDialog, setShowResetDialog] = useState(false)
   const [fontSize, setFontSize] = useState(18)
   const [selectedFont, setSelectedFont] = useState("'Times New Roman'")
   const [textAlign, setTextAlign] = useState('right')
@@ -702,6 +704,35 @@ export default function DictaEditorPage() {
     }
   }
 
+  const handleReset = () => {
+    setShowResetDialog(true)
+  }
+
+  const handleResetConfirm = async () => {
+    try {
+      setResetting(true)
+      const res = await fetch(`/api/dicta/books/${bookId}/reset`, {
+        method: 'POST',
+      })
+      
+      const data = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'שגיאה באיפוס הספר')
+      }
+      
+      setContent(data.book.content)
+      setSavedContent(data.book.content)
+      setShowResetDialog(false)
+      showAlert('הצלחה', 'הספר אופס בהצלחה! נתוני הספר נמשכו מחדש מגיטהאב.')
+    } catch (error) {
+      console.error('Error resetting book:', error)
+      showAlert('שגיאה', error.message || 'אירעה שגיאה באיפוס הספר')
+    } finally {
+      setResetting(false)
+    }
+  }
+
   const scrollToHeading = (index) => {
     // טיפול במצב של עריכה ללא תצוגה מקדימה (רק Textarea)
     if (editMode && !showPreview) {
@@ -828,6 +859,14 @@ export default function DictaEditorPage() {
               <div className="flex items-center gap-3">
           {canEdit && (
             <>
+              <Button
+                icon="restart_alt"
+                variant="ghost"
+                size="sm"
+                onClick={handleReset}
+                loading={resetting}
+                label="אפס עריכת ספר"
+              />
               <Button
                 icon="find_replace"
                 variant="ghost"
@@ -1321,6 +1360,15 @@ export default function DictaEditorPage() {
           onCancel={() => setShowUploadDialog(false)}
         />
       )}
+
+      {showResetDialog && (
+        <ResetDialog
+          bookTitle={book?.title}
+          onConfirm={handleResetConfirm}
+          onCancel={() => setShowResetDialog(false)}
+          loading={resetting}
+        />
+      )}
     </div>
   )
 }
@@ -1374,6 +1422,75 @@ function UploadDialog({ bookTitle, onConfirm, onCancel }) {
           <button
             onClick={onCancel}
             className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors"
+          >
+            ביטול
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ResetDialog({ bookTitle, onConfirm, onCancel, loading }) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onCancel])
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-4xl text-red-600">warning</span>
+          </div>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">אפס עריכת ספר</h2>
+          <p className="text-on-surface/70 font-bold">{bookTitle}</p>
+        </div>
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined text-red-600 mt-0.5">error</span>
+            <div className="text-sm text-red-800">
+              <p className="font-bold mb-2">אזהרה: פעולה בלתי הפיכה!</p>
+              <ul className="space-y-1">
+                <li>• כל העריכות שביצעת יימחקו לצמיתות</li>
+                <li>• הספר יחזור למצבו המקורי מגיטהאב</li>
+                <li>• לא ניתן לשחזר את השינויים לאחר האיפוס</li>
+              </ul>
+              <p className="mt-3 font-bold">האם אתה בטוח שברצונך להמשיך?</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3">
+          <button 
+            onClick={onConfirm} 
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <>
+                <span className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white"></span>
+                <span>מאפס...</span>
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined">restart_alt</span>
+                <span>כן, אפס את הספר</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ביטול
           </button>
