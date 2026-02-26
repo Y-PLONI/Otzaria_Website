@@ -71,7 +71,7 @@ export default function Button({
     >
       {loading ? (
         <span className="material-symbols-outlined text-xl animate-spin">
-          loading
+          progress_activity
         </span>
       ) : icon ? (
         <span className="material-symbols-outlined text-xl">{icon}</span>
