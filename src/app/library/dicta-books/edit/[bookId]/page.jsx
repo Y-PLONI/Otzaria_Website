@@ -72,6 +72,13 @@ export default function DictaEditorPage() {
   const [savedSearches, setSavedSearches] = useState([])
   const [showPreview, setShowPreview] = useState(true)
   const [isPending, startTransition] = useTransition()
+  const [toolbarExpanded, setToolbarExpanded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dicta_editor_toolbar_expanded')
+      return saved === 'true'
+    }
+    return false
+  })
   
   const hasLoadedPreviewState = useRef(false)
   const contentRef = useRef(null)
@@ -92,6 +99,10 @@ export default function DictaEditorPage() {
       localStorage.setItem('dicta_editor_show_preview', showPreview.toString())
     }
   }, [showPreview])
+
+  useEffect(() => {
+    localStorage.setItem('dicta_editor_toolbar_expanded', toolbarExpanded.toString())
+  }, [toolbarExpanded])
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -1011,78 +1022,110 @@ export default function DictaEditorPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {canEdit && (
-          <aside className="w-20 bg-white border-l flex flex-col items-center py-4 gap-2 overflow-y-auto shadow-sm">
+          <aside className={`${toolbarExpanded ? 'w-56' : 'w-20'} bg-white border-l flex flex-col py-4 gap-2 overflow-y-auto shadow-sm transition-all duration-300`}>
+            {toolbarExpanded && (
+              <div className="px-4 mb-2">
+                <span className="text-sm font-medium text-gray-700">כלי עריכה</span>
+              </div>
+            )}
+            
             <button
               onClick={() => setActiveTool('createHeaders')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="יצירת כותרות"
             >
               <span className="material-symbols-outlined text-gray-700">title</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">יצירת כותרות</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('singleLetterHeaders')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="כותרות אותיות"
             >
               <span className="material-symbols-outlined text-gray-700">format_size</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">כותרות אותיות</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('changeHeading')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="שינוי רמת כותרת"
             >
               <span className="material-symbols-outlined text-gray-700">format_indent_increase</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">שינוי רמת כותרת</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('punctuate')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="הדגשה וניקוד"
             >
               <span className="material-symbols-outlined text-gray-700">format_bold</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">הדגשה וניקוד</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('pageBHeader')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="כותרות עמוד ב"
             >
               <span className="material-symbols-outlined text-gray-700">find_in_page</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">כותרות עמוד ב</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('replacePageB')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="החלפת עמוד ב"
             >
               <span className="material-symbols-outlined text-gray-700">swap_horiz</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">החלפת עמוד ב</span>}
             </button>
 
             <button
               onClick={() => setActiveTool('addPageNumber')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="מיזוג דף ועמוד"
             >
               <span className="material-symbols-outlined text-gray-700">auto_stories</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">מיזוג דף ועמוד</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('headerCheck')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="בדיקת שגיאות בכותרות"
             >
               <span className="material-symbols-outlined text-gray-700">bug_report</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">בדיקת שגיאות</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('cleanText')}
-              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
               title="ניקוי טקסט"
             >
               <span className="material-symbols-outlined text-gray-700">cleaning_services</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">ניקוי טקסט</span>}
             </button>
+            
+            {/* Spacer to push button to bottom */}
+            <div className="flex-1"></div>
+            
+            {/* Expand/Collapse button at bottom */}
+            <div className="border-t pt-2 mt-2">
+              <button
+                onClick={() => setToolbarExpanded(!toolbarExpanded)}
+                className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2 w-full`}
+                title={toolbarExpanded ? "כווץ סרגל" : "הרחב סרגל"}
+              >
+                <span className="material-symbols-outlined text-gray-600">
+                  {toolbarExpanded ? 'chevron_right' : 'chevron_left'}
+                </span>
+                {toolbarExpanded && <span className="text-sm text-gray-600">{toolbarExpanded ? 'כווץ' : 'הרחב'}</span>}
+              </button>
+            </div>
           </aside>
         )}
 
