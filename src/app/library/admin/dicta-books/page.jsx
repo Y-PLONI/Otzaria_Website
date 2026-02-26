@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useDialog } from '@/components/DialogContext'
@@ -209,6 +209,17 @@ export default function AdminDictaBooksPage() {
     return sortConfig.direction === 'asc' ? '↑' : '↓'
   }
 
+  // חישוב כמויות לפי סטטוס במעבר אחד על המערך
+  const statusCounts = useMemo(() => {
+    return books.reduce((acc, book) => {
+      acc.total++
+      if (book.status === 'available') acc.available++
+      else if (book.status === 'in-progress') acc.inProgress++
+      else if (book.status === 'completed') acc.completed++
+      return acc
+    }, { total: 0, available: 0, inProgress: 0, completed: 0 })
+  }, [books])
+
   // סינון לפי סטטוס
   const filteredBooks = books.filter(book => {
     if (statusFilter === 'all') return true
@@ -307,7 +318,7 @@ export default function AdminDictaBooksPage() {
               : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
           }`}
         >
-          הכל ({books.length})
+          הכל ({statusCounts.total})
         </button>
         <button
           onClick={() => setStatusFilter('available')}
@@ -317,7 +328,7 @@ export default function AdminDictaBooksPage() {
               : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
           }`}
         >
-          פנוי ({books.filter(b => b.status === 'available').length})
+          פנוי ({statusCounts.available})
         </button>
         <button
           onClick={() => setStatusFilter('in-progress')}
@@ -327,7 +338,7 @@ export default function AdminDictaBooksPage() {
               : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
           }`}
         >
-          בטיפול ({books.filter(b => b.status === 'in-progress').length})
+          בטיפול ({statusCounts.inProgress})
         </button>
         <button
           onClick={() => setStatusFilter('completed')}
@@ -337,7 +348,7 @@ export default function AdminDictaBooksPage() {
               : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
           }`}
         >
-          הושלם ({books.filter(b => b.status === 'completed').length})
+          הושלם ({statusCounts.completed})
         </button>
       </div>
 

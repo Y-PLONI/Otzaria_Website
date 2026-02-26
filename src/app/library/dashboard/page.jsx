@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import ChangePasswordForm from '@/components/ChangePasswordForm'
 import { useDialog } from '@/components/DialogContext'
+import Pagination from '@/components/Pagination'
 
 export default function DashboardPage() {
   const { data: session, status, update } = useSession()
@@ -368,38 +369,6 @@ export default function DashboardPage() {
   const currentItems = sortedActivity.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(sortedActivity.length / itemsPerPage);
 
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-  const getPageNumbers = () => {
-    const result = [];
-    
-    const pages = new Set([
-      1, 
-      totalPages, 
-      currentPage, 
-      currentPage - 1, 
-      currentPage + 1
-    ]);
-
-    const sortedPages = Array.from(pages)
-      .filter(p => p >= 1 && p <= totalPages)
-      .sort((a, b) => a - b);
-
-    for (let i = 0; i < sortedPages.length; i++) {
-      const page = sortedPages[i];
-      const prevPage = sortedPages[i - 1];
-
-      if (i > 0) {
-        if (page - prevPage > 1) {
-           result.push('...');
-        }
-      }
-      result.push(page);
-    }
-
-    return result;
-  };
-
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -628,43 +597,11 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-2 mt-8 select-none">
-                    <button
-                      onClick={() => paginate(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-sm">chevron_right</span>
-                    </button>
-
-                    {getPageNumbers().map((page, index) => (
-                      page === '...' ? (
-                        <span key={`dots-${index}`} className="w-8 text-center text-on-surface/50">...</span>
-                      ) : (
-                        <button
-                          key={page}
-                          onClick={() => paginate(page)}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
-                            currentPage === page
-                              ? 'bg-primary text-white shadow-md'
-                              : 'bg-surface-variant text-on-surface hover:bg-primary/20'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      )
-                    ))}
-
-                    <button
-                      onClick={() => paginate(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-sm">chevron_left</span>
-                    </button>
-                  </div>
-                )}
+                <Pagination 
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
               </>
             ) : (
               <div className="text-center py-12">
@@ -729,74 +666,11 @@ export default function DashboardPage() {
                           </div>
                         ))}
 
-                        {totalDictaPages > 1 && (
-                          <div className="flex justify-center items-center gap-2 mt-8 select-none">
-                            <button
-                              onClick={() => setCurrentDictaPage(currentDictaPage - 1)}
-                              disabled={currentDictaPage === 1}
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-sm">chevron_right</span>
-                            </button>
-
-                            {(() => {
-                              const getDictaPageNumbers = () => {
-                                const result = [];
-                                const pages = new Set([
-                                  1, 
-                                  totalDictaPages, 
-                                  currentDictaPage, 
-                                  currentDictaPage - 1, 
-                                  currentDictaPage + 1
-                                ]);
-
-                                const sortedPages = Array.from(pages)
-                                  .filter(p => p >= 1 && p <= totalDictaPages)
-                                  .sort((a, b) => a - b);
-
-                                for (let i = 0; i < sortedPages.length; i++) {
-                                  const page = sortedPages[i];
-                                  const prevPage = sortedPages[i - 1];
-
-                                  if (i > 0) {
-                                    if (page - prevPage > 1) {
-                                       result.push('...');
-                                    }
-                                  }
-                                  result.push(page);
-                                }
-
-                                return result;
-                              };
-
-                              return getDictaPageNumbers().map((page, index) => (
-                                page === '...' ? (
-                                  <span key={`dots-${index}`} className="w-8 text-center text-on-surface/50">...</span>
-                                ) : (
-                                  <button
-                                    key={page}
-                                    onClick={() => setCurrentDictaPage(page)}
-                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
-                                      currentDictaPage === page
-                                        ? 'bg-primary text-white shadow-md'
-                                        : 'bg-surface-variant text-on-surface hover:bg-primary/20'
-                                    }`}
-                                  >
-                                    {page}
-                                  </button>
-                                )
-                              ));
-                            })()}
-
-                            <button
-                              onClick={() => setCurrentDictaPage(currentDictaPage + 1)}
-                              disabled={currentDictaPage === totalDictaPages}
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-variant disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-sm">chevron_left</span>
-                            </button>
-                          </div>
-                        )}
+                        <Pagination 
+                          currentPage={currentDictaPage}
+                          totalPages={totalDictaPages}
+                          onPageChange={setCurrentDictaPage}
+                        />
                       </>
                     );
                   })()}
